@@ -37,6 +37,10 @@ python predict.py "Jones" "Miocic" --model lr --division "light heavyweight" --t
 python backtest.py --from-year 2022
 python backtest.py --model lr --save-csv results.csv
 
+# Value-bet ROI simulation (requires odds_red/odds_blue populated in DB)
+python backtest.py --odds
+python backtest.py --odds --min-edge 0.05 --from-year 2020
+
 # Start the REST API
 uvicorn api:app --reload
 
