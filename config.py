@@ -62,7 +62,13 @@ XGB_PARAMS: dict = {
 
 # ── Feature Engineering ───────────────────────────────────────────────────────
 # Columns excluded from the automatic difference-feature loop
-EXCLUDE_STAT_KEYWORDS = ["stance", "dob", "opponent_id", "weight"]
+# Columns excluded from the automatic difference-feature loop.
+# total_fight_time is a proxy for career length (wins+losses) used only
+# for debutant detection — its diff is a linear combo of wins_diff + losses_diff.
+EXCLUDE_STAT_KEYWORDS = ["stance", "dob", "opponent_id", "weight", "total_fight_time"]
+
+# Minimum fight date included in the ML training set
+MIN_FIGHT_DATE = "2005-01-01"
 
 # Recent form window (number of prior fights to average)
 RECENT_FORM_WINDOW = 3
