@@ -130,6 +130,21 @@ All Python source files must use ASCII-safe characters only. The Windows cp1252 
 
 ---
 
+## Before committing
+
+Always untrack and gitignore generated/temporary files before committing. Files that must never be committed:
+
+- `**/__pycache__/` and `*.pyc` — Python bytecode
+- `models/*.joblib` — trained model artifacts (regenerate with `run_pipeline.py`)
+- `database_builder_files/ufc_v2.db` — SQLite database (regenerate with `ingest_mdabbert.py` + `run_pipeline.py`)
+- `logs/` — runtime logs
+- `ML_models/*.csv` — intermediate ML datasets
+- `raw_data/*.csv` and `raw_data/*.db` — large source files (download from Kaggle)
+
+If any of these were previously committed, untrack them with `git rm --cached <file>` (without deleting the local copy), then verify `.gitignore` covers them before staging the commit.
+
+---
+
 ## Key invariants
 
 - **No leakage**: every rolling stat uses `shift(1)`. ELO is computed *before* the fight is processed. Recent form excludes the current fight. Violating this inflates accuracy.

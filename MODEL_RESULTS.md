@@ -1,5 +1,55 @@
 # Model Results History
 
+---
+
+## 2026-05-28 — mdabbert dataset (ufc-master.csv, data to 2026-03-28)
+
+**Trigger:** Switched data source from original UFCStats hex-ID CSV (up to 2025-09-06) to mdabbert-format dataset (2010-03-21 to 2026-03-28). Wrote `ingest_mdabbert.py` adapter replacing pipeline steps 1-3.
+
+**Dataset:** 5,830 fights x 42 columns (7,169 raw minus 1,339 debut fights excluded). Career-average stats (no per-fight raw strike counts). Starts 2010 (no pre-2010 data).
+
+**Feature cleanup applied:**
+- Dropped `avg_sig_str_landed_diff` (exact duplicate of `splm_diff`)
+- Dropped `avg_td_landed_diff` (exact duplicate of `td_avg_diff`)
+- Dropped `strike_ratio_diff` (r=-0.92 with `grapple_ratio_diff` for non-debutants)
+- Dropped `total_fight_time_diff` (= `wins_diff + losses_diff` exactly)
+- Dropped `is_debutant_diff` (always 0 after debutant exclusion)
+
+**Exclusion filters:** debut fights (either fighter with 0 prior recorded fights) and pre-2005 fights.
+
+### XGBoost
+| Metric | Value |
+|--------|-------|
+| Test Accuracy | **64.67%** |
+| CV Mean (5-fold TimeSeriesSplit) | 61.52% |
+| CV Std | ± 3.36% |
+| Train cutoff | up to 2023-06-03 |
+| Test window | from 2023-06-03 (1,166 fights) |
+
+### Logistic Regression
+| Metric | Value |
+|--------|-------|
+| Test Accuracy | **62.95%** |
+| CV Mean (5-fold TimeSeriesSplit) | 60.60% |
+| CV Std | ± 2.27% |
+| Brier Score (uncalibrated) | ~0.222 |
+| Brier Score (calibrated, Platt) | ~0.222 |
+
+### Finish Type Model (XGBoost, 3-class)
+| Metric | Value |
+|--------|-------|
+| Test Accuracy | **53.61%** |
+| CV Mean (5-fold TimeSeriesSplit) | 49.89% |
+| CV Std | ± 3.16% |
+| Majority-class baseline | ~51.5% (Decision) |
+
+Class distribution in test set:
+- Decision: 51.5%
+- KO/TKO: 31.5%
+- Submission: 17.0%
+
+---
+
 Baseline to compare against when retraining. Update this file after every significant retrain.
 
 ---
