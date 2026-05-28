@@ -34,6 +34,7 @@ from config import (
     DIVISIONS,
     FINISH_METHOD_MAP,
     RECENT_FORM_WINDOW,
+    MIN_FIGHT_DATE,
 )
 from logger import get_logger
 from ML_models.ELO_calculator import build_elo_features
@@ -117,25 +118,13 @@ def compute_recent_form(conn: sqlite3.Connection, window: int = RECENT_FORM_WIND
         .transform(lambda s: s.shift(1).rolling(window, min_periods=1).mean())
     )
 
-    # Win streak: count consecutive wins before this fight
-    # We compute it per-fighter via a forward pass.
-    def _streak_col(series: pd.Series) -> pd.Series:
-        """Return the streak (before each fight) for a fighter's sorted win series."""
-        shifted = series.shift(1).fillna(0).astype(int)
-        streaks = []
-        current = 0
-        for w in shifted:
-            streaks.append(current)
-            current = current + 1 if w == 1 else 0
-        return pd.Series(streaks, index=series.index)
-
-    long["win_streak"] = grp["won"].transform(_streak_col)
-
     # Fill NaN (first fight of a career) with 0
-    for col in ("recent_win_rate", "recent_finish_rate", "win_streak"):
+    for col in ("recent_win_rate", "recent_finish_rate"):
         long[col] = long[col].fillna(0)
 
-    return long[["fight_id", "fighter_id", "recent_win_rate", "recent_finish_rate", "win_streak"]]
+    # win_streak is NOT computed here — mdabbert provides career_win_streak in
+    # fight_stats which is more accurate (covers pre-DB history).
+    return long[["fight_id", "fighter_id", "recent_win_rate", "recent_finish_rate"]]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -144,23 +133,30 @@ def compute_recent_form(conn: sqlite3.Connection, window: int = RECENT_FORM_WIND
 
 def add_age_features(ml_data: pd.DataFrame, df_raw: pd.DataFrame) -> pd.DataFrame:
     """
-    Compute each fighter's age at the time of the fight and add:
-        age_diff = age_red - age_blue   (years, float)
+    Add age_diff = age_red - age_blue.
 
-    dob is stored as 'YYYY/MM/DD' strings in fight_stats.
+    Two sources are supported:
+    - dob_red / dob_blue ('YYYY/MM/DD') — original UFCStats format; age computed from fight date.
+    - age_red / age_blue (numeric years) — mdabbert format; used directly.
     """
     log.info("Adding age features…")
 
-    fight_date = pd.to_datetime(df_raw["date"])
+    dob_col_available = (
+        "dob_red" in df_raw.columns
+        and df_raw["dob_red"].notna().any()
+    )
 
-    dob_red  = pd.to_datetime(df_raw["dob_red"],  format="%Y/%m/%d", errors="coerce")
-    dob_blue = pd.to_datetime(df_raw["dob_blue"], format="%Y/%m/%d", errors="coerce")
-
-    age_red  = (fight_date - dob_red).dt.days  / 365.25
-    age_blue = (fight_date - dob_blue).dt.days / 365.25
+    if dob_col_available:
+        fight_date = pd.to_datetime(df_raw["date"])
+        dob_red    = pd.to_datetime(df_raw["dob_red"],  format="%Y/%m/%d", errors="coerce")
+        dob_blue   = pd.to_datetime(df_raw["dob_blue"], format="%Y/%m/%d", errors="coerce")
+        age_red    = (fight_date - dob_red).dt.days  / 365.25
+        age_blue   = (fight_date - dob_blue).dt.days / 365.25
+    else:
+        age_red  = pd.to_numeric(df_raw.get("age_red"),  errors="coerce")
+        age_blue = pd.to_numeric(df_raw.get("age_blue"), errors="coerce")
 
     ml_data["age_diff"] = (age_red - age_blue).values
-    # Leave NaN where DOB is missing — models handle NaN via fillna(0) at training time
     return ml_data
 
 
@@ -197,10 +193,11 @@ def add_style_features(ml_data: pd.DataFrame, df_raw: pd.DataFrame) -> pd.DataFr
     grapple_r, strike_r = _ratios("red")
     grapple_b, strike_b = _ratios("blue")
 
-    ml_data["grapple_ratio_diff"]   = (grapple_r - grapple_b).values
-    ml_data["strike_ratio_diff"]    = (strike_r  - strike_b).values
-    ml_data["striker_vs_wrestler"]  = (strike_r  * grapple_b).values
-    ml_data["wrestler_vs_striker"]  = (grapple_r * strike_b).values
+    ml_data["grapple_ratio_diff"]  = (grapple_r - grapple_b).values
+    # strike_ratio = 1 - grapple_ratio per fighter, so strike_ratio_diff = -grapple_ratio_diff
+    # (r~-0.92 for non-debutants) — dropped to avoid near-duplicate feature.
+    ml_data["striker_vs_wrestler"] = (strike_r  * grapple_b).values
+    ml_data["wrestler_vs_striker"] = (grapple_r * strike_b).values
 
     return ml_data
 
@@ -363,23 +360,21 @@ def build_ml_dataset() -> pd.DataFrame:
     form_red  = form_df.rename(columns={
         "recent_win_rate":    "recent_win_rate_red",
         "recent_finish_rate": "recent_finish_rate_red",
-        "win_streak":         "win_streak_red",
     })
     form_blue = form_df.rename(columns={
         "recent_win_rate":    "recent_win_rate_blue",
         "recent_finish_rate": "recent_finish_rate_blue",
-        "win_streak":         "win_streak_blue",
     })
 
     df = df.merge(
-        form_red[["fight_id", "fighter_id", "recent_win_rate_red", "recent_finish_rate_red", "win_streak_red"]],
+        form_red[["fight_id", "fighter_id", "recent_win_rate_red", "recent_finish_rate_red"]],
         left_on=["fight_id", "r_fighter_id"],
         right_on=["fight_id", "fighter_id"],
         how="left",
     ).drop(columns=["fighter_id"])
 
     df = df.merge(
-        form_blue[["fight_id", "fighter_id", "recent_win_rate_blue", "recent_finish_rate_blue", "win_streak_blue"]],
+        form_blue[["fight_id", "fighter_id", "recent_win_rate_blue", "recent_finish_rate_blue"]],
         left_on=["fight_id", "b_fighter_id"],
         right_on=["fight_id", "fighter_id"],
         how="left",
@@ -407,11 +402,8 @@ def build_ml_dataset() -> pd.DataFrame:
         col_blue = pd.to_numeric(df[f"{stat}_blue"], errors="coerce").fillna(0)
         ml_data[f"{stat}_diff"] = col_red - col_blue
 
-    # Debutant indicator
-    ml_data["is_debutant_diff"] = (r_time == 0).astype(int) - (b_time == 0).astype(int)
-
     # ── Recent form differences ───────────────────────────────────────────────
-    for stat in ("recent_win_rate", "recent_finish_rate", "win_streak"):
+    for stat in ("recent_win_rate", "recent_finish_rate"):
         r_col = df[f"{stat}_red"].fillna(0)
         b_col = df[f"{stat}_blue"].fillna(0)
         ml_data[f"{stat}_diff"] = (r_col - b_col).values
@@ -428,6 +420,26 @@ def build_ml_dataset() -> pd.DataFrame:
     # ── Title fight flag ──────────────────────────────────────────────────────
     ml_data["title_fight"] = pd.to_numeric(df["title_fight"], errors="coerce").fillna(0).astype(int).values
 
+    # ── Exclusion filters ─────────────────────────────────────────────────────
+    n_before = len(ml_data)
+
+    # Drop fights before MIN_FIGHT_DATE (early era has unreliable stats)
+    ml_data = ml_data[pd.to_datetime(ml_data["date"]) >= MIN_FIGHT_DATE].copy()
+    n_date = n_before - len(ml_data)
+
+    # Drop fights where either fighter has no prior recorded fights (debutant)
+    # total_fight_time = wins + losses in the mdabbert schema; 0 means debut.
+    is_debut_r = r_time.values == 0
+    is_debut_b = b_time.values == 0
+    debut_mask = pd.Series(is_debut_r | is_debut_b, index=df.index)
+    # Align index after the date filter
+    ml_data = ml_data[~debut_mask.reindex(ml_data.index, fill_value=False)].copy()
+    n_debut = (n_before - n_date) - len(ml_data)
+
+    log.info(
+        "Exclusions: %d pre-%s fights, %d debut fights. %d rows remaining.",
+        n_date, MIN_FIGHT_DATE[:4], n_debut, len(ml_data),
+    )
     log.info("Final ML dataset shape: %s", ml_data.shape)
     return ml_data
 
