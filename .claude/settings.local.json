@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3)",
+      "PowerShell(tail *)",
+      "PowerShell(python -m pip install pytest -q; python -m pytest --version)",
+      "Bash(python -)"
+    ]
+  }
+}
