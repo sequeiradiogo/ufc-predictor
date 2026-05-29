@@ -13,8 +13,6 @@ build/
 venv/
 env/
 
-# Trained model artifacts (large binaries — regenerate with run_pipeline.py)
-models/*.joblib
 
 # Logs
 logs/
@@ -25,7 +23,6 @@ logs/
 
 # Intermediate generated data (regenerate with run_pipeline.py)
 ML_models/*.csv
-**/*.db
 
 # Raw source CSVs (large — download from Kaggle)
 raw_data/*.csv
