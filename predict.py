@@ -297,7 +297,7 @@ def build_feature_vector(
 
         # ── Division (one-hot) ────────────────────────────────────────────────
         elif feat.startswith("div_"):
-            matched = div_lower and any(feat == _div_col(d) and div_lower == d for d in DIVISIONS)
+            matched = bool(div_lower) and any(feat == _div_col(d) and div_lower == d for d in DIVISIONS)
             row[feat] = int(matched)
 
         # ── Title fight ───────────────────────────────────────────────────────
