@@ -20,8 +20,8 @@ import datetime
 import sys
 
 CURRENT_DIR = Path(__file__).resolve().parent
-
-DB_PATH = CURRENT_DIR.parent / "raw_data" / "ufc_v2.db"
+sys.path.insert(0, str(CURRENT_DIR.parent))
+from config import DB_PATH
 
 def backup_db(db_path: Path) -> Path:
     if not db_path.exists():
