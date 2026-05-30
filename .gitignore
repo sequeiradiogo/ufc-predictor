@@ -28,9 +28,6 @@ ml/*.csv
 db/*.db
 !db/ufc_v2.db
 
-# Model artifacts (regenerate with run_pipeline.py)
-models/*.joblib
-
 # Raw source CSVs (large — download from Kaggle)
 # ufc-master.csv is tracked separately as it contains scraped data
 raw_data/*.csv
