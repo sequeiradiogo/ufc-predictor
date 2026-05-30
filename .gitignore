@@ -24,8 +24,9 @@ logs/
 # Intermediate generated data (regenerate with run_pipeline.py)
 ml/*.csv
 
-# Database (regenerate with run_pipeline.py --full --csv)
+# Database temp files only -- ufc_v2.db is tracked
 db/*.db
+!db/ufc_v2.db
 
 # Model artifacts (regenerate with run_pipeline.py)
 models/*.joblib
