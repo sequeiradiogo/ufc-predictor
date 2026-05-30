@@ -5,7 +5,7 @@ Replaces: 'logistic regression.py'  (old file with space in name kept for
            backward compatibility but this is the canonical version)
 
 Run:
-    python ML_models/logistic_regression.py
+    python ml/logistic_regression.py
 """
 
 import sys

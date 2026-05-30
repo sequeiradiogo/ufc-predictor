@@ -23,7 +23,7 @@ try:
     from config import DB_PATH, STARTING_ELO, K_FACTOR_NORMAL, K_FACTOR_PROVISIONAL, PROVISIONAL_LIMIT
     from logger import get_logger
 except ImportError:
-    DB_PATH              = Path(__file__).parent.parent / "database_builder_files" / "ufc_v2.db"
+    DB_PATH              = Path(__file__).parent.parent / "db" / "ufc_v2.db"
     STARTING_ELO         = 1400
     K_FACTOR_NORMAL      = 32
     K_FACTOR_PROVISIONAL = 90

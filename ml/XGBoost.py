@@ -2,11 +2,11 @@
 XGBoost.py — XGBoost model for UFC fight prediction.
 
 Run (standard training):
-    python ML_models/XGBoost.py
+    python ml/XGBoost.py
 
 Run (with Optuna hyperparameter tuning — slower, finds best params):
-    python ML_models/XGBoost.py --tune
-    python ML_models/XGBoost.py --tune --trials 100
+    python ml/XGBoost.py --tune
+    python ml/XGBoost.py --tune --trials 100
 """
 
 import argparse

@@ -22,10 +22,16 @@ logs/
 *.db-wal
 
 # Intermediate generated data (regenerate with run_pipeline.py)
-ML_models/*.csv
+ml/*.csv
+
+# Database temp files only -- ufc_v2.db is tracked
+db/*.db
+!db/ufc_v2.db
 
 # Raw source CSVs (large — download from Kaggle)
+# ufc-master.csv is tracked separately as it contains scraped data
 raw_data/*.csv
+!raw_data/ufc-master.csv
 
 # IDE
 .idea/

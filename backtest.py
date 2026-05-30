@@ -49,7 +49,7 @@ def load_model(model_type: str) -> tuple:
     if model_type == "xgb":
         if not MODEL_XGB_PATH.exists():
             print(f"[ERROR] XGBoost model not found at '{MODEL_XGB_PATH}'.")
-            print("   Run: python ML_models/XGBoost.py")
+            print("   Run: python ml/XGBoost.py")
             sys.exit(1)
         model         = joblib.load(MODEL_XGB_PATH)
         feature_names = joblib.load(MODEL_XGB_FEATURES)
@@ -59,7 +59,7 @@ def load_model(model_type: str) -> tuple:
     else:
         if not MODEL_LR_PATH.exists():
             print(f"[ERROR] LR model not found at '{MODEL_LR_PATH}'.")
-            print("   Run: python ML_models/logistic_regression.py")
+            print("   Run: python ml/logistic_regression.py")
             sys.exit(1)
         artifact      = joblib.load(MODEL_LR_PATH)
         feature_names = joblib.load(MODEL_LR_FEATURES)
@@ -350,7 +350,7 @@ def main(
 ) -> None:
     if not CSV_WITH_ELO.exists():
         print(f"[ERROR] ML dataset not found at '{CSV_WITH_ELO}'.")
-        print("   Run: python ML_models/ML_data_preparation.py")
+        print("   Run: python ml/ML_data_preparation.py")
         sys.exit(1)
 
     log.info("Loading ML dataset from %s…", CSV_WITH_ELO)

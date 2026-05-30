@@ -1,11 +1,11 @@
 """
 ML_data_preparation.py — Build the ML feature dataset from the SQLite database.
 
-Reads  : database_builder_files/ufc_v2.db
-Writes : ML_models/ufc_ml_data_with_debuts_and_elo.csv
+Reads  : db/ufc_v2.db
+Writes : ml/ufc_ml_data_with_debuts_and_elo.csv
 
 Run:
-    python ML_models/ML_data_preparation.py
+    python ml/ML_data_preparation.py
 
 New features added (v2):
   - Recent form      : recent_win_rate, recent_finish_rate, win_streak (last 3 fights)
@@ -37,7 +37,7 @@ from config import (
     MIN_FIGHT_DATE,
 )
 from logger import get_logger
-from ML_models.ELO_calculator import build_elo_features
+from ml.ELO_calculator import build_elo_features
 
 log = get_logger(__name__)
 
