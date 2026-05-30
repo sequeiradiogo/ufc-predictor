@@ -49,7 +49,7 @@ from config import (
     RECENT_FORM_WINDOW,
     FINISH_METHOD_MAP,
 )
-from ML_models.ELO_calculator import get_current_ratings_by_division
+from ml.ELO_calculator import get_current_ratings_by_division
 from odds import print_value_bet_summary
 from logger import get_logger
 
@@ -342,7 +342,7 @@ def predict_fight(
         model_label   = "Logistic Regression"
 
     if not model_path.exists():
-        script = "ML_models/XGBoost.py" if model_type == "xgb" else "ML_models/logistic_regression.py"
+        script = "ml/XGBoost.py" if model_type == "xgb" else "ml/logistic_regression.py"
         log.error("No saved model found at '%s'. Run  python %s  first.", model_path, script)
         print(f"\n[ERROR]  No saved model found at '{model_path}'.")
         print(f"   Run  python {script}  first to train and save the model.")

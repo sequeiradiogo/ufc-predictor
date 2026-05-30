@@ -5,13 +5,13 @@ Chains every pipeline step from raw data to trained models in one command.
 
 Pipeline steps
 --------------
-  1  Build raw database from CSV          (database_builder_files/raw_sql_database.py)
-  2  Add foreign key constraints          (database_builder_files/keys.py)
-  3  Compute rolling statistics           (database_builder_files/rolling.py)
-  4  Generate ML feature dataset          (ML_models/ML_data_preparation.py)
-  5  Train XGBoost model                  (ML_models/XGBoost.py)
-  6  Train Logistic Regression model      (ML_models/logistic_regression.py)
-  7  Train Finish-Type model              (ML_models/finish_type_model.py)
+  1  Build raw database from CSV          (db/raw_sql_database.py)
+  2  Add foreign key constraints          (db/keys.py)
+  3  Compute rolling statistics           (db/rolling.py)
+  4  Generate ML feature dataset          (ml/ML_data_preparation.py)
+  5  Train XGBoost model                  (ml/XGBoost.py)
+  6  Train Logistic Regression model      (ml/logistic_regression.py)
+  7  Train Finish-Type model              (ml/finish_type_model.py)
 
 Usage
 -----
@@ -54,46 +54,46 @@ log = get_logger("pipeline")
 STEPS: dict[int, dict] = {
     1: {
         "name":   "Build raw database",
-        "script": ROOT_DIR / "database_builder_files" / "raw_sql_database.py",
+        "script": ROOT_DIR / "db" / "raw_sql_database.py",
         "mode":   "subprocess",
         "db_required": False,
     },
     2: {
         "name":   "Add foreign key constraints",
-        "script": ROOT_DIR / "database_builder_files" / "keys.py",
+        "script": ROOT_DIR / "db" / "keys.py",
         "mode":   "subprocess",
         "db_required": False,
     },
     3: {
         "name":   "Compute rolling statistics",
-        "script": ROOT_DIR / "database_builder_files" / "rolling.py",
+        "script": ROOT_DIR / "db" / "rolling.py",
         "mode":   "subprocess",
         "db_required": False,
     },
     4: {
         "name":   "Generate ML feature dataset",
-        "module": "ML_models.ML_data_preparation",
+        "module": "ml.ML_data_preparation",
         "fn":     "main",
         "mode":   "import",
         "db_required": True,
     },
     5: {
         "name":   "Train XGBoost model",
-        "module": "ML_models.XGBoost",
+        "module": "ml.XGBoost",
         "fn":     "main",
         "mode":   "import",
         "db_required": True,
     },
     6: {
         "name":   "Train Logistic Regression model",
-        "module": "ML_models.logistic_regression",
+        "module": "ml.logistic_regression",
         "fn":     "main",
         "mode":   "import",
         "db_required": True,
     },
     7: {
         "name":   "Train Finish-Type model",
-        "module": "ML_models.finish_type_model",
+        "module": "ml.finish_type_model",
         "fn":     "main",
         "mode":   "import",
         "db_required": True,

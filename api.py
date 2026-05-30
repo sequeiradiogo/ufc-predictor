@@ -45,7 +45,7 @@ from predict import (
     compute_recent_form,
     build_feature_vector,
 )
-from ML_models.ELO_calculator import get_current_ratings_by_division
+from ml.ELO_calculator import get_current_ratings_by_division
 from odds import american_to_prob, remove_vig, compute_edge, kelly_fraction
 
 app = FastAPI(

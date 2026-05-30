@@ -111,19 +111,23 @@ ufc-predictor/
 ├── README.md
 ├── IMPROVEMENTS.md                    ← Change log and roadmap
 │
-├── database_builder_files/
+├── db/
 │   ├── raw_sql_database.py            ← Step 1: create DB from CSV
 │   ├── keys.py                        ← Step 2: add foreign keys
 │   ├── rolling.py                     ← Step 3: compute rolling stats
-│   └── tests.py                       ← Basic DB validation queries
+│   └── ingest_mdabbert.py             ← Ingest mdabbert-format CSV
 │
-├── ML_models/
+├── ml/
 │   ├── ML_data_preparation.py         ← Step 4: build ML dataset from DB
 │   ├── ELO_calculator.py              ← ELO rating engine
 │   ├── XGBoost.py                     ← Step 5: XGBoost model
 │   ├── logistic_regression.py         ← Step 6: Logistic Regression model
-│   ├── check_elo.py                   ← ELO audit / visualisation
-│   └── top_15_elo.py                  ← ELO leaderboard
+│   └── finish_type_model.py           ← Step 7: finish-type classifier
+│
+├── scrapers/
+│   ├── ufcstats.py                    ← Scrape fight results from ufcstats.com
+│   ├── bestfightodds.py               ← Scrape moneyline odds
+│   └── ufc_rankings.py               ← Download rankings from Kaggle
 │
 ├── models/                            ← Saved model artifacts (auto-created)
 │   ├── xgboost.joblib

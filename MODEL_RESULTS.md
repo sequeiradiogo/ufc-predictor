@@ -2,6 +2,42 @@
 
 ---
 
+## 2026-05-30 — auto-refresh pipeline (ufc-master.csv, data to 2026-05-30)
+
+**Trigger:** First live run of `python refresh_data.py --auto`. Scraped 8 events (Apr 4 – May 16 2026) from ufcstats.com via `scrapers/csv_builder.py`, converting per-fight stats to pre-fight career snapshots and appending 100 new rows to ufc-master.csv. DB rebuilt from updated CSV; ELO recomputed from scratch over all 7,277 fights.
+
+**Dataset:** 5,830 fights × 42 columns (7,277 raw − 1,436 debut fights excluded). Same feature set as previous run; train/test split shifted slightly with new data.
+
+### XGBoost
+| Metric | Value |
+|--------|-------|
+| Test Accuracy | **64.67%** |
+| CV Mean (5-fold TimeSeriesSplit) | 61.52% |
+| CV Std | ± 3.36% |
+| Train cutoff | up to 2023-09-16 |
+| Test window | from 2023-09-16 (1,166 fights) |
+
+Top 10 features: `age_diff`, `td_avg_diff`, `career_win_streak_diff`, `total_title_bouts_diff`, `longest_win_streak_diff`, `splm_diff`, `elo_diff`, `striker_vs_wrestler`, `losses_diff`, `win_by_dec_split_diff`
+
+### Logistic Regression
+| Metric | Value |
+|--------|-------|
+| Test Accuracy | **62.95%** |
+| CV Mean (5-fold TimeSeriesSplit) | 60.60% |
+| CV Std | ± 2.27% |
+| Brier Score (uncalibrated) | 0.2238 |
+| Brier Score (calibrated, Platt) | 0.2254 |
+
+### Finish Type Model (XGBoost, 3-class)
+| Metric | Value |
+|--------|-------|
+| Test Accuracy | **53.61%** |
+| CV Mean (5-fold TimeSeriesSplit) | 49.89% |
+| CV Std | ± 3.16% |
+| Majority-class baseline | ~52.1% (Decision) |
+
+---
+
 ## 2026-05-28 — mdabbert dataset (ufc-master.csv, data to 2026-03-28)
 
 **Trigger:** Switched data source from original UFCStats hex-ID CSV (up to 2025-09-06) to mdabbert-format dataset (2010-03-21 to 2026-03-28). Wrote `ingest_mdabbert.py` adapter replacing pipeline steps 1-3.
