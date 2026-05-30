@@ -9,8 +9,8 @@ from pathlib import Path
 
 # ── Directories ───────────────────────────────────────────────────────────────
 ROOT_DIR   = Path(__file__).resolve().parent
-DB_DIR     = ROOT_DIR / "database_builder_files"
-ML_DIR     = ROOT_DIR / "ML_models"
+DB_DIR     = ROOT_DIR / "db"
+ML_DIR     = ROOT_DIR / "ml"
 MODELS_DIR = ROOT_DIR / "models"      # persisted model artifacts
 RAW_DIR    = ROOT_DIR / "raw_data"
 
@@ -46,7 +46,7 @@ TARGET_COL       = "target"   # 1 = Red wins, 0 = Blue wins
 META_COLS        = ["fight_id", "date", "division", "target"]
 
 # ── XGBoost Hyperparameters (tuned via Optuna, 50 trials, 2026-05-26) ────────
-# CV accuracy: 65.08% ± 1.54%  |  run: python ML_models/XGBoost.py --tune --trials 100
+# CV accuracy: 65.08% ± 1.54%  |  run: python ml/XGBoost.py --tune --trials 100
 # to refresh these after adding new features.
 XGB_PARAMS: dict = {
     "n_estimators":     367,

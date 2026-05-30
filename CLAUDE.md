@@ -23,11 +23,11 @@ python run_pipeline.py --full --csv path/to/UFC.csv
 python run_pipeline.py --steps 4,5,6,7
 
 # Train a single model directly
-python ML_models/XGBoost.py
-python ML_models/logistic_regression.py
+python ml/XGBoost.py
+python ml/logistic_regression.py
 
 # Tune XGBoost hyperparameters with Optuna (slow — update config.py XGB_PARAMS after)
-python ML_models/XGBoost.py --tune --trials 100
+python ml/XGBoost.py --tune --trials 100
 
 # Predict a fight
 python predict.py "Islam Makhachev" "Charles Oliveira"
@@ -66,7 +66,7 @@ The pipeline has 7 numbered steps (defined in `run_pipeline.py`):
 
 Steps 1–3 are run as subprocesses. Steps 4–7 are direct Python imports (faster, unified logging).
 
-### Database schema (`database_builder_files/ufc_v2.db`)
+### Database schema (`db/ufc_v2.db`)
 
 Three tables:
 
@@ -76,11 +76,11 @@ Three tables:
 
 Fighter IDs are hex strings sourced from UFCStats.com URLs (e.g. `c2299ec916bc7c56`).
 
-### Rolling stats (`database_builder_files/rolling.py`)
+### Rolling stats (`db/rolling.py`)
 
 Reads `fight_stats`, sorts by date, applies `shift(1)` so each row only contains data from fights *before* the current one, then upserts the computed columns back into `fight_stats`. This is the critical leakage-prevention step — never skip the shift.
 
-### ELO calculator (`ML_models/ELO_calculator.py`)
+### ELO calculator (`ml/ELO_calculator.py`)
 
 Replays all historical fights chronologically to produce pre-fight ELO ratings. Two modes:
 
@@ -89,7 +89,7 @@ Replays all historical fights chronologically to produce pre-fight ELO ratings. 
 
 K-factor is `K_FACTOR_PROVISIONAL=90` for fighters with ≤3 fights, then `K_FACTOR_NORMAL=32`. Starting ELO is 1400 (config).
 
-### Feature dataset (`ML_models/ML_data_preparation.py`)
+### Feature dataset (`ml/ML_data_preparation.py`)
 
 Joins fights + fight_stats + ELO + recent form into a flat feature CSV. Key transformations:
 
@@ -140,10 +140,13 @@ Always untrack and gitignore generated/temporary files before committing. Files 
 
 - `**/__pycache__/` and `*.pyc` — Python bytecode
 - `models/*.joblib` — trained model artifacts (regenerate with `run_pipeline.py`)
-- `database_builder_files/ufc_v2.db` — SQLite database (regenerate with `ingest_mdabbert.py` + `run_pipeline.py`)
+- `db/ufc_v2.db` — SQLite database (regenerate with `db/ingest_mdabbert.py` + `run_pipeline.py`)
 - `logs/` — runtime logs
-- `ML_models/*.csv` — intermediate ML datasets
-- `raw_data/*.csv` and `raw_data/*.db` — large source files (download from Kaggle)
+- `ml/*.csv` — intermediate ML datasets
+- `raw_data/*.db` — raw database files
+
+Note: `raw_data/ufc-master.csv` IS tracked — it is the source of truth and contains
+scraped data that cannot be re-downloaded from Kaggle.
 
 If any of these were previously committed, untrack them with `git rm --cached <file>` (without deleting the local copy), then verify `.gitignore` covers them before staging the commit.
 
