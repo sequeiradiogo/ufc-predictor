@@ -143,7 +143,10 @@ Always untrack and gitignore generated/temporary files before committing. Files 
 - `db/ufc_v2.db` — SQLite database (regenerate with `db/ingest_mdabbert.py` + `run_pipeline.py`)
 - `logs/` — runtime logs
 - `ml/*.csv` — intermediate ML datasets
-- `raw_data/*.csv` and `raw_data/*.db` — large source files (download from Kaggle)
+- `raw_data/*.db` — raw database files
+
+Note: `raw_data/ufc-master.csv` IS tracked — it is the source of truth and contains
+scraped data that cannot be re-downloaded from Kaggle.
 
 If any of these were previously committed, untrack them with `git rm --cached <file>` (without deleting the local copy), then verify `.gitignore` covers them before staging the commit.
 
