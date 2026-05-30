@@ -11,7 +11,7 @@ Download the updated Kaggle dataset (mdabbert or equivalent) and rebuild the dat
 ```
 python run_pipeline.py --full --csv path/to/new_UFC.csv
 ```
-Acceptance: `database_builder_files/ufc_v2.db` contains fights up to the most recent UFC event.
+Acceptance: `db/ufc_v2.db` contains fights up to the most recent UFC event.
 
 ### `data/odds-backfill` — Scrape and backfill historical betting odds
 Scrape closing moneylines from BestFightOdds.com (no public API — BeautifulSoup/Playwright).
@@ -92,7 +92,7 @@ Containerise with Docker and deploy `uvicorn api:app` to Fly.io (free tier).
 ## Infrastructure
 
 ### `infra/gitignore-lfs` — Move large files to Git LFS or exclude from history
-`raw_data/UFC_with_rolling.csv` and `database_builder_files/ufc_v2.db` should not be in git history.
+`raw_data/UFC_with_rolling.csv` and `db/ufc_v2.db` should not be in git history.
 - Set up Git LFS for `*.csv` and `*.db` OR add to `.gitignore` and document download steps in README
 - Rewrite history if already committed (requires force push — coordinate with collaborators)
 

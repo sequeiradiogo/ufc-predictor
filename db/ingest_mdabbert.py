@@ -10,7 +10,7 @@ rolling.py is not needed.  After running this, continue with steps 4-7:
     python run_pipeline.py --steps 4,5,6,7
 
 Usage:
-    python database_builder_files/ingest_mdabbert.py --csv raw_data/ufc-master.csv
+    python db/ingest_mdabbert.py --csv raw_data/ufc-master.csv
 """
 
 import argparse

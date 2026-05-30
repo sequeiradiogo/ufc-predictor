@@ -18,7 +18,7 @@ import pytest
 # ── Allow imports from project root ──────────────────────────────────────────
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
-sys.path.insert(0, str(ROOT_DIR / "ML_models"))
+sys.path.insert(0, str(ROOT_DIR / "ml"))
 
 from config import (
     DB_PATH,
@@ -404,7 +404,7 @@ class TestDataLeakageAudit:
         fighters at exactly STARTING_ELO (they have no history yet).
         """
         try:
-            from ML_models.ELO_calculator import build_elo_features
+            from ml.ELO_calculator import build_elo_features
         except ImportError:
             pytest.skip("ELO_calculator not importable")
         elo_df = build_elo_features(conn)

@@ -4,11 +4,11 @@ raw_sql_database.py — Build the raw UFC SQLite database from the source CSV.
 Supersedes: 'raw SQL database.py'  (space in name caused issues)
 
 Reads : UFC.csv  (path set via --csv argument or IN_CSV constant below)
-Writes: database_builder_files/ufc.db
+Writes: db/ufc.db
 
 Usage:
-    python database_builder_files/raw_sql_database.py
-    python database_builder_files/raw_sql_database.py --csv path/to/UFC.csv
+    python db/raw_sql_database.py
+    python db/raw_sql_database.py --csv path/to/UFC.csv
 """
 
 import argparse

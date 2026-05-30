@@ -6,7 +6,7 @@ Every stat is shifted so a fighter's row for fight N only contains data
 from fights 1 … N-1 — no future leakage.
 
 Run:
-    python database_builder_files/rolling.py
+    python db/rolling.py
 
 Or import and call main() from run_pipeline.py.
 """
@@ -337,7 +337,17 @@ def upsert_to_db(prior_df: pd.DataFrame, db_path: Path) -> None:
 # Entry point
 # ══════════════════════════════════════════════════════════════════════════════
 
-def main() -> None:
+def main(fighter_ids: set | None = None) -> None:
+    """
+    Compute rolling stats and upsert into the DB.
+
+    Pass *fighter_ids* to only recompute stats for a specific subset of fighters
+    (incremental mode used by refresh_data.py --auto). Rolling stats for each
+    fighter are independent so a partial recompute is safe; upsert_to_db uses
+    ON CONFLICT to update existing rows without touching others.
+
+    Omit *fighter_ids* (or pass None) for a full rebuild of all fighters.
+    """
     if not DB_PATH.exists():
         log.error("Database not found: %s", DB_PATH)
         log.error("Run step 1 (raw_sql_database.py) and step 2 (keys.py) first.")
@@ -347,6 +357,13 @@ def main() -> None:
     conn = sqlite3.connect(str(DB_PATH))
     df = load_raw_data(conn)
     conn.close()
+
+    if fighter_ids:
+        log.info(
+            "Incremental mode: recomputing rolling stats for %d fighters.",
+            len(fighter_ids),
+        )
+        df = df[df["fighter_id"].isin(fighter_ids)].copy()
 
     prior_df = build_prior_df(df)
     upsert_to_db(prior_df, DB_PATH)

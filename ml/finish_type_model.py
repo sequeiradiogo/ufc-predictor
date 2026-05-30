@@ -10,7 +10,7 @@ Uses the same fight-level diff features as the main win-prediction model.
 Fights with unknown or rare finish methods (DQ, Overturned, etc.) are excluded.
 
 Run:
-    python ML_models/finish_type_model.py
+    python ml/finish_type_model.py
 
 Saves:
     models/finish_type.joblib
@@ -59,7 +59,7 @@ def load_finish_dataset() -> pd.DataFrame:
     if not CSV_WITH_ELO.exists():
         raise FileNotFoundError(
             f"ML dataset not found at '{CSV_WITH_ELO}'.\n"
-            "Run 'python ML_models/ML_data_preparation.py' first."
+            "Run 'python ml/ML_data_preparation.py' first."
         )
 
     log.info("Loading ML dataset from %s…", CSV_WITH_ELO)

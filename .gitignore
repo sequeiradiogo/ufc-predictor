@@ -22,7 +22,10 @@ logs/
 *.db-wal
 
 # Intermediate generated data (regenerate with run_pipeline.py)
-ML_models/*.csv
+ml/*.csv
+
+# Database (regenerate with run_pipeline.py --full --csv)
+db/*.db
 
 # Raw source CSVs (large — download from Kaggle)
 raw_data/*.csv
