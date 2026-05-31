@@ -211,7 +211,7 @@ class TestBestMatch:
 # 3. _insert_new_data against a temp DB
 # ══════════════════════════════════════════════════════════════════════════════
 
-from refresh_data import _insert_new_data
+from scripts.refresh_data import _insert_new_data
 
 _FIGHTERS_DDL = """
 CREATE TABLE fighters (
@@ -386,20 +386,20 @@ class TestRollingIncremental:
 class TestRefreshHelpers:
     @pytest.mark.skipif(not DB_PATH.exists(), reason="DB not found")
     def test_get_last_event_date_returns_date(self):
-        from refresh_data import get_last_event_date
+        from scripts.refresh_data import get_last_event_date
         d = get_last_event_date()
         assert d is not None
         assert isinstance(d, date)
 
     @pytest.mark.skipif(not DB_PATH.exists(), reason="DB not found")
     def test_last_event_date_is_recent(self):
-        from refresh_data import get_last_event_date
+        from scripts.refresh_data import get_last_event_date
         d = get_last_event_date()
         assert d >= date(2020, 1, 1)
 
     @pytest.mark.skipif(not DB_PATH.exists(), reason="DB not found")
     def test_existing_fighter_ids_non_empty(self):
-        from refresh_data import _existing_fighter_ids
+        from scripts.refresh_data import _existing_fighter_ids
         conn = sqlite3.connect(str(DB_PATH))
         ids = _existing_fighter_ids(conn)
         conn.close()

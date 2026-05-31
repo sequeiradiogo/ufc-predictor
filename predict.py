@@ -50,8 +50,8 @@ from config import (
     FINISH_METHOD_MAP,
 )
 from ml.ELO_calculator import get_current_ratings_by_division
-from odds import print_value_bet_summary
-from logger import get_logger
+from utils.odds import print_value_bet_summary
+from utils.logger import get_logger
 
 log = get_logger(__name__)
 
