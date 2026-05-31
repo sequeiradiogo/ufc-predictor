@@ -35,7 +35,7 @@ from config import (
     TRAIN_TEST_SPLIT, RANDOM_STATE,
     MODEL_LR_PATH, MODEL_LR_SCALER, MODEL_LR_FEATURES,
 )
-from logger import get_logger
+from utils.logger import get_logger
 
 log = get_logger(__name__)
 

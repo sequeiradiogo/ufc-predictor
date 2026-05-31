@@ -46,7 +46,7 @@ from predict import (
     build_feature_vector,
 )
 from ml.ELO_calculator import get_current_ratings_by_division
-from odds import american_to_prob, remove_vig, compute_edge, kelly_fraction
+from utils.odds import american_to_prob, remove_vig, compute_edge, kelly_fraction
 
 app = FastAPI(
     title="UFC Fight Predictor API",

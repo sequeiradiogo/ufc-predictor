@@ -33,7 +33,7 @@ from config import (
     MODEL_XGB_PATH, MODEL_XGB_FEATURES,
     XGB_PARAMS,
 )
-from logger import get_logger
+from utils.logger import get_logger
 
 log = get_logger(__name__)
 

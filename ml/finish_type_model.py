@@ -42,7 +42,7 @@ from config import (
     FINISH_METHOD_MAP, FINISH_CLASS_NAMES,
     MODEL_FINISH_PATH, MODEL_FINISH_FEATURES,
 )
-from logger import get_logger
+from utils.logger import get_logger
 
 log = get_logger(__name__)
 

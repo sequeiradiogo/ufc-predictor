@@ -36,7 +36,7 @@ from config import (
     RECENT_FORM_WINDOW,
     MIN_FIGHT_DATE,
 )
-from logger import get_logger
+from utils.logger import get_logger
 from ml.ELO_calculator import build_elo_features
 
 log = get_logger(__name__)

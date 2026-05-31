@@ -8,7 +8,7 @@ Handles three common formats:
 
 Functions
 ---------
-american_to_prob(odds)         -> implied probability (float, 0–1)
+american_to_prob(odds)         -> implied probability (float, 0-1)
 decimal_to_prob(odds)          -> implied probability
 fractional_to_prob(frac_str)   -> implied probability
 remove_vig(p_red, p_blue)      -> (fair_p_red, fair_p_blue)  -- vig stripped
@@ -95,7 +95,7 @@ def remove_vig(p_red: float, p_blue: float) -> tuple[float, float]:
 
 def compute_edge(model_prob: float, fair_prob: float) -> float:
     """
-    Edge = model probability − market fair probability.
+    Edge = model probability - market fair probability.
     Positive edge -> model thinks fighter is undervalued by the market.
     """
     return model_prob - fair_prob
@@ -107,13 +107,13 @@ def kelly_fraction(edge: float, odds_decimal: float, fraction: float = 0.25) -> 
 
     Parameters
     ----------
-    edge          : model_prob − fair_prob  (positive = value bet)
+    edge          : model_prob - fair_prob  (positive = value bet)
     odds_decimal  : decimal odds for the bet
     fraction      : Kelly multiplier (default 0.25 = quarter Kelly, conservative)
 
     Returns
     -------
-    Stake as fraction of bankroll (0.0 -> 1.0). Returns 0 if edge ≤ 0.
+    Stake as fraction of bankroll (0.0 -> 1.0). Returns 0 if edge <= 0.
     """
     if edge <= 0 or odds_decimal <= 1:
         return 0.0
@@ -235,7 +235,7 @@ if __name__ == "__main__":
     import argparse
     import sys
 
-    ROOT_DIR = Path(__file__).resolve().parent
+    ROOT_DIR = Path(__file__).resolve().parent.parent
     sys.path.insert(0, str(ROOT_DIR))
     from config import DB_PATH
 

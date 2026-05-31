@@ -18,9 +18,9 @@ Two refresh modes
 
 Usage
 -----
-  python refresh_data.py --csv path/to/updated_UFC.csv
-  python refresh_data.py --auto
-  python refresh_data.py --auto --dry-run   # preview without changes
+  python scripts/refresh_data.py --csv path/to/updated_UFC.csv
+  python scripts/refresh_data.py --auto
+  python scripts/refresh_data.py --auto --dry-run   # preview without changes
 """
 
 import argparse
@@ -29,19 +29,19 @@ import sys
 from datetime import date
 from pathlib import Path
 
-ROOT_DIR = Path(__file__).resolve().parent
+ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 import pandas as pd
 
 from config import DB_PATH, RAW_DIR
-from logger import get_logger
+from utils.logger import get_logger
 import run_pipeline
 
 log = get_logger("refresh")
 
 
-# ── Last event date ───────────────────────────────────────────────────────────
+# -- Last event date -----------------------------------------------------------
 
 def get_last_event_date() -> date | None:
     """Return the date of the most recent fight in the database, or None."""
@@ -61,7 +61,7 @@ def _existing_fighter_ids(conn: sqlite3.Connection) -> set[str]:
     return {r[0] for r in rows}
 
 
-# ── Scraping ──────────────────────────────────────────────────────────────────
+# -- Scraping ------------------------------------------------------------------
 
 def scrape_new_fights(since: date) -> dict:
     """
@@ -113,7 +113,7 @@ def scrape_new_fights(since: date) -> dict:
     return data
 
 
-# ── Incremental DB insert ─────────────────────────────────────────────────────
+# -- Incremental DB insert -----------------------------------------------------
 
 _FIGHTER_COLS   = ("fighter_id", "name", "height", "reach", "stance", "dob")
 _FIGHT_COLS     = (
@@ -214,7 +214,7 @@ def _insert_new_data(data: dict, conn: sqlite3.Connection) -> set[str]:
     return affected_fids
 
 
-# ── Refresh modes ─────────────────────────────────────────────────────────────
+# -- Refresh modes -------------------------------------------------------------
 
 def refresh_from_csv(csv_path: Path, dry_run: bool = False) -> None:
     """Rebuild DB from an updated CSV and retrain all models."""
@@ -329,7 +329,7 @@ def refresh_auto(dry_run: bool = False) -> None:
     log.info("Refresh complete.")
 
 
-# ── CLI ───────────────────────────────────────────────────────────────────────
+# -- CLI -----------------------------------------------------------------------
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -338,10 +338,10 @@ def main() -> None:
         epilog="""
 Examples
 --------
-  python refresh_data.py --csv path/to/updated_UFC.csv
-  python refresh_data.py --csv path/to/updated_UFC.csv --dry-run
-  python refresh_data.py --auto
-  python refresh_data.py --auto --dry-run
+  python scripts/refresh_data.py --csv path/to/updated_UFC.csv
+  python scripts/refresh_data.py --csv path/to/updated_UFC.csv --dry-run
+  python scripts/refresh_data.py --auto
+  python scripts/refresh_data.py --auto --dry-run
         """,
     )
     group = parser.add_mutually_exclusive_group(required=True)

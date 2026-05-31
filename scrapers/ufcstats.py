@@ -28,7 +28,7 @@ from bs4 import BeautifulSoup
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
-from logger import get_logger
+from utils.logger import get_logger
 
 log = get_logger(__name__)
 

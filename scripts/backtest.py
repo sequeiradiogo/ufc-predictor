@@ -1,17 +1,17 @@
 """
-backtest.py — Simulate predictions at each historical fight and report accuracy.
+backtest.py -- Simulate predictions at each historical fight and report accuracy.
 
 Loads the saved XGBoost (or LR) model and scores it against the full dataset,
 reporting year-by-year accuracy, overall metrics, and model drift over time.
 
 Usage
 -----
-    python backtest.py
-    python backtest.py --model lr
-    python backtest.py --from-year 2018
-    python backtest.py --save-csv backtest_results.csv
-    python backtest.py --odds                 # value-bet ROI simulation
-    python backtest.py --odds --min-edge 0.05 # only bet when edge >= 5%
+    python scripts/backtest.py
+    python scripts/backtest.py --model lr
+    python scripts/backtest.py --from-year 2018
+    python scripts/backtest.py --save-csv backtest_results.csv
+    python scripts/backtest.py --odds                 # value-bet ROI simulation
+    python scripts/backtest.py --odds --min-edge 0.05 # only bet when edge >= 5%
 """
 
 import argparse
@@ -23,7 +23,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
-ROOT_DIR = Path(__file__).resolve().parent
+ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 from config import (
@@ -32,13 +32,13 @@ from config import (
     MODEL_LR_PATH, MODEL_LR_SCALER, MODEL_LR_FEATURES,
     TARGET_COL, META_COLS,
 )
-from logger import get_logger
-from odds import american_to_prob, remove_vig, kelly_fraction
+from utils.logger import get_logger
+from utils.odds import american_to_prob, remove_vig, kelly_fraction
 
 log = get_logger(__name__)
 
 
-# ── Load model ────────────────────────────────────────────────────────────────
+# -- Load model ----------------------------------------------------------------
 
 def load_model(model_type: str) -> tuple:
     """
@@ -71,7 +71,7 @@ def load_model(model_type: str) -> tuple:
     return model, feature_names, scaler, platt, label
 
 
-# ── Score dataset ─────────────────────────────────────────────────────────────
+# -- Score dataset -------------------------------------------------------------
 
 def score_dataset(
     df: pd.DataFrame,
@@ -88,7 +88,7 @@ def score_dataset(
     meta_to_drop = [c for c in META_COLS if c in df.columns]
     X = df.drop(columns=meta_to_drop).fillna(0)
 
-    # Align features — only use columns the model was trained on
+    # Align features -- only use columns the model was trained on
     common = [f for f in feature_names if f in X.columns]
     X_aligned = X[common]
 
@@ -119,7 +119,7 @@ def score_dataset(
     return results
 
 
-# ── Report ────────────────────────────────────────────────────────────────────
+# -- Report --------------------------------------------------------------------
 
 def print_report(results: pd.DataFrame, label: str, from_year: int | None = None) -> None:
     """Print overall + year-by-year accuracy report."""
@@ -127,7 +127,7 @@ def print_report(results: pd.DataFrame, label: str, from_year: int | None = None
         results = results[results["year"] >= from_year].copy()
 
     print(f"\n{'=' * 60}")
-    print(f"  Backtest Report — {label}")
+    print(f"  Backtest Report -- {label}")
     if from_year:
         print(f"  (from {from_year} onwards)")
     print(f"{'=' * 60}")
@@ -151,7 +151,7 @@ def print_report(results: pd.DataFrame, label: str, from_year: int | None = None
     print(f"  Naive baseline:    {naive_acc:.2%}  (always pick {'Red' if naive > 0.5 else 'Blue'})")
     print(f"  Model edge:        {overall - naive_acc:+.2%}")
 
-    # ── Year-by-year table ────────────────────────────────────────────────────
+    # -- Year-by-year table ----------------------------------------------------
     yearly = (
         results.groupby("year")
         .agg(
@@ -168,11 +168,11 @@ def print_report(results: pd.DataFrame, label: str, from_year: int | None = None
     print(f"\n  {'Year':<6} {'Fights':>7} {'Correct':>8} {'Accuracy':>10} {'Avg Conf':>10}")
     print(f"  {'-'*46}")
     for _, row in yearly.iterrows():
-        marker = " ←" if row["accuracy"] < 0.60 else ""
+        marker = " <-" if row["accuracy"] < 0.60 else ""
         print(f"  {int(row['year']):<6} {int(row['fights']):>7} {int(row['correct']):>8} "
               f"{row['accuracy_pct']:>10} {row['avg_conf_pct']:>10}{marker}")
 
-    # ── Division breakdown ────────────────────────────────────────────────────
+    # -- Division breakdown ----------------------------------------------------
     if "division" in results.columns and results["division"].notna().any():
         print(f"\n  {'Division':<25} {'Fights':>7} {'Accuracy':>10}")
         print(f"  {'-'*45}")
@@ -188,7 +188,7 @@ def print_report(results: pd.DataFrame, label: str, from_year: int | None = None
     print()
 
 
-# ── Odds backtest ─────────────────────────────────────────────────────────────
+# -- Odds backtest -------------------------------------------------------------
 
 def _load_odds(db_path: Path) -> pd.DataFrame:
     """Pull fight_id + odds_red + odds_blue from the DB fights table."""
@@ -223,10 +223,10 @@ def print_odds_report(results: pd.DataFrame, min_edge: float, from_year: int | N
     print(f"\n  Fights with odds: {coverage} / {total}  ({coverage/total:.0%} coverage)")
 
     if coverage == 0:
-        print("  No odds data available — run the pipeline with a dataset that includes odds.")
+        print("  No odds data available -- run the pipeline with a dataset that includes odds.")
         return
 
-    # ── Section 1: Naive model picks (1 unit on every prediction) ─────────────
+    # -- Section 1: Naive model picks (1 unit on every prediction) -------------
     raw_p_red_all  = df["odds_red"].apply(american_to_prob)
     raw_p_blue_all = df["odds_blue"].apply(american_to_prob)
     df["dec_red"]  = 1 / raw_p_red_all
@@ -256,7 +256,7 @@ def print_odds_report(results: pd.DataFrame, min_edge: float, from_year: int | N
     print(f"  Total P&L: {naive_pnl:+.2f} units  [{outcome}]")
     print(f"  ROI:       {naive_roi:+.1f}%  (per unit staked)")
 
-    # ── Section 2: Value bets only (edge >= min_edge) ─────────────────────────
+    # -- Section 2: Value bets only (edge >= min_edge) -------------------------
     print(f"\n  -- Section 2: Value bets only (edge >= {min_edge:.0%}) --")
 
     raw_p_red  = df["odds_red"].apply(american_to_prob)
@@ -339,7 +339,7 @@ def print_odds_report(results: pd.DataFrame, min_edge: float, from_year: int | N
     print()
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+# -- Main ----------------------------------------------------------------------
 
 def main(
     model_type: str = "xgb",
@@ -353,14 +353,14 @@ def main(
         print("   Run: python ml/ML_data_preparation.py")
         sys.exit(1)
 
-    log.info("Loading ML dataset from %s…", CSV_WITH_ELO)
+    log.info("Loading ML dataset from %s...", CSV_WITH_ELO)
     df = pd.read_csv(CSV_WITH_ELO)
     df["date"] = pd.to_datetime(df["date"])
     df = df.sort_values("date").reset_index(drop=True)
     log.info("Loaded %d rows.", len(df))
 
     model, feature_names, scaler, platt, label = load_model(model_type)
-    log.info("Scoring full dataset…")
+    log.info("Scoring full dataset...")
 
     results = score_dataset(df, model, feature_names, scaler, platt)
     print_report(results, label, from_year)
@@ -371,9 +371,9 @@ def main(
         else:
             odds_df = _load_odds(DB_PATH)
             if odds_df.empty:
-                print("\n  [ODDS] No odds data in DB — ingest a dataset that includes R_odds/B_odds.")
+                print("\n  [ODDS] No odds data in DB -- ingest a dataset that includes R_odds/B_odds.")
             else:
-                # fight_id is a meta col in the CSV — re-attach it from df
+                # fight_id is a meta col in the CSV -- re-attach it from df
                 results["fight_id"] = df["fight_id"].values if "fight_id" in df.columns else np.nan
                 results = results.merge(odds_df, on="fight_id", how="left")
                 log.info("Odds joined: %d / %d fights have odds.", results["odds_red"].notna().sum(), len(results))
@@ -392,12 +392,12 @@ if __name__ == "__main__":
         epilog="""
 Examples
 --------
-  python backtest.py                          # XGBoost, all years
-  python backtest.py --model lr               # Logistic Regression
-  python backtest.py --from-year 2020         # only fights from 2020 onward
-  python backtest.py --save-csv results.csv   # save fight-level results
-  python backtest.py --odds                   # value-bet ROI simulation
-  python backtest.py --odds --min-edge 0.05   # only bet when edge >= 5%
+  python scripts/backtest.py                          # XGBoost, all years
+  python scripts/backtest.py --model lr               # Logistic Regression
+  python scripts/backtest.py --from-year 2020         # only fights from 2020 onward
+  python scripts/backtest.py --save-csv results.csv   # save fight-level results
+  python scripts/backtest.py --odds                   # value-bet ROI simulation
+  python scripts/backtest.py --odds --min-edge 0.05   # only bet when edge >= 5%
         """,
     )
     parser.add_argument("--model",     choices=["xgb", "lr"], default="xgb")
