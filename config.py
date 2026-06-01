@@ -33,6 +33,12 @@ MODEL_LR_FEATURES  = MODELS_DIR / "lr_features.joblib"
 MODEL_XGB_PATH     = MODELS_DIR / "xgboost.joblib"
 MODEL_XGB_FEATURES = MODELS_DIR / "xgb_features.joblib"
 
+MODEL_RF_PATH      = MODELS_DIR / "random_forest.joblib"
+MODEL_RF_FEATURES  = MODELS_DIR / "rf_features.joblib"
+
+MODEL_LGBM_PATH     = MODELS_DIR / "lightgbm.joblib"
+MODEL_LGBM_FEATURES = MODELS_DIR / "lgbm_features.joblib"
+
 # ── ELO ───────────────────────────────────────────────────────────────────────
 STARTING_ELO         = 1400   # slightly below 1500 to penalise unknowns
 K_FACTOR_NORMAL      = 32
@@ -67,6 +73,30 @@ LR_PARAMS: dict = {
     "solver":       "liblinear",
     "max_iter":     1883,
     "class_weight": "balanced",
+}
+
+# ── Random Forest Hyperparameters (tuned via Optuna, 100 trials, 2026-06-01) ──
+# CV accuracy: 62.49% +/- 2.41%  |  run: python ml/random_forest.py --tune --trials 100
+RF_PARAMS: dict = {
+    "n_estimators":      203,
+    "max_depth":         6,
+    "min_samples_split": 9,
+    "min_samples_leaf":  4,
+    "max_features":      0.3,
+    "class_weight":      None,
+}
+
+# ── LightGBM Hyperparameters (tuned via Optuna, 100 trials, 2026-06-01) ───────
+# CV accuracy: 61.94% +/- 2.89%  |  run: python ml/lightgbm_model.py --tune --trials 100
+LGBM_PARAMS: dict = {
+    "n_estimators":     316,
+    "learning_rate":    0.011995,
+    "max_depth":        3,
+    "num_leaves":       57,
+    "subsample":        0.7433,
+    "colsample_bytree": 0.5987,
+    "reg_alpha":        0.3932,
+    "reg_lambda":       0.004966,
 }
 
 # ── Feature Engineering ───────────────────────────────────────────────────────
