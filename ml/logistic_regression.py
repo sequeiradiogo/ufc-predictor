@@ -6,8 +6,10 @@ Replaces: 'logistic regression.py'  (old file with space in name kept for
 
 Run:
     python ml/logistic_regression.py
+    python ml/logistic_regression.py --tune --trials 100
 """
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -34,8 +36,12 @@ from config import (
     TARGET_COL, META_COLS,
     TRAIN_TEST_SPLIT, RANDOM_STATE,
     MODEL_LR_PATH, MODEL_LR_SCALER, MODEL_LR_FEATURES,
+    LR_PARAMS,
 )
+
 from utils.logger import get_logger
+
+DEFAULT_PARAMS = {**LR_PARAMS, "random_state": RANDOM_STATE}
 
 log = get_logger(__name__)
 
@@ -81,11 +87,64 @@ def make_symmetric(df: pd.DataFrame) -> pd.DataFrame:
     return pd.concat([df, df_flip], ignore_index=True).sort_values("date").reset_index(drop=True)
 
 
+# ── Hyperparameter tuning ─────────────────────────────────────────────────────
+
+def tune_hyperparameters(df: pd.DataFrame, n_trials: int = 50) -> dict:
+    """Use Optuna to find the best LR hyperparameters via TimeSeriesSplit CV."""
+    try:
+        import optuna
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+    except ImportError:
+        log.error("Optuna not installed. Run: pip install optuna")
+        return DEFAULT_PARAMS.copy()
+
+    log.info("Starting Optuna hyperparameter search (%d trials)...", n_trials)
+
+    tss = TimeSeriesSplit(n_splits=5)
+    X_all, y_all = preprocess_data(df)
+
+    def objective(trial) -> float:
+        params = {
+            "C":            trial.suggest_float("C", 1e-4, 100.0, log=True),
+            "solver":       trial.suggest_categorical("solver", ["lbfgs", "liblinear", "saga"]),
+            "max_iter":     trial.suggest_int("max_iter", 200, 2000),
+            "class_weight": trial.suggest_categorical("class_weight", [None, "balanced"]),
+        }
+
+        fold_scores: list[float] = []
+        for train_idx, val_idx in tss.split(X_all):
+            train_fold = make_symmetric(df.iloc[train_idx].copy())
+            X_tr, y_tr = preprocess_data(train_fold)
+            X_val = X_all.iloc[val_idx]
+            y_val = y_all.iloc[val_idx]
+
+            scaler  = StandardScaler()
+            X_tr_s  = scaler.fit_transform(X_tr)
+            X_val_s = scaler.transform(X_val)
+
+            m = LogisticRegression(**params, random_state=RANDOM_STATE)
+            m.fit(X_tr_s, y_tr)
+            fold_scores.append(accuracy_score(y_val, m.predict(X_val_s)))
+
+        return float(np.mean(fold_scores))
+
+    study = optuna.create_study(direction="maximize")
+    study.optimize(objective, n_trials=n_trials, show_progress_bar=True)
+
+    best = study.best_params
+    best["random_state"] = RANDOM_STATE
+    log.info("Best CV accuracy: %.2f%%", study.best_value * 100)
+    log.info("Best params: %s", best)
+    return best
+
+
 # ── Cross-validation ──────────────────────────────────────────────────────────
 
-def cross_validate(df: pd.DataFrame, n_splits: int = 5) -> list[float]:
+def cross_validate(df: pd.DataFrame, n_splits: int = 5, params: dict | None = None) -> list[float]:
     """TimeSeriesSplit CV — train on older fights, validate on newer."""
-    log.info("Running %d-fold TimeSeriesSplit cross-validation…", n_splits)
+    if params is None:
+        params = DEFAULT_PARAMS.copy()
+    log.info("Running %d-fold TimeSeriesSplit cross-validation...", n_splits)
     tss   = TimeSeriesSplit(n_splits=n_splits)
     X_all, y_all = preprocess_data(df)
     scores: list[float] = []
@@ -100,13 +159,13 @@ def cross_validate(df: pd.DataFrame, n_splits: int = 5) -> list[float]:
         X_tr_s  = scaler.fit_transform(X_tr)
         X_val_s = scaler.transform(X_val)
 
-        m = LogisticRegression(max_iter=1000, random_state=RANDOM_STATE)
+        m = LogisticRegression(**params)
         m.fit(X_tr_s, y_tr)
         score = accuracy_score(y_val, m.predict(X_val_s))
         scores.append(score)
         log.info("  Fold %d: %.2f%%", fold, score * 100)
 
-    log.info("CV Mean: %.2f%%  ± %.2f%%", np.mean(scores) * 100, np.std(scores) * 100)
+    log.info("CV Mean: %.2f%%  +/- %.2f%%", np.mean(scores) * 100, np.std(scores) * 100)
     return scores
 
 
@@ -155,10 +214,16 @@ def plot_model_performance(
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def main() -> None:
+def main(tune: bool = False, n_trials: int = 50) -> None:
     df = load_data(CSV_PATH)
 
-    cv_scores = cross_validate(df)
+    if tune:
+        log.info("Hyperparameter tuning mode - this may take several minutes.")
+        best_params = tune_hyperparameters(df, n_trials=n_trials)
+    else:
+        best_params = DEFAULT_PARAMS.copy()
+
+    cv_scores = cross_validate(df, params=best_params)
 
     # 70 / 10 / 20 chronological split
     n         = len(df)
@@ -181,8 +246,8 @@ def main() -> None:
     X_cal_s   = scaler.transform(X_cal)
     X_test_s  = scaler.transform(X_test)
 
-    log.info("Training Logistic Regression…")
-    base_model = LogisticRegression(max_iter=1000, random_state=RANDOM_STATE)
+    log.info("Training Logistic Regression...")
+    base_model = LogisticRegression(**best_params)
     base_model.fit(X_train_s, y_train)
 
     # Platt scaling — fit a 1-feature logistic regression on the calibration set
@@ -205,11 +270,11 @@ def main() -> None:
 
     log.info("Test Accuracy:    %.2f%%", acc * 100)
     log.info("Brier score  — before calibration: %.4f  after: %.4f", brier_before, brier_after)
-    log.info("Mean CV Accuracy: %.2f%% ± %.2f%%", np.mean(cv_scores) * 100, np.std(cv_scores) * 100)
+    log.info("Mean CV Accuracy: %.2f%% +/- %.2f%%", np.mean(cv_scores) * 100, np.std(cv_scores) * 100)
 
     print("\n=== RESULTS ===")
     print(f"Test Accuracy:    {acc:.2%}")
-    print(f"Mean CV Accuracy: {np.mean(cv_scores):.2%} ± {np.std(cv_scores):.2%}")
+    print(f"Mean CV Accuracy: {np.mean(cv_scores):.2%} +/- {np.std(cv_scores):.2%}")
     print(f"Brier Score — uncalibrated: {brier_before:.4f}  calibrated: {brier_after:.4f}")
     print("\nClassification Report:")
     print(classification_report(y_test, predictions))
@@ -231,7 +296,10 @@ def main() -> None:
 
     # Save — we persist base_model + platt scaler + feature scaler + feature names.
     # predict.py applies: StandardScaler → base_model.predict_proba → Platt → probabilities
-    log.info("Saving model artifacts to %s…", MODEL_LR_PATH.parent)
+    if tune:
+        print(f"Best params: {best_params}")
+
+    log.info("Saving model artifacts to %s...", MODEL_LR_PATH.parent)
     joblib.dump({"base": base_model, "platt": platt}, MODEL_LR_PATH)
     joblib.dump(scaler,        MODEL_LR_SCALER)
     joblib.dump(feature_names, MODEL_LR_FEATURES)
@@ -239,4 +307,17 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Train Logistic Regression UFC fight predictor.")
+    parser.add_argument(
+        "--tune",
+        action="store_true",
+        help="Run Optuna hyperparameter search before training (slower).",
+    )
+    parser.add_argument(
+        "--trials",
+        type=int,
+        default=50,
+        help="Number of Optuna trials (default: 50). Only used with --tune.",
+    )
+    args = parser.parse_args()
+    main(tune=args.tune, n_trials=args.trials)
