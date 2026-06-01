@@ -39,6 +39,8 @@ MODEL_RF_FEATURES  = MODELS_DIR / "rf_features.joblib"
 MODEL_LGBM_PATH     = MODELS_DIR / "lightgbm.joblib"
 MODEL_LGBM_FEATURES = MODELS_DIR / "lgbm_features.joblib"
 
+MODEL_ENSEMBLE_PATH = MODELS_DIR / "ensemble.joblib"
+
 # ── ELO ───────────────────────────────────────────────────────────────────────
 STARTING_ELO         = 1400   # slightly below 1500 to penalise unknowns
 K_FACTOR_NORMAL      = 32
