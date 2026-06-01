@@ -60,6 +60,15 @@ XGB_PARAMS: dict = {
     "reg_lambda":       2.9687,
 }
 
+# ── Logistic Regression Hyperparameters (tuned via Optuna, 100 trials, 2026-06-01) ──
+# CV accuracy: 62.43% +/- 2.45%  |  run: python ml/logistic_regression.py --tune --trials 100
+LR_PARAMS: dict = {
+    "C":            0.0005069,
+    "solver":       "liblinear",
+    "max_iter":     1883,
+    "class_weight": "balanced",
+}
+
 # ── Feature Engineering ───────────────────────────────────────────────────────
 # Columns excluded from the automatic difference-feature loop
 # Columns excluded from the automatic difference-feature loop.
