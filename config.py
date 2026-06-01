@@ -33,6 +33,12 @@ MODEL_LR_FEATURES  = MODELS_DIR / "lr_features.joblib"
 MODEL_XGB_PATH     = MODELS_DIR / "xgboost.joblib"
 MODEL_XGB_FEATURES = MODELS_DIR / "xgb_features.joblib"
 
+MODEL_RF_PATH      = MODELS_DIR / "random_forest.joblib"
+MODEL_RF_FEATURES  = MODELS_DIR / "rf_features.joblib"
+
+MODEL_LGBM_PATH     = MODELS_DIR / "lightgbm.joblib"
+MODEL_LGBM_FEATURES = MODELS_DIR / "lgbm_features.joblib"
+
 # ── ELO ───────────────────────────────────────────────────────────────────────
 STARTING_ELO         = 1400   # slightly below 1500 to penalise unknowns
 K_FACTOR_NORMAL      = 32
@@ -67,6 +73,28 @@ LR_PARAMS: dict = {
     "solver":       "liblinear",
     "max_iter":     1883,
     "class_weight": "balanced",
+}
+
+# ── Random Forest Hyperparameters (defaults; tune with --tune --trials 100) ──
+RF_PARAMS: dict = {
+    "n_estimators":      300,
+    "max_depth":         None,
+    "min_samples_split": 2,
+    "min_samples_leaf":  1,
+    "max_features":      "sqrt",
+    "class_weight":      None,
+}
+
+# ── LightGBM Hyperparameters (defaults; tune with --tune --trials 100) ────────
+LGBM_PARAMS: dict = {
+    "n_estimators":     300,
+    "learning_rate":    0.05,
+    "max_depth":        -1,
+    "num_leaves":       31,
+    "subsample":        0.8,
+    "colsample_bytree": 0.8,
+    "reg_alpha":        0.0,
+    "reg_lambda":       0.0,
 }
 
 # ── Feature Engineering ───────────────────────────────────────────────────────
