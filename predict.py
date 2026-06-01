@@ -12,13 +12,13 @@ Arguments
 ---------
     red_fighter   Name of the Red corner fighter (partial names OK)
     blue_fighter  Name of the Blue corner fighter (partial names OK)
-    --model       Model to use: 'xgb' (default) or 'lr'
+    --model       Model to use: 'xgb' (default), 'lr', 'rf', or 'lgbm'
     --division    Weight division (optional — for division feature encoding)
     --title       Flag if this is a title fight (default: False)
 
 Notes
 -----
-- Models must have been trained first (XGBoost.py / logistic_regression.py).
+- Models must have been trained first (XGBoost.py / logistic_regression.py / random_forest.py / lightgbm_model.py).
 - Fighter stats are taken from their most recent recorded fight.
 - ELO ratings are computed by replaying all historical fights.
 - Recent form (win rate, finish rate, win streak) is computed from fight history.
@@ -42,6 +42,8 @@ from config import (
     STARTING_ELO, K_FACTOR_NORMAL, K_FACTOR_PROVISIONAL, PROVISIONAL_LIMIT,
     MODEL_XGB_PATH, MODEL_XGB_FEATURES,
     MODEL_LR_PATH, MODEL_LR_SCALER, MODEL_LR_FEATURES,
+    MODEL_RF_PATH, MODEL_RF_FEATURES,
+    MODEL_LGBM_PATH, MODEL_LGBM_FEATURES,
     MODEL_FINISH_PATH, MODEL_FINISH_FEATURES,
     FINISH_CLASS_NAMES,
     DIVISIONS,
@@ -335,14 +337,30 @@ def predict_fight(
         features_path = MODEL_XGB_FEATURES
         scaler_path   = None
         model_label   = "XGBoost"
-    else:
+    elif model_type == "lr":
         model_path    = MODEL_LR_PATH
         features_path = MODEL_LR_FEATURES
         scaler_path   = MODEL_LR_SCALER
         model_label   = "Logistic Regression"
+    elif model_type == "rf":
+        model_path    = MODEL_RF_PATH
+        features_path = MODEL_RF_FEATURES
+        scaler_path   = None
+        model_label   = "Random Forest"
+    else:  # lgbm
+        model_path    = MODEL_LGBM_PATH
+        features_path = MODEL_LGBM_FEATURES
+        scaler_path   = None
+        model_label   = "LightGBM"
 
+    script_map = {
+        "xgb":  "ml/XGBoost.py",
+        "lr":   "ml/logistic_regression.py",
+        "rf":   "ml/random_forest.py",
+        "lgbm": "ml/lightgbm_model.py",
+    }
     if not model_path.exists():
-        script = "ml/XGBoost.py" if model_type == "xgb" else "ml/logistic_regression.py"
+        script = script_map[model_type]
         log.error("No saved model found at '%s'. Run  python %s  first.", model_path, script)
         print(f"\n[ERROR]  No saved model found at '{model_path}'.")
         print(f"   Run  python {script}  first to train and save the model.")
@@ -508,9 +526,9 @@ Examples
     parser.add_argument("blue_fighter", help="Blue corner fighter name (partial OK)")
     parser.add_argument(
         "--model",
-        choices=["xgb", "lr"],
+        choices=["xgb", "lr", "rf", "lgbm"],
         default="xgb",
-        help="Model: 'xgb' = XGBoost (default), 'lr' = Logistic Regression",
+        help="Model: 'xgb' = XGBoost (default), 'lr' = Logistic Regression, 'rf' = Random Forest, 'lgbm' = LightGBM",
     )
     parser.add_argument(
         "--division",
