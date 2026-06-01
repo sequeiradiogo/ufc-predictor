@@ -25,12 +25,20 @@ python run_pipeline.py --steps 4,5,6,7
 # Train a single model directly
 python ml/XGBoost.py
 python ml/logistic_regression.py
+python ml/random_forest.py
+python ml/lightgbm_model.py
+python ml/soft_vote_ensemble.py
 
-# Tune XGBoost hyperparameters with Optuna (slow — update config.py XGB_PARAMS after)
+# Tune hyperparameters with Optuna (slow — update config.py *_PARAMS after)
 python ml/XGBoost.py --tune --trials 100
+python ml/logistic_regression.py --tune --trials 100
+python ml/random_forest.py --tune --trials 100
+python ml/lightgbm_model.py --tune --trials 100
+python ml/soft_vote_ensemble.py --trials 100
 
 # Predict a fight
 python predict.py "Islam Makhachev" "Charles Oliveira"
+python predict.py "Islam Makhachev" "Charles Oliveira" --model ensemble
 python predict.py "Jones" "Miocic" --model lr --division "light heavyweight" --title
 
 # Backtest model accuracy year-by-year (use --from-year 2022 for honest out-of-sample)
@@ -56,15 +64,16 @@ python utils/odds.py --migrate
 
 Raw CSV → SQLite DB → Rolling stats → ML feature CSV → Trained models → Predictions
 
-The pipeline has 7 numbered steps (defined in `run_pipeline.py`):
+The pipeline has 10 numbered steps (defined in `run_pipeline.py`):
 
 | Steps | Layer | What happens |
 |-------|-------|--------------|
 | 1–3 | DB build | CSV → SQLite → rolling per-fight stats computed and upserted |
 | 4 | Feature engineering | DB → ML feature CSV with ELO, form, age, style, division encoding |
-| 5–7 | Training | Feature CSV → three saved `.joblib` models |
+| 5–9 | Training | Feature CSV → five saved `.joblib` model groups |
+| 10 | Ensemble | Optuna-tuned soft-vote weights saved to `ensemble.joblib` |
 
-Steps 1–3 are run as subprocesses. Steps 4–7 are direct Python imports (faster, unified logging).
+Steps 1–3 are run as subprocesses. Steps 4–10 are direct Python imports (faster, unified logging).
 
 ### Database schema (`db/ufc_v2.db`)
 
@@ -101,15 +110,20 @@ Joins fights + fight_stats + ELO + recent form into a flat feature CSV. Key tran
 
 ### Models
 
-Three classifiers, all saved to `models/` as `.joblib` files:
+All models are saved to `models/` as `.joblib` files and tracked in git.
 
 | Model | Script | Artifacts | Notes |
 |-------|--------|-----------|-------|
-| XGBoost | `XGBoost.py` | `xgboost.joblib`, `xgb_features.joblib` | Default predictor; Optuna-tuned params in `config.XGB_PARAMS` |
-| Logistic Regression | `logistic_regression.py` | `logistic_regression.joblib` (dict with `base`+`platt` keys), `lr_scaler.joblib`, `lr_features.joblib` | Platt-calibrated; better-calibrated probabilities than XGBoost |
-| Finish type | `finish_type_model.py` | `finish_type.joblib`, `finish_type_features.joblib` | 3-class (Decision/KO-TKO/Submission); ~50% accuracy — use as soft signal only |
+| XGBoost | `ml/XGBoost.py` | `xgboost.joblib`, `xgb_features.joblib` | Optuna-tuned params in `config.XGB_PARAMS` |
+| Logistic Regression | `ml/logistic_regression.py` | `logistic_regression.joblib`, `lr_scaler.joblib`, `lr_features.joblib` | Platt-calibrated; artifact is dict with `base`+`platt` keys |
+| Random Forest | `ml/random_forest.py` | `random_forest.joblib`, `rf_features.joblib` | Optuna-tuned params in `config.RF_PARAMS` |
+| LightGBM | `ml/lightgbm_model.py` | `lightgbm.joblib`, `lgbm_features.joblib` | Optuna-tuned params in `config.LGBM_PARAMS` |
+| Ensemble | `ml/soft_vote_ensemble.py` | `ensemble.joblib` | Soft-vote over XGB+LR+RF+LightGBM; Optuna-tuned weights; recommended for predictions |
+| Finish type | `ml/finish_type_model.py` | `finish_type.joblib`, `finish_type_features.joblib` | 3-class (Decision/KO-TKO/Submission); ~50% accuracy — use as soft signal only |
 
 The LR artifact is a dict with `base` (raw model) and `platt` (calibration wrapper) — load with `artifact["base"]` and `artifact["platt"]`.
+
+The ensemble artifact is a dict with `weights` (per-model float weights) and `test_accuracy`. Retrain it (step 10) whenever any base model is retrained.
 
 Training uses `TimeSeriesSplit(5)` with chronological ordering. The train/test split point is set by `TRAIN_TEST_SPLIT=0.80` (most recent 20% is test). For honest out-of-sample evaluation, use `backtest.py --from-year 2022`.
 
@@ -136,19 +150,20 @@ All Python source files must use ASCII-safe characters only. The Windows cp1252 
 
 ## Before committing
 
-Always untrack and gitignore generated/temporary files before committing. Files that must never be committed:
+Files that must never be committed:
 
 - `**/__pycache__/` and `*.pyc` — Python bytecode
-- `models/*.joblib` — trained model artifacts (regenerate with `run_pipeline.py`)
 - `db/ufc_v2.db` — SQLite database (regenerate with `db/ingest_mdabbert.py` + `run_pipeline.py`)
 - `logs/` — runtime logs
 - `ml/*.csv` — intermediate ML datasets
 - `raw_data/*.db` — raw database files
 
-Note: `raw_data/ufc-master.csv` IS tracked — it is the source of truth and contains
-scraped data that cannot be re-downloaded from Kaggle.
+Files that ARE tracked:
 
-If any of these were previously committed, untrack them with `git rm --cached <file>` (without deleting the local copy), then verify `.gitignore` covers them before staging the commit.
+- `raw_data/ufc-master.csv` — source of truth; scraped data that cannot be re-downloaded
+- `models/*.joblib` — trained model artifacts; tracked so predictions work immediately after cloning without retraining
+
+If any excluded files were previously committed, untrack them with `git rm --cached <file>` (without deleting the local copy), then verify `.gitignore` covers them before staging the commit.
 
 ---
 
