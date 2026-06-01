@@ -75,26 +75,28 @@ LR_PARAMS: dict = {
     "class_weight": "balanced",
 }
 
-# ── Random Forest Hyperparameters (defaults; tune with --tune --trials 100) ──
+# ── Random Forest Hyperparameters (tuned via Optuna, 100 trials, 2026-06-01) ──
+# CV accuracy: 62.49% +/- 2.41%  |  run: python ml/random_forest.py --tune --trials 100
 RF_PARAMS: dict = {
-    "n_estimators":      300,
-    "max_depth":         None,
-    "min_samples_split": 2,
-    "min_samples_leaf":  1,
-    "max_features":      "sqrt",
+    "n_estimators":      203,
+    "max_depth":         6,
+    "min_samples_split": 9,
+    "min_samples_leaf":  4,
+    "max_features":      0.3,
     "class_weight":      None,
 }
 
-# ── LightGBM Hyperparameters (defaults; tune with --tune --trials 100) ────────
+# ── LightGBM Hyperparameters (tuned via Optuna, 100 trials, 2026-06-01) ───────
+# CV accuracy: 61.94% +/- 2.89%  |  run: python ml/lightgbm_model.py --tune --trials 100
 LGBM_PARAMS: dict = {
-    "n_estimators":     300,
-    "learning_rate":    0.05,
-    "max_depth":        -1,
-    "num_leaves":       31,
-    "subsample":        0.8,
-    "colsample_bytree": 0.8,
-    "reg_alpha":        0.0,
-    "reg_lambda":       0.0,
+    "n_estimators":     316,
+    "learning_rate":    0.011995,
+    "max_depth":        3,
+    "num_leaves":       57,
+    "subsample":        0.7433,
+    "colsample_bytree": 0.5987,
+    "reg_alpha":        0.3932,
+    "reg_lambda":       0.004966,
 }
 
 # ── Feature Engineering ───────────────────────────────────────────────────────
