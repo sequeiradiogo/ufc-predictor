@@ -44,6 +44,7 @@ from config import (
     MODEL_LR_PATH, MODEL_LR_SCALER, MODEL_LR_FEATURES,
     MODEL_RF_PATH, MODEL_RF_FEATURES,
     MODEL_LGBM_PATH, MODEL_LGBM_FEATURES,
+    MODEL_ENSEMBLE_PATH,
     MODEL_FINISH_PATH, MODEL_FINISH_FEATURES,
     FINISH_CLASS_NAMES,
     DIVISIONS,
@@ -347,6 +348,11 @@ def predict_fight(
         features_path = MODEL_RF_FEATURES
         scaler_path   = None
         model_label   = "Random Forest"
+    elif model_type == "ensemble":
+        model_path    = MODEL_ENSEMBLE_PATH
+        features_path = None
+        scaler_path   = None
+        model_label   = "Ensemble (Soft Vote)"
     else:  # lgbm
         model_path    = MODEL_LGBM_PATH
         features_path = MODEL_LGBM_FEATURES
@@ -354,10 +360,11 @@ def predict_fight(
         model_label   = "LightGBM"
 
     script_map = {
-        "xgb":  "ml/XGBoost.py",
-        "lr":   "ml/logistic_regression.py",
-        "rf":   "ml/random_forest.py",
-        "lgbm": "ml/lightgbm_model.py",
+        "xgb":      "ml/XGBoost.py",
+        "lr":       "ml/logistic_regression.py",
+        "rf":       "ml/random_forest.py",
+        "lgbm":     "ml/lightgbm_model.py",
+        "ensemble": "ml/soft_vote_ensemble.py",
     }
     if not model_path.exists():
         script = script_map[model_type]
@@ -367,18 +374,24 @@ def predict_fight(
         sys.exit(1)
 
     artifact      = joblib.load(model_path)
-    feature_names = joblib.load(features_path)
+    feature_names = joblib.load(features_path) if features_path is not None else None
     scaler        = joblib.load(scaler_path) if scaler_path and scaler_path.exists() else None
 
-    # LR is saved as {"base": model, "platt": calibrator}; XGBoost is saved directly
-    if isinstance(artifact, dict):
+    # Unpack per-model artifact format
+    if model_type == "ensemble":
+        ensemble_weights = artifact["weights"]
+        model = base_model = platt = None
+    elif isinstance(artifact, dict):
+        # LR is saved as {"base": model, "platt": calibrator}
         base_model  = artifact["base"]
         platt       = artifact["platt"]
         model       = None
+        ensemble_weights = None
     else:
         model       = artifact
         base_model  = None
         platt       = None
+        ensemble_weights = None
 
     # Finish-type model (optional)
     finish_model   = joblib.load(MODEL_FINISH_PATH)     if MODEL_FINISH_PATH.exists()     else None
@@ -437,22 +450,62 @@ def predict_fight(
     conn.close()
 
     # ── Build & predict ───────────────────────────────────────────────────────
-    X = build_feature_vector(
-        red_stats, blue_stats,
-        elo_r, elo_b,
-        form_r, form_b,
-        division, title_fight,
-        feature_names,
-    ).fillna(0)
-
-    X_input = scaler.transform(X) if scaler is not None else X.values
-
-    if model is not None:
-        proba = model.predict_proba(X_input)[0]
+    if model_type == "ensemble":
+        _specs = [
+            ("xgb",  MODEL_XGB_PATH,  MODEL_XGB_FEATURES,  None,            False),
+            ("lr",   MODEL_LR_PATH,   MODEL_LR_FEATURES,   MODEL_LR_SCALER, True),
+            ("rf",   MODEL_RF_PATH,   MODEL_RF_FEATURES,   None,            False),
+            ("lgbm", MODEL_LGBM_PATH, MODEL_LGBM_FEATURES, None,            False),
+        ]
+        model_probas   = []
+        active_weights = []
+        for m_key, m_path, m_feats_path, m_scaler_path, m_is_lr in _specs:
+            if not m_path.exists():
+                continue
+            m_artifact      = joblib.load(m_path)
+            m_feature_names = joblib.load(m_feats_path)
+            m_scaler        = joblib.load(m_scaler_path) if m_scaler_path and m_scaler_path.exists() else None
+            Xm = build_feature_vector(
+                red_stats, blue_stats,
+                elo_r, elo_b,
+                form_r, form_b,
+                division, title_fight,
+                m_feature_names,
+            ).fillna(0)
+            Xm_input = m_scaler.transform(Xm) if m_scaler is not None else Xm.values
+            if m_is_lr:
+                m_base   = m_artifact["base"]
+                m_platt  = m_artifact["platt"]
+                raw_p    = m_base.predict_proba(Xm_input)[0, 1]
+                cal_p    = m_platt.predict_proba([[raw_p]])[0, 1]
+                m_proba  = [1 - cal_p, cal_p]
+            else:
+                m_proba  = m_artifact.predict_proba(Xm_input)[0].tolist()
+            model_probas.append(m_proba)
+            active_weights.append(ensemble_weights.get(m_key, 1.0))
+        if not model_probas:
+            print("\n[ERROR]  No base models found for ensemble. Train base models first.")
+            sys.exit(1)
+        total_w        = sum(active_weights)
+        active_weights = [w / total_w for w in active_weights]
+        proba = list(np.average(model_probas, axis=0, weights=active_weights))
     else:
-        raw_prob   = base_model.predict_proba(X_input)[0, 1]
-        calibrated = platt.predict_proba([[raw_prob]])[0, 1]
-        proba      = [1 - calibrated, calibrated]
+        X = build_feature_vector(
+            red_stats, blue_stats,
+            elo_r, elo_b,
+            form_r, form_b,
+            division, title_fight,
+            feature_names,
+        ).fillna(0)
+
+        X_input = scaler.transform(X) if scaler is not None else X.values
+
+        if model is not None:
+            proba = model.predict_proba(X_input)[0]
+        else:
+            raw_prob   = base_model.predict_proba(X_input)[0, 1]
+            calibrated = platt.predict_proba([[raw_prob]])[0, 1]
+            proba      = [1 - calibrated, calibrated]
 
     red_win_prob  = float(proba[1])
     blue_win_prob = float(proba[0])
@@ -526,9 +579,9 @@ Examples
     parser.add_argument("blue_fighter", help="Blue corner fighter name (partial OK)")
     parser.add_argument(
         "--model",
-        choices=["xgb", "lr", "rf", "lgbm"],
+        choices=["xgb", "lr", "rf", "lgbm", "ensemble"],
         default="xgb",
-        help="Model: 'xgb' = XGBoost (default), 'lr' = Logistic Regression, 'rf' = Random Forest, 'lgbm' = LightGBM",
+        help="Model: 'xgb' = XGBoost (default), 'lr' = Logistic Regression, 'rf' = Random Forest, 'lgbm' = LightGBM, 'ensemble' = Soft-Vote Ensemble",
     )
     parser.add_argument(
         "--division",

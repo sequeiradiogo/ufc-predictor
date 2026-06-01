@@ -114,6 +114,13 @@ STEPS: dict[int, dict] = {
         "mode":   "import",
         "db_required": True,
     },
+    10: {
+        "name":   "Train Ensemble model",
+        "module": "ml.soft_vote_ensemble",
+        "fn":     "main",
+        "mode":   "import",
+        "db_required": False,
+    },
 }
 
 
