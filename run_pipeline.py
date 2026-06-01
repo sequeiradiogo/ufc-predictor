@@ -12,6 +12,8 @@ Pipeline steps
   5  Train XGBoost model                  (ml/XGBoost.py)
   6  Train Logistic Regression model      (ml/logistic_regression.py)
   7  Train Finish-Type model              (ml/finish_type_model.py)
+  8  Train Random Forest model            (ml/random_forest.py)
+  9  Train LightGBM model                 (ml/lightgbm_model.py)
 
 Usage
 -----
@@ -30,7 +32,7 @@ Usage
 Notes
 -----
 - Steps 1-3 only need to run once (or when you add new raw data).
-- Steps 4-6 should be re-run whenever the DB is updated.
+- Steps 4-9 should be re-run whenever the DB is updated.
 - Step 3 (rolling.py) is a standalone script with no functions, so it is
   invoked as a subprocess.
 """
@@ -94,6 +96,20 @@ STEPS: dict[int, dict] = {
     7: {
         "name":   "Train Finish-Type model",
         "module": "ml.finish_type_model",
+        "fn":     "main",
+        "mode":   "import",
+        "db_required": True,
+    },
+    8: {
+        "name":   "Train Random Forest model",
+        "module": "ml.random_forest",
+        "fn":     "main",
+        "mode":   "import",
+        "db_required": True,
+    },
+    9: {
+        "name":   "Train LightGBM model",
+        "module": "ml.lightgbm_model",
         "fn":     "main",
         "mode":   "import",
         "db_required": True,
@@ -212,7 +228,7 @@ def main() -> None:
         epilog="""
 Examples
 --------
-  python run_pipeline.py                        # ML steps only (4, 5, 6)
+  python run_pipeline.py                        # ML steps only (4-9)
   python run_pipeline.py --full --csv UFC.csv   # all steps from scratch
   python run_pipeline.py --steps 4,5            # specific steps
   python run_pipeline.py --dry-run              # preview without executing
@@ -251,9 +267,9 @@ Examples
         except ValueError:
             parser.error("--steps must be comma-separated integers, e.g. '4,5,6'")
     elif args.full:
-        steps = list(STEPS)          # 1 through 7
+        steps = list(STEPS)          # 1 through 9
     else:
-        steps = [4, 5, 6, 7]         # default: ML steps only
+        steps = [4, 5, 6, 7, 8, 9]  # default: ML steps only
 
     if 1 in steps and not args.csv and not args.dry_run:
         log.warning(
