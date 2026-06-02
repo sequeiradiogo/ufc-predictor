@@ -300,9 +300,19 @@ def _scrape_fight(
         log.warning("Failed to scrape fight %s: %s", fight_id, exc)
         return None
 
-    # ---- Winner ----
+    # ---- Red/Blue corner assignment and winner ----
+    # The fight detail page lists Red corner first, Blue corner second in
+    # b-fight-details__person divs. The event listing page lists winner first,
+    # so we override r_fid/b_fid here with the actual corner assignment.
     winner_id = None
-    for person_div in soup.select("div.b-fight-details__person"):
+    person_divs = soup.select("div.b-fight-details__person")
+    if len(person_divs) >= 2:
+        red_link  = person_divs[0].select_one("a[href*='fighter-details']")
+        blue_link = person_divs[1].select_one("a[href*='fighter-details']")
+        if red_link and blue_link:
+            r_fid = _id_from_url(red_link["href"])
+            b_fid = _id_from_url(blue_link["href"])
+    for person_div in person_divs:
         status = person_div.select_one("i.b-fight-details__person-status")
         flink  = person_div.select_one("a[href*='fighter-details']")
         if status and flink and "W" in status.get_text():
@@ -471,6 +481,40 @@ def _scrape_fighter_bio(fighter_id: str, fighter_url: str, name: str, get) -> di
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+def scrape_events_iter(
+    since: date,
+    existing_fighter_ids: set[str] | None = None,
+    skip_event_ids: set[str] | None = None,
+):
+    """
+    Generator that scrapes events one at a time and yields (event_meta, data) per event.
+
+    event_meta -- dict with event_id, name, date, url
+    data       -- dict with "fighters", "fights", "fight_stats" for that event only
+
+    Use this instead of scrape_new_data() when you want to checkpoint incrementally
+    (e.g. write to DB after every N events) so a crash does not lose all progress.
+
+    Pass *skip_event_ids* to resume after a partial run -- events whose event_id is
+    already in that set are logged and skipped without an HTTP request.
+    """
+    seen_fids: set[str] = set(existing_fighter_ids or [])
+    skip: set[str] = set(skip_event_ids or [])
+
+    with _browser_session() as get:
+        events = _fetch_completed_events(since, get)
+        if not events:
+            return
+
+        for event in events:
+            if event["event_id"] in skip:
+                log.info("Skipping already-ingested event: %s (%s)", event["name"], event["date"])
+                continue
+            log.info("Scraping event: %s (%s)", event["name"], event["date"])
+            data = _scrape_event(event, seen_fids, get)
+            yield event, data
+
+
 def scrape_new_data(since: date, existing_fighter_ids: set[str] | None = None) -> dict:
     """
     Scrape all UFC events completed after *since* from ufcstats.com.
@@ -478,22 +522,14 @@ def scrape_new_data(since: date, existing_fighter_ids: set[str] | None = None) -
     Returns {"fighters": [...], "fights": [...], "fight_stats": [...]}.
     Pass *existing_fighter_ids* to skip bio scraping for fighters already in DB.
     """
-    seen_fids: set[str] = set(existing_fighter_ids or [])
     all_fighters: list[dict] = []
     all_fights:   list[dict] = []
     all_stats:    list[dict] = []
 
-    with _browser_session() as get:
-        events = _fetch_completed_events(since, get)
-        if not events:
-            return {"fighters": [], "fights": [], "fight_stats": []}
-
-        for event in events:
-            log.info("Scraping event: %s (%s)", event["name"], event["date"])
-            data = _scrape_event(event, seen_fids, get)
-            all_fighters.extend(data["fighters"])
-            all_fights.extend(data["fights"])
-            all_stats.extend(data["fight_stats"])
+    for _event, data in scrape_events_iter(since, existing_fighter_ids):
+        all_fighters.extend(data["fighters"])
+        all_fights.extend(data["fights"])
+        all_stats.extend(data["fight_stats"])
 
     log.info(
         "UFCStats: %d fighters, %d fights, %d fight_stats rows",
