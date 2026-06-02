@@ -18,7 +18,9 @@ RAW_DIR    = ROOT_DIR / "raw_data"
 MODELS_DIR.mkdir(exist_ok=True)
 
 # ── Database ──────────────────────────────────────────────────────────────────
-DB_PATH = DB_DIR / "ufc_v2.db"
+DB_UFCSTATS_PATH = DB_DIR / "ufc_ufcstats.db"    # UFCStats per-fight DB with rolling stats
+DB_PATH          = DB_UFCSTATS_PATH               # active DB for ML pipeline (branch: feat/ufcstats-schema)
+_DB_MDABBERT     = DB_DIR / "ufc_v2.db"           # mdabbert career-aggregate DB (kept for comparison)
 
 # ── ML Datasets ───────────────────────────────────────────────────────────────
 CSV_WITH_ELO       = ML_DIR / "ufc_ml_data_with_debuts_and_elo.csv"
