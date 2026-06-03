@@ -67,8 +67,42 @@ def load_raw_data(conn: sqlite3.Connection) -> pd.DataFrame:
     """
     df = pd.read_sql_query(query, conn, parse_dates=["date"])
 
-    numeric_cols = _LANDED_COLS + _ATMPTED_COLS + _SUM_STATS + _AVG_STATS + _ROLLING_STATS
+    # Only coerce columns that are actually present (UFCStats schema omits some
+    # mdabbert-only columns like wins/losses and landed_*_per percentages).
+    present = set(df.columns)
+    numeric_cols = [c for c in _LANDED_COLS + _ATMPTED_COLS + _SUM_STATS + _AVG_STATS + _ROLLING_STATS
+                    if c in present]
     df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce")
+
+    # UFCStats schema: compute location-share percentages from raw counts.
+    if "landed_body_per" not in df.columns:
+        _sig = df["sig_str_landed"].replace(0, float("nan"))
+        _loc_map = {
+            "landed_body_per":   "body_landed",
+            "landed_clinch_per": "clinch_landed",
+            "landed_dist_per":   "dist_landed",
+            "landed_ground_per": "ground_landed",
+            "landed_head_per":   "head_landed",
+            "landed_leg_per":    "leg_landed",
+        }
+        for col, src in _loc_map.items():
+            df[col] = (df[src] / _sig).fillna(0)
+
+    # UFCStats schema: wins/losses not stored in fight_stats; initialise to 0
+    # so _compute_win_loss knows to use purely DB-derived values.
+    if "wins" not in df.columns:
+        df["wins"]   = 0
+        df["losses"] = 0
+        df["_wins_losses_absent"] = True
+    else:
+        df["_wins_losses_absent"] = False
+
+    # UFCStats schema: time-dependent and relative stats are computed by rolling.py,
+    # not stored in fight_stats. Initialise to 0 so column-selection in the compute
+    # functions does not KeyError; values are overwritten before being used.
+    for col in _TIME_DEPENDENT_STATS + _RELATIVE_STATS:
+        if col not in df.columns:
+            df[col] = 0.0
 
     # Sort order is CRITICAL for correct rolling calculation
     df = df.sort_values(
@@ -85,6 +119,7 @@ def load_raw_data(conn: sqlite3.Connection) -> pd.DataFrame:
 
 def _compute_win_loss(df: pd.DataFrame) -> pd.DataFrame:
     """Compute cumulative wins/losses *before* each fight (shift-based)."""
+    wins_losses_absent = bool(df["_wins_losses_absent"].iloc[0]) if "_wins_losses_absent" in df.columns else False
     rolling = df[["fighter_id", "date", "winner_id", "corner"] + _ROLLING_STATS].copy()
     rolling["is_win"]  = (rolling["fighter_id"] == rolling["winner_id"]).astype(int)
     rolling["is_loss"] = (
@@ -98,8 +133,14 @@ def _compute_win_loss(df: pd.DataFrame) -> pd.DataFrame:
     rolling["wins_prov"]    = grp["wins_shift"].cumsum().astype(int)
     rolling["losses_prov"]  = grp["losses_shift"].cumsum().astype(int)
 
-    rolling["wins"]   = rolling["wins_prov"]   + (rolling["wins"]   - grp["is_win"].transform("sum"))
-    rolling["losses"] = rolling["losses_prov"] + (rolling["losses"] - grp["is_loss"].transform("sum"))
+    if wins_losses_absent:
+        # UFCStats schema: complete fight history is in the DB, so DB-derived
+        # cumulative counts are authoritative — no mdabbert offset needed.
+        rolling["wins"]   = rolling["wins_prov"]
+        rolling["losses"] = rolling["losses_prov"]
+    else:
+        rolling["wins"]   = rolling["wins_prov"]   + (rolling["wins"]   - grp["is_win"].transform("sum"))
+        rolling["losses"] = rolling["losses_prov"] + (rolling["losses"] - grp["is_loss"].transform("sum"))
 
     rolling["outcome"] = np.where(
         rolling["is_win"],
@@ -225,6 +266,14 @@ def build_prior_df(df: pd.DataFrame) -> pd.DataFrame:
     log.info("Computing relative stats (str_def, sapm, td_def)…")
     relative = _compute_relative_stats(df, time_dep["total_fight_time"])
 
+    # weight is derived from division at ingest time; guard in case of older DBs
+    if "weight" not in df.columns:
+        df = df.copy()
+        df["weight"] = pd.NA
+
+    # Drop the sentinel column used by _compute_win_loss before concat
+    df = df.drop(columns=["_wins_losses_absent"], errors="ignore")
+
     prior_df = pd.concat(
         [
             df[["fighter_id", "date", "fight_id", "corner",
@@ -277,16 +326,14 @@ def upsert_to_db(prior_df: pd.DataFrame, db_path: Path) -> None:
         if cur.fetchone() is None:
             raise RuntimeError(f"Target table '{_TARGET_TABLE}' not found.")
 
-        # Add new columns if missing
-        def _add_col(col_name: str, col_type: str) -> None:
-            cur.execute(f"PRAGMA table_info({_TARGET_TABLE})")
-            existing = {row[1] for row in cur.fetchall()}
-            if col_name not in existing:
-                log.info("Adding column '%s' to '%s'…", col_name, _TARGET_TABLE)
-                cur.execute(f"ALTER TABLE {_TARGET_TABLE} ADD COLUMN {col_name} {col_type}")
-
-        _add_col("total_fight_time", "REAL")
-        _add_col("opponent_id",      "TEXT")
+        # Add any columns from prior_df that don't yet exist in the table.
+        cur.execute(f"PRAGMA table_info({_TARGET_TABLE})")
+        existing_cols = {row[1] for row in cur.fetchall()}
+        for col in df_export.columns:
+            if col not in existing_cols:
+                col_type = "TEXT" if df_export[col].dtype == object else "REAL"
+                log.info("Adding column '%s' (%s) to '%s'…", col, col_type, _TARGET_TABLE)
+                cur.execute(f'ALTER TABLE "{_TARGET_TABLE}" ADD COLUMN "{col}" {col_type}')
         conn.commit()
 
         # Unique index for upsert
@@ -337,7 +384,7 @@ def upsert_to_db(prior_df: pd.DataFrame, db_path: Path) -> None:
 # Entry point
 # ══════════════════════════════════════════════════════════════════════════════
 
-def main(fighter_ids: set | None = None) -> None:
+def main(fighter_ids: set | None = None, db_path: Path | None = None) -> None:
     """
     Compute rolling stats and upsert into the DB.
 
@@ -347,14 +394,17 @@ def main(fighter_ids: set | None = None) -> None:
     ON CONFLICT to update existing rows without touching others.
 
     Omit *fighter_ids* (or pass None) for a full rebuild of all fighters.
+    Pass *db_path* to target a database other than the default DB_PATH (e.g.
+    the UFCStats per-fight DB at config.DB_UFCSTATS_PATH).
     """
-    if not DB_PATH.exists():
-        log.error("Database not found: %s", DB_PATH)
-        log.error("Run step 1 (raw_sql_database.py) and step 2 (keys.py) first.")
+    target = db_path or DB_PATH
+    if not target.exists():
+        log.error("Database not found: %s", target)
+        log.error("Run the ingestion step first.")
         sys.exit(1)
 
-    log.info("Connecting to database: %s", DB_PATH)
-    conn = sqlite3.connect(str(DB_PATH))
+    log.info("Connecting to database: %s", target)
+    conn = sqlite3.connect(str(target))
     df = load_raw_data(conn)
     conn.close()
 
@@ -366,7 +416,7 @@ def main(fighter_ids: set | None = None) -> None:
         df = df[df["fighter_id"].isin(fighter_ids)].copy()
 
     prior_df = build_prior_df(df)
-    upsert_to_db(prior_df, DB_PATH)
+    upsert_to_db(prior_df, target)
     log.info("Rolling stats update complete.")
 
 

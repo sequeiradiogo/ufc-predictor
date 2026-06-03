@@ -35,6 +35,7 @@ from config import (
     FINISH_METHOD_MAP,
     RECENT_FORM_WINDOW,
     MIN_FIGHT_DATE,
+    SHRINKAGE_LAMBDA,
 )
 from utils.logger import get_logger
 from ml.ELO_calculator import build_elo_features
@@ -45,6 +46,43 @@ pd.set_option("display.max_columns", None)
 pd.set_option("display.max_rows", None)
 
 _EPS = 1e-6   # avoid division by zero in ratios
+
+# Rolling stats to shrink toward the division mean (derived rates/accuracies,
+# not raw counts which are already excluded from the diff loop).
+_SHRINKAGE_COLS = [
+    "splm", "sapm", "str_def", "td_def", "td_avg", "sub_avg",
+    "sig_str_acc", "total_str_acc", "td_acc",
+    "head_acc", "body_acc", "leg_acc", "dist_acc", "clinch_acc", "ground_acc",
+    "landed_head_per", "landed_body_per", "landed_leg_per",
+    "landed_dist_per", "landed_clinch_per", "landed_ground_per",
+]
+
+
+def apply_shrinkage(df: pd.DataFrame, lam: float = SHRINKAGE_LAMBDA) -> pd.DataFrame:
+    """
+    Shrink each fighter's rolling stats toward their division mean.
+
+    smoothed = (n * raw + lam * div_mean) / (n + lam)
+
+    Fighters with few prior fights (small n) are pulled toward the division
+    average; established fighters (large n) keep their own stats.
+    """
+    df = df.copy()
+    for suffix in ("red", "blue"):
+        wins   = pd.to_numeric(df.get(f"wins_{suffix}",   0), errors="coerce").fillna(0)
+        losses = pd.to_numeric(df.get(f"losses_{suffix}", 0), errors="coerce").fillna(0)
+        n = wins + losses
+
+        for col in _SHRINKAGE_COLS:
+            col_s = f"{col}_{suffix}"
+            if col_s not in df.columns:
+                continue
+            raw      = pd.to_numeric(df[col_s], errors="coerce").fillna(0)
+            div_mean = df.groupby("division")[col_s].transform(
+                lambda x: pd.to_numeric(x, errors="coerce").mean()
+            ).fillna(raw.mean())
+            df[col_s] = (n * raw + lam * div_mean) / (n + lam)
+    return df
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -381,6 +419,9 @@ def build_ml_dataset() -> pd.DataFrame:
     ).drop(columns=["fighter_id"])
 
     conn.close()
+
+    # ── Shrinkage toward division mean ────────────────────────────────────────
+    df = apply_shrinkage(df)
 
     # ── Difference features (rolling stats) ───────────────────────────────────
     base_stats    = [c.replace("_red", "") for c in df.columns if c.endswith("_red")]
