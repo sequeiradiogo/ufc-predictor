@@ -1,20 +1,26 @@
 """
 ML_data_preparation.py — Build the ML feature dataset from the SQLite database.
 
-Reads  : db/ufc_v2.db
+Reads  : db/ufc_ufcstats.db (DB_PATH)
 Writes : ml/ufc_ml_data_with_debuts_and_elo.csv
 
 Run:
     python ml/ML_data_preparation.py
 
 New features added (v2):
-  - Recent form      : recent_win_rate, recent_finish_rate, win_streak (last 3 fights)
-  - Age              : age_diff  (Red age − Blue age at fight date)
+  - Recent form      : recent_win_rate, recent_finish_rate (last 3 fights)
+  - Age              : age_diff  (Red age - Blue age at fight date)
   - Style matchup    : grapple_ratio, strike_ratio + striker_vs_wrestler interactions
   - Division         : one-hot encoded (12 known weight classes)
   - Title fight      : binary flag (0 / 1) passed directly to the model
   - Debutant imputation (v3): debutant stats replaced with division-average prior
-    instead of zeros — better Bayesian baseline for fighters with no history.
+
+New features added (v3):
+  - Height / reach diff    : physical advantage from fighters table
+  - Stance matchup         : southpaw_adv_diff (-1/0/+1), both_southpaw flag
+  - Finish-method rates    : ko_rate_diff, sub_rate_diff, dec_rate_diff
+  - Inactivity             : days_since_last_diff (days between consecutive fights)
+  - Strength of schedule   : sos_diff (avg ELO of last 5 opponents)
 """
 
 import sqlite3
@@ -36,6 +42,10 @@ from config import (
     RECENT_FORM_WINDOW,
     MIN_FIGHT_DATE,
     SHRINKAGE_LAMBDA,
+    STARTING_ELO,
+    SOS_WINDOW,
+    KO_VULN_WINDOW,
+    EWMA_SPAN,
 )
 from utils.logger import get_logger
 from ml.ELO_calculator import build_elo_features
@@ -163,6 +173,275 @@ def compute_recent_form(conn: sqlite3.Connection, window: int = RECENT_FORM_WIND
     # win_streak is NOT computed here — mdabbert provides career_win_streak in
     # fight_stats which is more accurate (covers pre-DB history).
     return long[["fight_id", "fighter_id", "recent_win_rate", "recent_finish_rate"]]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Finish-method rate features
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def compute_finish_rates(conn: sqlite3.Connection) -> pd.DataFrame:
+    """
+    For every (fight_id, fighter_id) pair compute three pre-fight cumulative rates:
+      - ko_rate  : fraction of career wins by KO/TKO  (0-1)
+      - sub_rate : fraction of career wins by Submission (0-1)
+      - dec_rate : fraction of career wins by Decision (0-1)
+
+    shift(1) ensures the current fight result is never included.
+    Fighters with zero wins before a fight have all rates set to 0.
+    """
+    log.info("Computing finish-method rates...")
+
+    df = pd.read_sql_query(
+        """
+        SELECT fight_id, date, r_fighter_id, b_fighter_id, winner_id, method
+        FROM fights
+        ORDER BY date ASC, fight_id ASC
+        """,
+        conn,
+    )
+
+    long_rows = []
+    for _, row in df.iterrows():
+        method_cls = FINISH_METHOD_MAP.get(row["method"], -1)
+        for fighter_id, is_winner in [
+            (row["r_fighter_id"], row["winner_id"] == row["r_fighter_id"]),
+            (row["b_fighter_id"], row["winner_id"] == row["b_fighter_id"]),
+        ]:
+            long_rows.append({
+                "fight_id":   row["fight_id"],
+                "date":       row["date"],
+                "fighter_id": fighter_id,
+                "won":        int(is_winner),
+                "ko_win":     int(is_winner and method_cls == 1),
+                "sub_win":    int(is_winner and method_cls == 2),
+                "dec_win":    int(is_winner and method_cls == 0),
+            })
+
+    long = pd.DataFrame(long_rows)
+    long["date"] = pd.to_datetime(long["date"])
+    long = long.sort_values(["fighter_id", "date", "fight_id"]).reset_index(drop=True)
+
+    grp = long.groupby("fighter_id", sort=False)
+    for col in ("won", "ko_win", "sub_win", "dec_win"):
+        long[f"cum_{col}"] = grp[col].transform(lambda s: s.shift(1).cumsum().fillna(0))
+
+    wins = long["cum_won"]
+    long["ko_rate"]  = long["cum_ko_win"]  / wins.clip(lower=1)
+    long["sub_rate"] = long["cum_sub_win"] / wins.clip(lower=1)
+    long["dec_rate"] = long["cum_dec_win"] / wins.clip(lower=1)
+    no_wins_mask = wins == 0
+    for col in ("ko_rate", "sub_rate", "dec_rate"):
+        long.loc[no_wins_mask, col] = 0.0
+
+    return long[["fight_id", "fighter_id", "ko_rate", "sub_rate", "dec_rate"]]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Inactivity features
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def compute_inactivity(conn: sqlite3.Connection) -> pd.DataFrame:
+    """
+    For every (fight_id, fighter_id) pair compute days since the fighter's
+    previous fight (pre-fight inactivity gap).
+
+    First career appearance has no prior date — filled with the dataset median.
+    """
+    log.info("Computing inactivity features...")
+
+    df = pd.read_sql_query(
+        """
+        SELECT fight_id, date, r_fighter_id, b_fighter_id
+        FROM fights
+        ORDER BY date ASC, fight_id ASC
+        """,
+        conn,
+    )
+
+    long_rows = []
+    for _, row in df.iterrows():
+        for fid in [row["r_fighter_id"], row["b_fighter_id"]]:
+            long_rows.append({
+                "fight_id":   row["fight_id"],
+                "date":       row["date"],
+                "fighter_id": fid,
+            })
+
+    long = pd.DataFrame(long_rows)
+    long["date"] = pd.to_datetime(long["date"])
+    long = long.sort_values(["fighter_id", "date", "fight_id"]).reset_index(drop=True)
+
+    grp = long.groupby("fighter_id", sort=False)
+    long["prev_date"] = grp["date"].transform(lambda s: s.shift(1))
+    long["days_since_last"] = (long["date"] - long["prev_date"]).dt.days
+
+    median_days = long["days_since_last"].median()
+    long["days_since_last"] = long["days_since_last"].fillna(median_days)
+
+    return long[["fight_id", "fighter_id", "days_since_last"]]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Strength-of-schedule (SOS) features
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def compute_sos_features(df_fights: pd.DataFrame, window: int = SOS_WINDOW) -> pd.DataFrame:
+    """
+    For every (fight_id, fighter_id) pair compute the rolling average ELO of
+    the last `window` opponents before this fight (strength of schedule).
+
+    df_fights must contain: fight_id, date, r_fighter_id, b_fighter_id,
+                            elo_red, elo_blue.
+
+    Red fighter's opponent ELO = elo_blue (blue fighter's pre-fight per-division ELO).
+    Blue fighter's opponent ELO = elo_red.
+
+    shift(1) ensures the current opponent's ELO is not counted.
+    """
+    log.info("Computing SOS features (window=%d)...", window)
+
+    long_rows = []
+    for _, row in df_fights.iterrows():
+        long_rows.append({
+            "fight_id":   row["fight_id"],
+            "date":       row["date"],
+            "fighter_id": row["r_fighter_id"],
+            "opp_elo":    row["elo_blue"],
+        })
+        long_rows.append({
+            "fight_id":   row["fight_id"],
+            "date":       row["date"],
+            "fighter_id": row["b_fighter_id"],
+            "opp_elo":    row["elo_red"],
+        })
+
+    long = pd.DataFrame(long_rows)
+    long["date"] = pd.to_datetime(long["date"])
+    long = long.sort_values(["fighter_id", "date", "fight_id"]).reset_index(drop=True)
+
+    grp = long.groupby("fighter_id", sort=False)
+    long["sos"] = grp["opp_elo"].transform(
+        lambda s: s.shift(1).rolling(window, min_periods=1).mean()
+    )
+    long["sos"] = long["sos"].fillna(STARTING_ELO)
+
+    return long[["fight_id", "fighter_id", "sos"]]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# KO vulnerability
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def compute_ko_vulnerability(
+    conn: sqlite3.Connection, window: int = KO_VULN_WINDOW
+) -> pd.DataFrame:
+    """
+    For every (fight_id, fighter_id) pair compute the number of times the
+    fighter was stopped by KO/TKO in their last `window` fights (as the loser).
+
+    Distinct from ko_rate (which measures KO wins) — this captures chin damage:
+    a fighter who has been knocked out recently is more susceptible going forward.
+
+    shift(1) ensures the current fight result is never included.
+    """
+    log.info("Computing KO vulnerability (window=%d)...", window)
+
+    df = pd.read_sql_query(
+        """
+        SELECT fight_id, date, r_fighter_id, b_fighter_id, winner_id, method
+        FROM fights
+        ORDER BY date ASC, fight_id ASC
+        """,
+        conn,
+    )
+
+    long_rows = []
+    for _, row in df.iterrows():
+        method_cls = FINISH_METHOD_MAP.get(row["method"], -1)
+        for fighter_id, is_winner in [
+            (row["r_fighter_id"], row["winner_id"] == row["r_fighter_id"]),
+            (row["b_fighter_id"], row["winner_id"] == row["b_fighter_id"]),
+        ]:
+            # ko_stopped = fighter LOST by KO/TKO
+            ko_stopped = int(not is_winner and method_cls == 1)
+            long_rows.append({
+                "fight_id":   row["fight_id"],
+                "date":       row["date"],
+                "fighter_id": fighter_id,
+                "ko_stopped": ko_stopped,
+            })
+
+    long = pd.DataFrame(long_rows)
+    long["date"] = pd.to_datetime(long["date"])
+    long = long.sort_values(["fighter_id", "date", "fight_id"]).reset_index(drop=True)
+
+    grp = long.groupby("fighter_id", sort=False)
+    long["ko_vuln"] = grp["ko_stopped"].transform(
+        lambda s: s.shift(1).rolling(window, min_periods=1).sum()
+    ).fillna(0)
+
+    return long[["fight_id", "fighter_id", "ko_vuln"]]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# EWMA accuracy and variance
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def compute_ewma_stats(
+    conn: sqlite3.Connection, span: int = EWMA_SPAN
+) -> pd.DataFrame:
+    """
+    For every (fight_id, fighter_id) pair compute:
+      - ewma_str_acc  : EWMA of per-fight sig-strike accuracy (landed/attempted)
+      - ewma_td_acc   : EWMA of per-fight TD accuracy
+      - str_acc_var   : rolling std of per-fight sig-strike accuracy (consistency)
+
+    Per-fight accuracy uses raw counts (sig_str_landed / sig_str_atmpted for that
+    specific fight), giving a recency-sensitive view vs the cumulative sig_str_acc.
+
+    shift(1) ensures the current fight is never included.
+    """
+    log.info("Computing EWMA accuracy and variance (span=%d)...", span)
+
+    fs = pd.read_sql_query(
+        """
+        SELECT fs.fight_id, fs.fighter_id,
+               CAST(fs.sig_str_landed  AS REAL) AS str_land,
+               CAST(fs.sig_str_atmpted AS REAL) AS str_att,
+               CAST(fs.td_landed       AS REAL) AS td_land,
+               CAST(fs.td_atmpted      AS REAL) AS td_att
+        FROM fight_stats fs
+        JOIN fights f ON fs.fight_id = f.fight_id
+        ORDER BY f.date ASC, f.fight_id ASC
+        """,
+        conn,
+    )
+    dates = pd.read_sql_query(
+        "SELECT fight_id, date FROM fights ORDER BY date ASC, fight_id ASC", conn
+    )
+    fs = fs.merge(dates, on="fight_id", how="left")
+    fs["date"] = pd.to_datetime(fs["date"])
+
+    _eps = 1e-6
+    fs["pf_str_acc"] = fs["str_land"] / (fs["str_att"] + _eps)
+    fs.loc[fs["str_att"] == 0, "pf_str_acc"] = 0.0
+    fs["pf_td_acc"]  = fs["td_land"]  / (fs["td_att"]  + _eps)
+    fs.loc[fs["td_att"]  == 0, "pf_td_acc"]  = 0.0
+
+    fs = fs.sort_values(["fighter_id", "date", "fight_id"]).reset_index(drop=True)
+    grp = fs.groupby("fighter_id", sort=False)
+
+    fs["ewma_str_acc"] = grp["pf_str_acc"].transform(
+        lambda s: s.shift(1).ewm(span=span, min_periods=1).mean()
+    ).fillna(0)
+    fs["ewma_td_acc"] = grp["pf_td_acc"].transform(
+        lambda s: s.shift(1).ewm(span=span, min_periods=1).mean()
+    ).fillna(0)
+    fs["str_acc_var"] = grp["pf_str_acc"].transform(
+        lambda s: s.shift(1).rolling(span, min_periods=2).std()
+    ).fillna(0)
+
+    return fs[["fight_id", "fighter_id", "ewma_str_acc", "ewma_td_acc", "str_acc_var"]]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -418,7 +697,111 @@ def build_ml_dataset() -> pd.DataFrame:
         how="left",
     ).drop(columns=["fighter_id"])
 
+    # Note: height, reach, stance, dob, weight are already columns in fight_stats
+    # (denormalized from the fighters table by rolling.py), so height_red/blue and
+    # reach_red/blue are already in df and will be handled by the auto-diff loop.
+    # stance_red/blue are present but excluded from the diff loop via EXCLUDE_STAT_KEYWORDS.
+
+    # ── Finish-method rates ───────────────────────────────────────────────────
+    finish_df = compute_finish_rates(conn)
+    finish_red = finish_df.rename(columns={
+        "ko_rate": "ko_rate_red", "sub_rate": "sub_rate_red", "dec_rate": "dec_rate_red",
+    })
+    finish_blue = finish_df.rename(columns={
+        "ko_rate": "ko_rate_blue", "sub_rate": "sub_rate_blue", "dec_rate": "dec_rate_blue",
+    })
+    df = df.merge(
+        finish_red[["fight_id", "fighter_id", "ko_rate_red", "sub_rate_red", "dec_rate_red"]],
+        left_on=["fight_id", "r_fighter_id"],
+        right_on=["fight_id", "fighter_id"],
+        how="left",
+    ).drop(columns=["fighter_id"])
+    df = df.merge(
+        finish_blue[["fight_id", "fighter_id", "ko_rate_blue", "sub_rate_blue", "dec_rate_blue"]],
+        left_on=["fight_id", "b_fighter_id"],
+        right_on=["fight_id", "fighter_id"],
+        how="left",
+    ).drop(columns=["fighter_id"])
+
+    # ── Inactivity ────────────────────────────────────────────────────────────
+    inact_df = compute_inactivity(conn)
+    inact_red  = inact_df.rename(columns={"days_since_last": "days_since_last_red"})
+    inact_blue = inact_df.rename(columns={"days_since_last": "days_since_last_blue"})
+    df = df.merge(
+        inact_red[["fight_id", "fighter_id", "days_since_last_red"]],
+        left_on=["fight_id", "r_fighter_id"],
+        right_on=["fight_id", "fighter_id"],
+        how="left",
+    ).drop(columns=["fighter_id"])
+    df = df.merge(
+        inact_blue[["fight_id", "fighter_id", "days_since_last_blue"]],
+        left_on=["fight_id", "b_fighter_id"],
+        right_on=["fight_id", "fighter_id"],
+        how="left",
+    ).drop(columns=["fighter_id"])
+
+    # ── KO vulnerability ──────────────────────────────────────────────────────
+    kovuln_df = compute_ko_vulnerability(conn)
+    kovuln_red  = kovuln_df.rename(columns={"ko_vuln": "ko_vuln_red"})
+    kovuln_blue = kovuln_df.rename(columns={"ko_vuln": "ko_vuln_blue"})
+    df = df.merge(
+        kovuln_red[["fight_id", "fighter_id", "ko_vuln_red"]],
+        left_on=["fight_id", "r_fighter_id"],
+        right_on=["fight_id", "fighter_id"],
+        how="left",
+    ).drop(columns=["fighter_id"])
+    df = df.merge(
+        kovuln_blue[["fight_id", "fighter_id", "ko_vuln_blue"]],
+        left_on=["fight_id", "b_fighter_id"],
+        right_on=["fight_id", "fighter_id"],
+        how="left",
+    ).drop(columns=["fighter_id"])
+
+    # ── EWMA accuracy and variance ────────────────────────────────────────────
+    ewma_df = compute_ewma_stats(conn)
+    ewma_red  = ewma_df.rename(columns={
+        "ewma_str_acc": "ewma_str_acc_red",
+        "ewma_td_acc":  "ewma_td_acc_red",
+        "str_acc_var":  "str_acc_var_red",
+    })
+    ewma_blue = ewma_df.rename(columns={
+        "ewma_str_acc": "ewma_str_acc_blue",
+        "ewma_td_acc":  "ewma_td_acc_blue",
+        "str_acc_var":  "str_acc_var_blue",
+    })
+    df = df.merge(
+        ewma_red[["fight_id", "fighter_id", "ewma_str_acc_red", "ewma_td_acc_red", "str_acc_var_red"]],
+        left_on=["fight_id", "r_fighter_id"],
+        right_on=["fight_id", "fighter_id"],
+        how="left",
+    ).drop(columns=["fighter_id"])
+    df = df.merge(
+        ewma_blue[["fight_id", "fighter_id", "ewma_str_acc_blue", "ewma_td_acc_blue", "str_acc_var_blue"]],
+        left_on=["fight_id", "b_fighter_id"],
+        right_on=["fight_id", "fighter_id"],
+        how="left",
+    ).drop(columns=["fighter_id"])
+
     conn.close()
+
+    # ── Strength of schedule (uses elo cols already in df) ────────────────────
+    sos_df = compute_sos_features(
+        df[["fight_id", "date", "r_fighter_id", "b_fighter_id", "elo_red", "elo_blue"]]
+    )
+    sos_red  = sos_df.rename(columns={"sos": "sos_red"})
+    sos_blue = sos_df.rename(columns={"sos": "sos_blue"})
+    df = df.merge(
+        sos_red[["fight_id", "fighter_id", "sos_red"]],
+        left_on=["fight_id", "r_fighter_id"],
+        right_on=["fight_id", "fighter_id"],
+        how="left",
+    ).drop(columns=["fighter_id"])
+    df = df.merge(
+        sos_blue[["fight_id", "fighter_id", "sos_blue"]],
+        left_on=["fight_id", "b_fighter_id"],
+        right_on=["fight_id", "fighter_id"],
+        how="left",
+    ).drop(columns=["fighter_id"])
 
     # ── Shrinkage toward division mean ────────────────────────────────────────
     df = apply_shrinkage(df)
@@ -460,6 +843,52 @@ def build_ml_dataset() -> pd.DataFrame:
 
     # ── Title fight flag ──────────────────────────────────────────────────────
     ml_data["title_fight"] = pd.to_numeric(df["title_fight"], errors="coerce").fillna(0).astype(int).values
+
+    # height_diff and reach_diff are computed automatically by the diff loop
+    # above — fight_stats stores height and reach per row so height_red/blue
+    # are already in df with no extra merge needed.
+
+    # ── Stance matchup ────────────────────────────────────────────────────────
+    # stance_red / stance_blue come from fight_stats (same denormalized source)
+    stance_r = df["stance_red"].fillna("Orthodox").str.strip().str.lower()
+    stance_b = df["stance_blue"].fillna("Orthodox").str.strip().str.lower()
+    red_sp = stance_r == "southpaw"
+    blue_sp = stance_b == "southpaw"
+    red_or = stance_r == "orthodox"
+    blue_or = stance_b == "orthodox"
+    # +1 if red has southpaw advantage, -1 if blue does, 0 otherwise
+    ml_data["southpaw_adv_diff"] = (
+        (red_sp & blue_or).astype(int) - (red_or & blue_sp).astype(int)
+    ).values
+    # Mirror-stance signal (both southpaw; symmetric so no _diff needed)
+    ml_data["both_southpaw"] = (red_sp & blue_sp).astype(int).values
+
+    # ── Finish-method rate differences ────────────────────────────────────────
+    for stat in ("ko_rate", "sub_rate", "dec_rate"):
+        r_col = pd.to_numeric(df[f"{stat}_red"],  errors="coerce").fillna(0)
+        b_col = pd.to_numeric(df[f"{stat}_blue"], errors="coerce").fillna(0)
+        ml_data[f"{stat}_diff"] = (r_col - b_col).values
+
+    # ── Inactivity difference ─────────────────────────────────────────────────
+    inact_r = pd.to_numeric(df["days_since_last_red"],  errors="coerce").fillna(365)
+    inact_b = pd.to_numeric(df["days_since_last_blue"], errors="coerce").fillna(365)
+    ml_data["days_since_last_diff"] = (inact_r - inact_b).values
+
+    # ── Strength-of-schedule difference ──────────────────────────────────────
+    sos_r = pd.to_numeric(df["sos_red"],  errors="coerce").fillna(STARTING_ELO)
+    sos_b = pd.to_numeric(df["sos_blue"], errors="coerce").fillna(STARTING_ELO)
+    ml_data["sos_diff"] = (sos_r - sos_b).values
+
+    # ── KO vulnerability difference ───────────────────────────────────────────
+    ko_vuln_r = pd.to_numeric(df["ko_vuln_red"],  errors="coerce").fillna(0)
+    ko_vuln_b = pd.to_numeric(df["ko_vuln_blue"], errors="coerce").fillna(0)
+    ml_data["ko_vuln_diff"] = (ko_vuln_r - ko_vuln_b).values
+
+    # ── EWMA accuracy differences ─────────────────────────────────────────────
+    for stat in ("ewma_str_acc", "ewma_td_acc", "str_acc_var"):
+        r_col = pd.to_numeric(df[f"{stat}_red"],  errors="coerce").fillna(0)
+        b_col = pd.to_numeric(df[f"{stat}_blue"], errors="coerce").fillna(0)
+        ml_data[f"{stat}_diff"] = (r_col - b_col).values
 
     # ── Exclusion filters ─────────────────────────────────────────────────────
     n_before = len(ml_data)

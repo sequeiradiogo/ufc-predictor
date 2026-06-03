@@ -23,6 +23,7 @@ logs/
 
 # Intermediate generated data (regenerate with run_pipeline.py)
 ml/*.csv
+!ml/ufc_ml_data_with_debuts_and_elo.csv
 
 # Databases -- regenerate with db/rebuild_ufcstats_db.py or scripts/scrape_history.py
 db/*.db

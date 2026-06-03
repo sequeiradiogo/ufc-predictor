@@ -39,6 +39,7 @@ sys.path.insert(0, str(ROOT_DIR))
 
 from config import (
     DB_PATH,
+    MODELS_DIR,
     STARTING_ELO, K_FACTOR_NORMAL, K_FACTOR_PROVISIONAL, PROVISIONAL_LIMIT,
     MODEL_XGB_PATH, MODEL_XGB_FEATURES,
     MODEL_LR_PATH, MODEL_LR_SCALER, MODEL_LR_FEATURES,
@@ -51,6 +52,9 @@ from config import (
     EXCLUDE_STAT_KEYWORDS,
     RECENT_FORM_WINDOW,
     FINISH_METHOD_MAP,
+    SOS_WINDOW,
+    KO_VULN_WINDOW,
+    EWMA_SPAN,
 )
 from ml.ELO_calculator import get_current_ratings_by_division
 from utils.odds import print_value_bet_summary
@@ -219,6 +223,178 @@ def compute_recent_form(
     }
 
 
+# ── Extra features: bio, finish rates, inactivity, SOS ───────────────────────
+
+def get_fighter_bio(conn: sqlite3.Connection, fighter_id: str) -> dict[str, object]:
+    """Return height (cm), reach (cm), and stance for a fighter."""
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT height, reach, stance FROM fighters WHERE fighter_id = ?",
+        (fighter_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return {"height": 0.0, "reach": 0.0, "stance": "orthodox"}
+    h, r, s = row
+    return {
+        "height": float(h) if h is not None else 0.0,
+        "reach":  float(r) if r is not None else 0.0,
+        "stance": (s or "Orthodox").strip(),
+    }
+
+
+def compute_finish_rates_single(
+    conn: sqlite3.Connection, fighter_id: str
+) -> dict[str, float]:
+    """Return career KO/sub/dec win rates for a fighter (all prior fights)."""
+    df = pd.read_sql_query(
+        """
+        SELECT winner_id, method FROM fights
+        WHERE r_fighter_id = ? OR b_fighter_id = ?
+        ORDER BY date ASC, fight_id ASC
+        """,
+        conn,
+        params=(fighter_id, fighter_id),
+    )
+    if df.empty:
+        return {"ko_rate": 0.0, "sub_rate": 0.0, "dec_rate": 0.0}
+
+    won = df["winner_id"] == fighter_id
+    total_wins = int(won.sum())
+    if total_wins == 0:
+        return {"ko_rate": 0.0, "sub_rate": 0.0, "dec_rate": 0.0}
+
+    method_cls = df["method"].map(FINISH_METHOD_MAP)
+    ko_wins  = int((won & (method_cls == 1)).sum())
+    sub_wins = int((won & (method_cls == 2)).sum())
+    dec_wins = int((won & (method_cls == 0)).sum())
+    return {
+        "ko_rate":  ko_wins  / total_wins,
+        "sub_rate": sub_wins / total_wins,
+        "dec_rate": dec_wins / total_wins,
+    }
+
+
+def compute_inactivity_single(
+    conn: sqlite3.Connection, fighter_id: str
+) -> dict[str, float]:
+    """Return days since the fighter's most recent fight relative to today."""
+    df = pd.read_sql_query(
+        """
+        SELECT date FROM fights
+        WHERE r_fighter_id = ? OR b_fighter_id = ?
+        ORDER BY date DESC
+        LIMIT 1
+        """,
+        conn,
+        params=(fighter_id, fighter_id),
+    )
+    if df.empty:
+        return {"days_since_last": 365.0}
+
+    last_fight = pd.to_datetime(df.iloc[0]["date"])
+    today = pd.Timestamp.now().normalize()
+    days = max(0, (today - last_fight).days)
+    return {"days_since_last": float(days)}
+
+
+def compute_sos_single(
+    conn: sqlite3.Connection,
+    fighter_id: str,
+    elo_by_division: dict[tuple[str, str], float],
+    window: int = SOS_WINDOW,
+) -> dict[str, float]:
+    """Return average ELO of the last `window` opponents (strength of schedule)."""
+    df = pd.read_sql_query(
+        """
+        SELECT f.division,
+               CASE WHEN f.r_fighter_id = ? THEN f.b_fighter_id
+                    ELSE f.r_fighter_id END AS opp_id
+        FROM fights f
+        WHERE (f.r_fighter_id = ? OR f.b_fighter_id = ?)
+        ORDER BY f.date DESC
+        LIMIT ?
+        """,
+        conn,
+        params=(fighter_id, fighter_id, fighter_id, window),
+    )
+    if df.empty:
+        return {"sos": float(STARTING_ELO)}
+
+    elo_vals = []
+    for _, row in df.iterrows():
+        div = str(row["division"]).lower().strip()
+        opp_elo = elo_by_division.get((row["opp_id"], div), STARTING_ELO)
+        elo_vals.append(opp_elo)
+
+    return {"sos": float(np.mean(elo_vals))}
+
+
+def compute_ko_vulnerability_single(
+    conn: sqlite3.Connection,
+    fighter_id: str,
+    window: int = KO_VULN_WINDOW,
+) -> dict[str, float]:
+    """Return count of KO/TKO stoppages suffered in the last `window` fights."""
+    df = pd.read_sql_query(
+        """
+        SELECT winner_id, method FROM fights
+        WHERE r_fighter_id = ? OR b_fighter_id = ?
+        ORDER BY date DESC, fight_id DESC
+        LIMIT ?
+        """,
+        conn,
+        params=(fighter_id, fighter_id, window),
+    )
+    if df.empty:
+        return {"ko_vuln": 0.0}
+
+    ko_stopped = 0
+    for _, row in df.iterrows():
+        if row["winner_id"] != fighter_id:
+            method_cls = FINISH_METHOD_MAP.get(row["method"], -1)
+            if method_cls == 1:
+                ko_stopped += 1
+
+    return {"ko_vuln": float(ko_stopped)}
+
+
+def compute_ewma_stats_single(
+    conn: sqlite3.Connection,
+    fighter_id: str,
+    span: int = EWMA_SPAN,
+) -> dict[str, float]:
+    """Return EWMA striking/TD accuracy and striking accuracy variance."""
+    df = pd.read_sql_query(
+        """
+        SELECT CAST(fs.sig_str_landed  AS REAL) AS str_land,
+               CAST(fs.sig_str_atmpted AS REAL) AS str_att,
+               CAST(fs.td_landed       AS REAL) AS td_land,
+               CAST(fs.td_atmpted      AS REAL) AS td_att
+        FROM fight_stats fs
+        JOIN fights f ON fs.fight_id = f.fight_id
+        WHERE fs.fighter_id = ?
+        ORDER BY f.date ASC, f.fight_id ASC
+        """,
+        conn,
+        params=(fighter_id,),
+    )
+    if df.empty:
+        return {"ewma_str_acc": 0.0, "ewma_td_acc": 0.0, "str_acc_var": 0.0}
+
+    _eps = 1e-6
+    df["pf_str_acc"] = df["str_land"] / (df["str_att"] + _eps)
+    df.loc[df["str_att"] == 0, "pf_str_acc"] = 0.0
+    df["pf_td_acc"]  = df["td_land"]  / (df["td_att"]  + _eps)
+    df.loc[df["td_att"]  == 0, "pf_td_acc"]  = 0.0
+
+    ewma_str = float(df["pf_str_acc"].ewm(span=span, min_periods=1).mean().iloc[-1])
+    ewma_td  = float(df["pf_td_acc"].ewm(span=span, min_periods=1).mean().iloc[-1])
+    var_str  = float(df["pf_str_acc"].rolling(span, min_periods=2).std().fillna(0).iloc[-1])
+
+    return {"ewma_str_acc": ewma_str, "ewma_td_acc": ewma_td, "str_acc_var": var_str}
+
+
 # ── Style Ratios ──────────────────────────────────────────────────────────────
 
 def _style_ratios(stats: pd.Series) -> tuple[float, float]:
@@ -241,22 +417,32 @@ def build_feature_vector(
     division:     str | None,
     title_fight:  int,
     feature_names: list[str],
+    extra_r:      dict | None = None,
+    extra_b:      dict | None = None,
 ) -> pd.DataFrame:
     """
     Compute all features the model expects.
 
     Handles:
-      - Standard _diff features (Red − Blue rolling stats)
+      - Standard _diff features (Red - Blue rolling stats)
       - elo_diff
       - is_debutant_diff
       - recent_win_rate_diff / recent_finish_rate_diff / win_streak_diff
-      - age_diff  (set to 0 — DOB not typically known for future fights)
+      - age_diff  (set to 0 - DOB not typically known for future fights)
       - grapple_ratio_diff / strike_ratio_diff / striker_vs_wrestler / wrestler_vs_striker
       - div_*  (one-hot division encoding)
       - title_fight  (direct binary feature)
+      - height_diff / reach_diff  (from extra_r/extra_b)
+      - southpaw_adv_diff / both_southpaw  (from extra_r/extra_b stance)
+      - ko_rate_diff / sub_rate_diff / dec_rate_diff  (from extra_r/extra_b)
+      - days_since_last_diff  (from extra_r/extra_b)
+      - sos_diff  (from extra_r/extra_b)
     """
     grapple_r, strike_r = _style_ratios(red_stats)
     grapple_b, strike_b = _style_ratios(blue_stats)
+
+    _er = extra_r or {}
+    _eb = extra_b or {}
 
     r_time = float(red_stats.get("total_fight_time",  0) or 0)
     b_time = float(blue_stats.get("total_fight_time", 0) or 0)
@@ -306,6 +492,49 @@ def build_feature_vector(
         # ── Title fight ───────────────────────────────────────────────────────
         elif feat == "title_fight":
             row[feat] = title_fight
+
+        # ── Height / reach ────────────────────────────────────────────────────
+        # height and reach live in fight_stats so they fall through to the
+        # standard _diff handler below via red_stats.get("height") etc.
+
+        # ── Stance matchup ────────────────────────────────────────────────────
+        # stance is in fight_stats; use red_stats / blue_stats directly
+        elif feat == "southpaw_adv_diff":
+            r_st = str(red_stats.get("stance", "Orthodox") or "Orthodox").lower()
+            b_st = str(blue_stats.get("stance", "Orthodox") or "Orthodox").lower()
+            row[feat] = int(r_st == "southpaw" and b_st == "orthodox") - int(r_st == "orthodox" and b_st == "southpaw")
+        elif feat == "both_southpaw":
+            r_st = str(red_stats.get("stance", "Orthodox") or "Orthodox").lower()
+            b_st = str(blue_stats.get("stance", "Orthodox") or "Orthodox").lower()
+            row[feat] = int(r_st == "southpaw" and b_st == "southpaw")
+
+        # ── Finish-method rates ───────────────────────────────────────────────
+        elif feat == "ko_rate_diff":
+            row[feat] = _er.get("ko_rate", 0.0) - _eb.get("ko_rate", 0.0)
+        elif feat == "sub_rate_diff":
+            row[feat] = _er.get("sub_rate", 0.0) - _eb.get("sub_rate", 0.0)
+        elif feat == "dec_rate_diff":
+            row[feat] = _er.get("dec_rate", 0.0) - _eb.get("dec_rate", 0.0)
+
+        # ── Inactivity ────────────────────────────────────────────────────────
+        elif feat == "days_since_last_diff":
+            row[feat] = _er.get("days_since_last", 365.0) - _eb.get("days_since_last", 365.0)
+
+        # ── Strength of schedule ──────────────────────────────────────────────
+        elif feat == "sos_diff":
+            row[feat] = _er.get("sos", float(STARTING_ELO)) - _eb.get("sos", float(STARTING_ELO))
+
+        # ── KO vulnerability ──────────────────────────────────────────────────
+        elif feat == "ko_vuln_diff":
+            row[feat] = _er.get("ko_vuln", 0.0) - _eb.get("ko_vuln", 0.0)
+
+        # ── EWMA accuracy and variance ────────────────────────────────────────
+        elif feat == "ewma_str_acc_diff":
+            row[feat] = _er.get("ewma_str_acc", 0.0) - _eb.get("ewma_str_acc", 0.0)
+        elif feat == "ewma_td_acc_diff":
+            row[feat] = _er.get("ewma_td_acc", 0.0) - _eb.get("ewma_td_acc", 0.0)
+        elif feat == "str_acc_var_diff":
+            row[feat] = _er.get("str_acc_var", 0.0) - _eb.get("str_acc_var", 0.0)
 
         # ── Standard _diff features ───────────────────────────────────────────
         elif feat.endswith("_diff"):
@@ -418,10 +647,10 @@ def compute_prediction(
     # ── ELO ───────────────────────────────────────────────────────────────────
     log.info("Computing current ELO ratings...")
     div_lower = (division or "").lower().strip()
+    div_elo   = get_current_ratings_by_division(conn)   # always needed for SOS
     if div_lower:
-        div_elo = get_current_ratings_by_division(conn)
-        elo_r   = div_elo.get((r_id, div_lower), STARTING_ELO)
-        elo_b   = div_elo.get((b_id, div_lower), STARTING_ELO)
+        elo_r = div_elo.get((r_id, div_lower), STARTING_ELO)
+        elo_b = div_elo.get((b_id, div_lower), STARTING_ELO)
     else:
         elo_ratings = compute_current_elo(conn)
         elo_r       = elo_ratings.get(r_id, STARTING_ELO)
@@ -431,6 +660,21 @@ def compute_prediction(
     log.info("Computing recent form...")
     form_r = compute_recent_form(conn, r_id)
     form_b = compute_recent_form(conn, b_id)
+
+    # ── Extra features ────────────────────────────────────────────────────────
+    log.info("Computing extra features...")
+    finish_r = compute_finish_rates_single(conn, r_id)
+    finish_b = compute_finish_rates_single(conn, b_id)
+    inact_r  = compute_inactivity_single(conn, r_id)
+    inact_b  = compute_inactivity_single(conn, b_id)
+    sos_r    = compute_sos_single(conn, r_id, div_elo)
+    sos_b    = compute_sos_single(conn, b_id, div_elo)
+    kovuln_r = compute_ko_vulnerability_single(conn, r_id)
+    kovuln_b = compute_ko_vulnerability_single(conn, b_id)
+    ewma_r   = compute_ewma_stats_single(conn, r_id)
+    ewma_b   = compute_ewma_stats_single(conn, b_id)
+    extra_r  = {**finish_r, **inact_r, **sos_r, **kovuln_r, **ewma_r}
+    extra_b  = {**finish_b, **inact_b, **sos_b, **kovuln_b, **ewma_b}
 
     conn.close()
 
@@ -456,6 +700,7 @@ def compute_prediction(
                 form_r, form_b,
                 division, title_fight,
                 m_feature_names,
+                extra_r=extra_r, extra_b=extra_b,
             ).fillna(0)
             Xm_input = m_scaler.transform(Xm) if m_scaler is not None else Xm.values
             if m_is_lr:
@@ -481,6 +726,7 @@ def compute_prediction(
             form_r, form_b,
             division, title_fight,
             feature_names,
+            extra_r=extra_r, extra_b=extra_b,
         ).fillna(0)
 
         X_input = scaler.transform(X) if scaler is not None else X.values
@@ -505,6 +751,7 @@ def compute_prediction(
             form_r, form_b,
             division, title_fight,
             finish_feats,
+            extra_r=extra_r, extra_b=extra_b,
         ).fillna(0)
         finish_proba = finish_model.predict_proba(X_fin.values)[0].tolist()
 
