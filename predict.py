@@ -322,42 +322,35 @@ def build_feature_vector(
 
 # ── Core Prediction Logic ─────────────────────────────────────────────────────
 
-def predict_fight(
-    red_name:        str,
-    blue_name:       str,
-    model_type:      str = "xgb",
-    division:        str | None = None,
-    title_fight:     int = 0,
-    odds_red:        float | None = None,
-    odds_blue:       float | None = None,
-) -> None:
+def compute_prediction(
+    red_name:   str,
+    blue_name:  str,
+    model_type: str = "ensemble",
+    division:   str | None = None,
+    title_fight: int = 0,
+    db_path:    Path | None = None,
+    models_dir: Path | None = None,
+) -> dict:
+    """
+    Compute a fight prediction and return a result dict.
 
-    # ── Load saved artifacts ──────────────────────────────────────────────────
-    if model_type == "xgb":
-        model_path    = MODEL_XGB_PATH
-        features_path = MODEL_XGB_FEATURES
-        scaler_path   = None
-        model_label   = "XGBoost"
-    elif model_type == "lr":
-        model_path    = MODEL_LR_PATH
-        features_path = MODEL_LR_FEATURES
-        scaler_path   = MODEL_LR_SCALER
-        model_label   = "Logistic Regression"
-    elif model_type == "rf":
-        model_path    = MODEL_RF_PATH
-        features_path = MODEL_RF_FEATURES
-        scaler_path   = None
-        model_label   = "Random Forest"
-    elif model_type == "ensemble":
-        model_path    = MODEL_ENSEMBLE_PATH
-        features_path = None
-        scaler_path   = None
-        model_label   = "Ensemble (Soft Vote)"
-    else:  # lgbm
-        model_path    = MODEL_LGBM_PATH
-        features_path = MODEL_LGBM_FEATURES
-        scaler_path   = None
-        model_label   = "LightGBM"
+    Returns keys: red_name, blue_name, winner, red_prob, blue_prob,
+                  confidence, elo_red, elo_blue, form_red, form_blue.
+
+    db_path defaults to DB_PATH; models_dir defaults to MODELS_DIR.
+    """
+    db_path    = db_path    or DB_PATH
+    models_dir = models_dir or MODELS_DIR
+
+    # ── Resolve artifact paths from models_dir ────────────────────────────────
+    _paths = {
+        "xgb":      (models_dir / "xgboost.joblib",          models_dir / "xgb_features.joblib",  None,                              False),
+        "lr":       (models_dir / "logistic_regression.joblib", models_dir / "lr_features.joblib", models_dir / "lr_scaler.joblib",   True),
+        "rf":       (models_dir / "random_forest.joblib",     models_dir / "rf_features.joblib",   None,                              False),
+        "lgbm":     (models_dir / "lightgbm.joblib",          models_dir / "lgbm_features.joblib", None,                              False),
+        "ensemble": (models_dir / "ensemble.joblib",          None,                                None,                              False),
+    }
+    model_path, features_path, scaler_path, _is_lr = _paths[model_type]
 
     script_map = {
         "xgb":      "ml/XGBoost.py",
@@ -377,12 +370,10 @@ def predict_fight(
     feature_names = joblib.load(features_path) if features_path is not None else None
     scaler        = joblib.load(scaler_path) if scaler_path and scaler_path.exists() else None
 
-    # Unpack per-model artifact format
     if model_type == "ensemble":
         ensemble_weights = artifact["weights"]
         model = base_model = platt = None
     elif isinstance(artifact, dict):
-        # LR is saved as {"base": model, "platt": calibrator}
         base_model  = artifact["base"]
         platt       = artifact["platt"]
         model       = None
@@ -393,17 +384,18 @@ def predict_fight(
         platt       = None
         ensemble_weights = None
 
-    # Finish-type model (optional)
-    finish_model   = joblib.load(MODEL_FINISH_PATH)     if MODEL_FINISH_PATH.exists()     else None
-    finish_feats   = joblib.load(MODEL_FINISH_FEATURES) if MODEL_FINISH_FEATURES.exists() else None
+    finish_path  = models_dir / "finish_type.joblib"
+    finish_feats_path = models_dir / "finish_type_features.joblib"
+    finish_model = joblib.load(finish_path)       if finish_path.exists()       else None
+    finish_feats = joblib.load(finish_feats_path) if finish_feats_path.exists() else None
 
     # ── DB connection ─────────────────────────────────────────────────────────
-    if not DB_PATH.exists():
-        print(f"\n[ERROR]  Database not found at '{DB_PATH}'.")
+    if not db_path.exists():
+        print(f"\n[ERROR]  Database not found at '{db_path}'.")
         print("   Run the database builder scripts first.")
         sys.exit(1)
 
-    conn = sqlite3.connect(str(DB_PATH))
+    conn = sqlite3.connect(str(db_path))
 
     # ── Resolve fighters ──────────────────────────────────────────────────────
     r_id, r_name = resolve_fighter(conn, red_name)
@@ -413,11 +405,6 @@ def predict_fight(
         print("\n[WARN]  Both names resolved to the same fighter — please check the names.")
         conn.close()
         sys.exit(1)
-
-    print(f"\n[FIGHT]  {r_name}  (Red)  vs  {b_name}  (Blue)")
-    if division:
-        print(f"         Division: {division.title()}" + ("  [TITLE FIGHT]" if title_fight else ""))
-    print("-" * 56)
 
     # ── Get rolling stats ─────────────────────────────────────────────────────
     red_stats  = get_latest_stats(conn, r_id)
@@ -429,21 +416,19 @@ def predict_fight(
         print(f"[WARN]  No fight history for {b_name} -- all stats set to 0.")
 
     # ── ELO ───────────────────────────────────────────────────────────────────
-    log.info("Computing current ELO ratings…")
+    log.info("Computing current ELO ratings...")
     div_lower = (division or "").lower().strip()
     if div_lower:
-        # Per-division ELO — matches how the model was trained
         div_elo = get_current_ratings_by_division(conn)
         elo_r   = div_elo.get((r_id, div_lower), STARTING_ELO)
         elo_b   = div_elo.get((b_id, div_lower), STARTING_ELO)
     else:
-        # Global ELO fallback when no division specified
         elo_ratings = compute_current_elo(conn)
         elo_r       = elo_ratings.get(r_id, STARTING_ELO)
         elo_b       = elo_ratings.get(b_id, STARTING_ELO)
 
     # ── Recent form ───────────────────────────────────────────────────────────
-    log.info("Computing recent form…")
+    log.info("Computing recent form...")
     form_r = compute_recent_form(conn, r_id)
     form_b = compute_recent_form(conn, b_id)
 
@@ -452,10 +437,10 @@ def predict_fight(
     # ── Build & predict ───────────────────────────────────────────────────────
     if model_type == "ensemble":
         _specs = [
-            ("xgb",  MODEL_XGB_PATH,  MODEL_XGB_FEATURES,  None,            False),
-            ("lr",   MODEL_LR_PATH,   MODEL_LR_FEATURES,   MODEL_LR_SCALER, True),
-            ("rf",   MODEL_RF_PATH,   MODEL_RF_FEATURES,   None,            False),
-            ("lgbm", MODEL_LGBM_PATH, MODEL_LGBM_FEATURES, None,            False),
+            ("xgb",  models_dir / "xgboost.joblib",           models_dir / "xgb_features.joblib",  None,                              False),
+            ("lr",   models_dir / "logistic_regression.joblib", models_dir / "lr_features.joblib",  models_dir / "lr_scaler.joblib",   True),
+            ("rf",   models_dir / "random_forest.joblib",      models_dir / "rf_features.joblib",   None,                              False),
+            ("lgbm", models_dir / "lightgbm.joblib",           models_dir / "lgbm_features.joblib", None,                              False),
         ]
         model_probas   = []
         active_weights = []
@@ -512,10 +497,8 @@ def predict_fight(
     winner_name   = r_name if red_win_prob >= 0.5 else b_name
     confidence    = max(red_win_prob, blue_win_prob)
 
-    # ── Finish-type prediction ────────────────────────────────────────────────
     finish_proba = None
     if finish_model is not None and finish_feats is not None:
-        # Use same feature vector but aligned to finish model's feature list
         X_fin = build_feature_vector(
             red_stats, blue_stats,
             elo_r, elo_b,
@@ -523,9 +506,62 @@ def predict_fight(
             division, title_fight,
             finish_feats,
         ).fillna(0)
-        finish_proba = finish_model.predict_proba(X_fin.values)[0]
+        finish_proba = finish_model.predict_proba(X_fin.values)[0].tolist()
+
+    return {
+        "red_name":    r_name,
+        "blue_name":   b_name,
+        "winner":      winner_name,
+        "red_prob":    red_win_prob,
+        "blue_prob":   blue_win_prob,
+        "confidence":  confidence,
+        "elo_red":     elo_r,
+        "elo_blue":    elo_b,
+        "form_red":    form_r,
+        "form_blue":   form_b,
+        "finish_proba": finish_proba,
+    }
+
+
+def predict_fight(
+    red_name:        str,
+    blue_name:       str,
+    model_type:      str = "xgb",
+    division:        str | None = None,
+    title_fight:     int = 0,
+    odds_red:        float | None = None,
+    odds_blue:       float | None = None,
+) -> None:
+
+    model_labels = {
+        "xgb":      "XGBoost",
+        "lr":       "Logistic Regression",
+        "rf":       "Random Forest",
+        "lgbm":     "LightGBM",
+        "ensemble": "Ensemble (Soft Vote)",
+    }
+    model_label = model_labels.get(model_type, model_type)
+
+    result = compute_prediction(red_name, blue_name, model_type, division, title_fight)
+
+    r_name        = result["red_name"]
+    b_name        = result["blue_name"]
+    red_win_prob  = result["red_prob"]
+    blue_win_prob = result["blue_prob"]
+    winner_name   = result["winner"]
+    confidence    = result["confidence"]
+    elo_r         = result["elo_red"]
+    elo_b         = result["elo_blue"]
+    form_r        = result["form_red"]
+    form_b        = result["form_blue"]
+    finish_proba  = result["finish_proba"]
 
     # ── Display results ───────────────────────────────────────────────────────
+    print(f"\n[FIGHT]  {r_name}  (Red)  vs  {b_name}  (Blue)")
+    if division:
+        print(f"         Division: {division.title()}" + ("  [TITLE FIGHT]" if title_fight else ""))
+    print("-" * 56)
+
     _bar = lambda p: "#" * int(p * 20) + "-" * (20 - int(p * 20))
 
     print(f"\n  ELO:  {r_name} = {elo_r:.0f}  |  {b_name} = {elo_b:.0f}")
@@ -548,7 +584,7 @@ def predict_fight(
 
     if finish_proba is not None:
         print(f"\n  Predicted Finish Method:")
-        for i, (name, p) in enumerate(zip(FINISH_CLASS_NAMES, finish_proba)):
+        for name, p in zip(FINISH_CLASS_NAMES, finish_proba):
             print(f"    {name:12s}  {_bar(p)} {p:.1%}")
 
     # ── Betting odds value-bet analysis ───────────────────────────────────────
