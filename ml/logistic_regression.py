@@ -84,6 +84,9 @@ def make_symmetric(df: pd.DataFrame) -> pd.DataFrame:
     df_flip[TARGET_COL] = 1 - df[TARGET_COL]
     diff_cols = [c for c in df.columns if "_diff" in c]
     df_flip[diff_cols] = df_flip[diff_cols] * -1
+    if "striker_vs_wrestler" in df.columns and "wrestler_vs_striker" in df.columns:
+        df_flip["striker_vs_wrestler"] = df["wrestler_vs_striker"]
+        df_flip["wrestler_vs_striker"] = df["striker_vs_wrestler"]
     return pd.concat([df, df_flip], ignore_index=True).sort_values("date").reset_index(drop=True)
 
 

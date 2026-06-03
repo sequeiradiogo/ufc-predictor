@@ -139,6 +139,15 @@ MIN_FIGHT_DATE = "2005-01-01"
 # Recent form window (number of prior fights to average)
 RECENT_FORM_WINDOW = 3
 
+# Opponents to average for strength-of-schedule (SOS) computation
+SOS_WINDOW = 5
+
+# KO vulnerability: fights to look back for recent KO/TKO stoppages
+KO_VULN_WINDOW = 3
+
+# EWMA span for time-decay striking/TD accuracy features
+EWMA_SPAN = 5
+
 # Known UFC weight divisions (lowercase, as stored in DB) in ascending weight order
 DIVISIONS = [
     "women's strawweight",

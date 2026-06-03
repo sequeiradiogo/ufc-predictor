@@ -124,7 +124,12 @@ Joins fights + fight_stats + ELO + recent form into a flat feature CSV. Key tran
 - **Feature selection**: raw per-fight counts (`_landed`, `_atmpted`, `sub_att`, `ctrl`, `kd`) are excluded from the diff loop via `EXCLUDE_STAT_KEYWORDS` -- these are too noisy (single-fight values). Only derived rolling stats (accuracies, rates, splm, sapm, etc.) are diffed.
 - **Shrinkage toward division mean**: each fighter's rolling stats are blended toward their division average -- `smoothed = (n * raw + lambda * div_mean) / (n + lambda)` where `n` = prior fights and `lambda = SHRINKAGE_LAMBDA = 5`. Stabilises features for fighters with few fights.
 - **Recent form**: rolling win rate and finish rate over last 3 fights (configurable via `RECENT_FORM_WINDOW` in config)
-- **Style matchup**: `striker_vs_wrestler` and `wrestler_vs_striker` interaction terms
+- **Style matchup**: `striker_vs_wrestler` and `wrestler_vs_striker` interaction terms; `southpaw_adv_diff` (+1/-1/0) and `both_southpaw` (binary) stance features
+- **Finish rates**: `ko_rate_diff`, `sub_rate_diff`, `dec_rate_diff` -- career win rates by method
+- **Inactivity**: `days_since_last_diff` -- days since last fight
+- **Strength of schedule**: `sos_diff` -- avg ELO of last 5 opponents (config: `SOS_WINDOW`)
+- **KO vulnerability**: `ko_vuln_diff` -- times stopped by KO/TKO as loser in last 3 fights (config: `KO_VULN_WINDOW`)
+- **Time-decay accuracy**: `ewma_str_acc_diff`, `ewma_td_acc_diff` -- EWMA of per-fight striking/TD accuracy (config: `EWMA_SPAN`); `str_acc_var_diff` -- rolling std of per-fight striking accuracy
 - **Division**: 12-column one-hot encoding
 - Debutant imputation function exists (`impute_debutant_stats`) but is **not called** -- tested and hurt accuracy
 
@@ -134,14 +139,15 @@ All models are saved to `models/` as `.joblib` files and tracked in git.
 
 | Model | Script | Artifacts | Test Acc | Notes |
 |-------|--------|-----------|----------|-------|
-| XGBoost | `ml/XGBoost.py` | `xgboost.joblib`, `xgb_features.joblib` | 63.02% | Optuna-tuned params in `config.XGB_PARAMS` |
-| Logistic Regression | `ml/logistic_regression.py` | `logistic_regression.joblib`, `lr_scaler.joblib`, `lr_features.joblib` | 61.17% | Platt-calibrated; artifact is dict with `base`+`platt` keys |
-| Random Forest | `ml/random_forest.py` | `random_forest.joblib`, `rf_features.joblib` | 61.82% | Optuna-tuned params in `config.RF_PARAMS` |
-| LightGBM | `ml/lightgbm_model.py` | `lightgbm.joblib`, `lgbm_features.joblib` | 61.74% | Optuna-tuned params in `config.LGBM_PARAMS` |
-| Ensemble | `ml/soft_vote_ensemble.py` | `ensemble.joblib` | **63.50%** | Soft-vote over XGB+LR+RF+LightGBM; Optuna-tuned weights; recommended |
+| XGBoost | `ml/XGBoost.py` | `xgboost.joblib`, `xgb_features.joblib` | 63.83% | Optuna-tuned params in `config.XGB_PARAMS` |
+| Logistic Regression | `ml/logistic_regression.py` | `logistic_regression.joblib`, `lr_scaler.joblib`, `lr_features.joblib` | 61.98% | Platt-calibrated; artifact is dict with `base`+`platt` keys |
+| Random Forest | `ml/random_forest.py` | `random_forest.joblib`, `rf_features.joblib` | 62.86% | Optuna-tuned params in `config.RF_PARAMS` |
+| LightGBM | `ml/lightgbm_model.py` | `lightgbm.joblib`, `lgbm_features.joblib` | 63.10% | Optuna-tuned params in `config.LGBM_PARAMS` |
+| Ensemble | `ml/soft_vote_ensemble.py` | `ensemble.joblib` | **64.07%** | Soft-vote over XGB+LR+RF+LightGBM; Optuna-tuned weights; recommended |
 | Finish type | `ml/finish_type_model.py` | `finish_type.joblib`, `finish_type_features.joblib` | ~51% | 3-class (Decision/KO-TKO/Submission); use as soft signal only |
 
 Accuracy figures are on the held-out test set (fights from 2023-06-17 to 2026-05-30, ~1244 fights). These models are trained on the UFCStats rolling DB with no leakage.
+Out-of-sample backtest (2022-2026, 1832 fights): **65.01%** accuracy, +9.06% over naive Red baseline.
 
 The LR artifact is a dict with `base` (raw model) and `platt` (calibration wrapper) -- load with `artifact["base"]` and `artifact["platt"]`.
 
