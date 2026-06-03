@@ -23,6 +23,7 @@ DB_PATH          = DB_UFCSTATS_PATH               # active DB for ML pipeline (b
 _DB_MDABBERT     = DB_DIR / "ufc_v2.db"           # mdabbert career-aggregate DB (kept for comparison)
 
 # ── ML Datasets ───────────────────────────────────────────────────────────────
+CSV_MASTER         = RAW_DIR / "ufc-master.csv"          # mdabbert source CSV with historical odds
 CSV_WITH_ELO       = ML_DIR / "ufc_ml_data_with_debuts_and_elo.csv"
 CSV_WITH_DEBUTS    = ML_DIR / "ufc_ml_data_with_debuts.csv"
 CSV_WITHOUT_DEBUTS = ML_DIR / "ufc_ml_data_without_debuts.csv"
