@@ -43,6 +43,20 @@ MODEL_LGBM_FEATURES = MODELS_DIR / "lgbm_features.joblib"
 
 MODEL_ENSEMBLE_PATH = MODELS_DIR / "ensemble.joblib"
 
+# ── v1 (mdabbert) Model Artifacts ─────────────────────────────────────────────
+MODELS_V1_DIR          = ROOT_DIR / "models_v1"
+MODEL_V1_XGB_PATH      = MODELS_V1_DIR / "xgboost.joblib"
+MODEL_V1_XGB_FEATURES  = MODELS_V1_DIR / "xgb_features.joblib"
+MODEL_V1_LR_PATH       = MODELS_V1_DIR / "logistic_regression.joblib"
+MODEL_V1_LR_SCALER     = MODELS_V1_DIR / "lr_scaler.joblib"
+MODEL_V1_LR_FEATURES   = MODELS_V1_DIR / "lr_features.joblib"
+MODEL_V1_RF_PATH       = MODELS_V1_DIR / "random_forest.joblib"
+MODEL_V1_RF_FEATURES   = MODELS_V1_DIR / "rf_features.joblib"
+MODEL_V1_LGBM_PATH     = MODELS_V1_DIR / "lightgbm.joblib"
+MODEL_V1_LGBM_FEATURES = MODELS_V1_DIR / "lgbm_features.joblib"
+MODEL_V1_ENSEMBLE_PATH = MODELS_V1_DIR / "ensemble.joblib"
+DB_V1_PATH             = _DB_MDABBERT    # public alias for v1 DB
+
 # ── ELO ───────────────────────────────────────────────────────────────────────
 STARTING_ELO         = 1400   # slightly below 1500 to penalise unknowns
 K_FACTOR_NORMAL      = 32
