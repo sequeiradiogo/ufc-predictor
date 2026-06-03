@@ -24,14 +24,16 @@ logs/
 # Intermediate generated data (regenerate with run_pipeline.py)
 ml/*.csv
 
-# Database temp files only -- ufc_v2.db is tracked
+# Databases -- regenerate with db/rebuild_ufcstats_db.py or scripts/scrape_history.py
 db/*.db
-!db/ufc_v2.db
+db/*_backup_*.db
 
-# Raw source CSVs (large — download from Kaggle)
-# ufc-master.csv is tracked separately as it contains scraped data
+# Raw source CSVs -- seed CSVs are tracked, others are not
 raw_data/*.csv
 !raw_data/ufc-master.csv
+!raw_data/ufcstats_fighters.csv
+!raw_data/ufcstats_fights.csv
+!raw_data/ufcstats_fight_stats.csv
 
 # IDE
 .idea/
