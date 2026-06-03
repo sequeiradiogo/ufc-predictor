@@ -21,6 +21,11 @@ New features added (v3):
   - Finish-method rates    : ko_rate_diff, sub_rate_diff, dec_rate_diff
   - Inactivity             : days_since_last_diff (days between consecutive fights)
   - Strength of schedule   : sos_diff (avg ELO of last 5 opponents)
+
+New features added (v4):
+  - Win / loss streaks     : win_streak_diff, loss_streak_diff
+  - Performance slopes     : str_acc_slope_diff, td_acc_slope_diff, splm_slope_diff
+                             (linear trend of per-fight metrics over last TRAJECTORY_WINDOW fights)
 """
 
 import sqlite3
@@ -46,6 +51,7 @@ from config import (
     SOS_WINDOW,
     KO_VULN_WINDOW,
     EWMA_SPAN,
+    TRAJECTORY_WINDOW,
 )
 from utils.logger import get_logger
 from ml.ELO_calculator import build_elo_features
@@ -108,15 +114,14 @@ def _is_finish(method: str) -> int:
 
 def compute_recent_form(conn: sqlite3.Connection, window: int = RECENT_FORM_WINDOW) -> pd.DataFrame:
     """
-    For every (fight_id, fighter_id) pair compute three *pre-fight* rolling stats:
-      - recent_win_rate    : fraction of last `window` fights won (0–1)
-      - recent_finish_rate : fraction of last `window` fights ended by KO/TKO or Sub (0–1)
-      - win_streak         : consecutive wins immediately before this fight (integer)
+    For every (fight_id, fighter_id) pair compute two *pre-fight* rolling stats:
+      - recent_win_rate    : fraction of last `window` fights won (0-1)
+      - recent_finish_rate : fraction of last `window` fights ended by KO/TKO or Sub (0-1)
 
-    shift(1) is applied so the current fight is never included → no leakage.
+    shift(1) is applied so the current fight is never included -- no leakage.
 
     Returns a DataFrame with columns:
-        fight_id | fighter_id | recent_win_rate | recent_finish_rate | win_streak
+        fight_id | fighter_id | recent_win_rate | recent_finish_rate
     """
     log.info("Computing recent form (window=%d)…", window)
 
@@ -170,8 +175,6 @@ def compute_recent_form(conn: sqlite3.Connection, window: int = RECENT_FORM_WIND
     for col in ("recent_win_rate", "recent_finish_rate"):
         long[col] = long[col].fillna(0)
 
-    # win_streak is NOT computed here — mdabbert provides career_win_streak in
-    # fight_stats which is more accurate (covers pre-DB history).
     return long[["fight_id", "fighter_id", "recent_win_rate", "recent_finish_rate"]]
 
 
@@ -615,6 +618,154 @@ def impute_debutant_stats(df: pd.DataFrame, stat_cols: list[str]) -> pd.DataFram
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# Trajectory / momentum helpers
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def _running_win_streak(s: pd.Series) -> pd.Series:
+    """Pre-fight consecutive win streak. shift(1) applied internally so the
+    current fight result is excluded."""
+    shifted = s.shift(1)
+    out = np.zeros(len(shifted), dtype=int)
+    streak = 0
+    for i, v in enumerate(shifted):
+        if pd.isna(v) or v == 0:
+            streak = 0
+        else:
+            streak += 1
+        out[i] = streak
+    return pd.Series(out, index=s.index)
+
+
+def _running_loss_streak(s: pd.Series) -> pd.Series:
+    """Pre-fight consecutive loss streak. shift(1) applied internally."""
+    shifted = s.shift(1)
+    out = np.zeros(len(shifted), dtype=int)
+    streak = 0
+    for i, v in enumerate(shifted):
+        if pd.isna(v) or v == 1:
+            streak = 0
+        else:
+            streak += 1
+        out[i] = streak
+    return pd.Series(out, index=s.index)
+
+
+def _rolling_slope(arr: np.ndarray) -> float:
+    """Linear slope (via np.polyfit) of the values in arr. Used as a rolling apply fn."""
+    if len(arr) < 2:
+        return 0.0
+    x = np.arange(len(arr), dtype=float)
+    return float(np.polyfit(x, arr, 1)[0])
+
+
+def compute_trajectory_features(
+    conn: sqlite3.Connection, window: int = TRAJECTORY_WINDOW
+) -> pd.DataFrame:
+    """
+    For every (fight_id, fighter_id) pair compute:
+      - win_streak    : consecutive wins immediately before this fight
+      - loss_streak   : consecutive losses immediately before this fight
+      - str_acc_slope : linear trend of per-fight sig-strike accuracy over last window fights
+      - td_acc_slope  : linear trend of per-fight TD accuracy over last window fights
+      - splm_slope    : linear trend of per-fight sig strikes per minute over last window fights
+
+    All features use shift(1) -- the current fight is never included.
+    Fighters with fewer than 2 prior fights get 0 for slope features.
+    """
+    log.info("Computing trajectory/momentum features (window=%d)...", window)
+
+    # --- Win / loss streaks ---
+    fights = pd.read_sql_query(
+        """
+        SELECT fight_id, date, r_fighter_id, b_fighter_id, winner_id
+        FROM fights
+        ORDER BY date ASC, fight_id ASC
+        """,
+        conn,
+    )
+
+    long_rows = []
+    for _, row in fights.iterrows():
+        won_r = int(row["winner_id"] == row["r_fighter_id"])
+        for fighter_id, won in [
+            (row["r_fighter_id"], won_r),
+            (row["b_fighter_id"], 1 - won_r),
+        ]:
+            long_rows.append({
+                "fight_id":   row["fight_id"],
+                "date":       row["date"],
+                "fighter_id": fighter_id,
+                "won":        won,
+            })
+
+    long = pd.DataFrame(long_rows)
+    long["date"] = pd.to_datetime(long["date"])
+    long = long.sort_values(["fighter_id", "date", "fight_id"]).reset_index(drop=True)
+
+    grp = long.groupby("fighter_id", sort=False)
+    long["win_streak"]  = grp["won"].transform(_running_win_streak)
+    long["loss_streak"] = grp["won"].transform(_running_loss_streak)
+
+    # --- Per-fight performance slopes ---
+    # match_time_sec + (finish_round - 1) * 300 = per-fight duration in seconds
+    fs = pd.read_sql_query(
+        """
+        SELECT fs.fight_id, fs.fighter_id,
+               CAST(fs.sig_str_landed  AS REAL) AS str_land,
+               CAST(fs.sig_str_atmpted AS REAL) AS str_att,
+               CAST(fs.td_landed       AS REAL) AS td_land,
+               CAST(fs.td_atmpted      AS REAL) AS td_att,
+               CAST(f.match_time_sec   AS REAL) AS match_sec,
+               CAST(f.finish_round     AS REAL) AS fin_round
+        FROM fight_stats fs
+        JOIN fights f ON fs.fight_id = f.fight_id
+        ORDER BY f.date ASC, f.fight_id ASC
+        """,
+        conn,
+    )
+    dates = pd.read_sql_query(
+        "SELECT fight_id, date FROM fights ORDER BY date ASC, fight_id ASC", conn
+    )
+    fs = fs.merge(dates, on="fight_id", how="left")
+    fs["date"] = pd.to_datetime(fs["date"])
+
+    _eps = 1e-6
+    fs["pf_str_acc"] = fs["str_land"] / (fs["str_att"] + _eps)
+    fs.loc[fs["str_att"] == 0, "pf_str_acc"] = 0.0
+    fs["pf_td_acc"]  = fs["td_land"]  / (fs["td_att"]  + _eps)
+    fs.loc[fs["td_att"]  == 0, "pf_td_acc"]  = 0.0
+
+    fight_secs = fs["match_sec"].fillna(0) + (fs["fin_round"].fillna(1) - 1) * 300
+    fight_min  = fight_secs / 60.0
+    fs["pf_splm"] = fs["str_land"] / (fight_min + _eps)
+    fs.loc[fight_min == 0, "pf_splm"] = 0.0
+
+    fs = fs.sort_values(["fighter_id", "date", "fight_id"]).reset_index(drop=True)
+    fs_grp = fs.groupby("fighter_id", sort=False)
+
+    for metric, col in [
+        ("str_acc_slope", "pf_str_acc"),
+        ("td_acc_slope",  "pf_td_acc"),
+        ("splm_slope",    "pf_splm"),
+    ]:
+        fs[metric] = fs_grp[col].transform(
+            lambda s, c=col: s.shift(1).rolling(window, min_periods=2).apply(
+                _rolling_slope, raw=True
+            )
+        ).fillna(0)
+
+    result = long[["fight_id", "fighter_id", "win_streak", "loss_streak"]].merge(
+        fs[["fight_id", "fighter_id", "str_acc_slope", "td_acc_slope", "splm_slope"]],
+        on=["fight_id", "fighter_id"],
+        how="left",
+    )
+    for col in ("str_acc_slope", "td_acc_slope", "splm_slope"):
+        result[col] = result[col].fillna(0)
+
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # Main dataset builder
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -782,6 +933,24 @@ def build_ml_dataset() -> pd.DataFrame:
         how="left",
     ).drop(columns=["fighter_id"])
 
+    # ── Trajectory / momentum ─────────────────────────────────────────────────
+    traj_df   = compute_trajectory_features(conn)
+    traj_cols = ["win_streak", "loss_streak", "str_acc_slope", "td_acc_slope", "splm_slope"]
+    traj_red  = traj_df.rename(columns={c: f"{c}_red"  for c in traj_cols})
+    traj_blue = traj_df.rename(columns={c: f"{c}_blue" for c in traj_cols})
+    df = df.merge(
+        traj_red[["fight_id", "fighter_id"] + [f"{c}_red" for c in traj_cols]],
+        left_on=["fight_id", "r_fighter_id"],
+        right_on=["fight_id", "fighter_id"],
+        how="left",
+    ).drop(columns=["fighter_id"])
+    df = df.merge(
+        traj_blue[["fight_id", "fighter_id"] + [f"{c}_blue" for c in traj_cols]],
+        left_on=["fight_id", "b_fighter_id"],
+        right_on=["fight_id", "fighter_id"],
+        how="left",
+    ).drop(columns=["fighter_id"])
+
     conn.close()
 
     # ── Strength of schedule (uses elo cols already in df) ────────────────────
@@ -886,6 +1055,12 @@ def build_ml_dataset() -> pd.DataFrame:
 
     # ── EWMA accuracy differences ─────────────────────────────────────────────
     for stat in ("ewma_str_acc", "ewma_td_acc", "str_acc_var"):
+        r_col = pd.to_numeric(df[f"{stat}_red"],  errors="coerce").fillna(0)
+        b_col = pd.to_numeric(df[f"{stat}_blue"], errors="coerce").fillna(0)
+        ml_data[f"{stat}_diff"] = (r_col - b_col).values
+
+    # ── Trajectory / momentum differences ────────────────────────────────────
+    for stat in ("win_streak", "loss_streak", "str_acc_slope", "td_acc_slope", "splm_slope"):
         r_col = pd.to_numeric(df[f"{stat}_red"],  errors="coerce").fillna(0)
         b_col = pd.to_numeric(df[f"{stat}_blue"], errors="coerce").fillna(0)
         ml_data[f"{stat}_diff"] = (r_col - b_col).values

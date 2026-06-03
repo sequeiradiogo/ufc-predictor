@@ -148,6 +148,9 @@ KO_VULN_WINDOW = 3
 # EWMA span for time-decay striking/TD accuracy features
 EWMA_SPAN = 5
 
+# Fights to look back when computing trajectory/momentum slopes and streaks
+TRAJECTORY_WINDOW = 5
+
 # Known UFC weight divisions (lowercase, as stored in DB) in ascending weight order
 DIVISIONS = [
     "women's strawweight",
