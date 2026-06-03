@@ -55,52 +55,51 @@ RANDOM_STATE     = 42
 TARGET_COL       = "target"   # 1 = Red wins, 0 = Blue wins
 META_COLS        = ["fight_id", "date", "division", "target"]
 
-# ── XGBoost Hyperparameters (tuned via Optuna, 50 trials, 2026-05-26) ────────
-# CV accuracy: 65.08% ± 1.54%  |  run: python ml/XGBoost.py --tune --trials 100
-# to refresh these after adding new features.
+# ── XGBoost Hyperparameters (tuned via Optuna, 100 trials, 2026-06-03) ───────
+# CV accuracy: 62.70% (shrinkage+feature-sel features)  |  run: python ml/XGBoost.py --tune --trials 100
 XGB_PARAMS: dict = {
-    "n_estimators":     367,
-    "learning_rate":    0.02873,
-    "max_depth":        4,
-    "subsample":        0.6631,
-    "colsample_bytree": 0.7104,
-    "min_child_weight": 9,
-    "gamma":            1.6733,
-    "reg_alpha":        0.1539,
-    "reg_lambda":       2.9687,
-}
-
-# ── Logistic Regression Hyperparameters (tuned via Optuna, 100 trials, 2026-06-01) ──
-# CV accuracy: 62.43% +/- 2.45%  |  run: python ml/logistic_regression.py --tune --trials 100
-LR_PARAMS: dict = {
-    "C":            0.0005069,
-    "solver":       "liblinear",
-    "max_iter":     1883,
-    "class_weight": "balanced",
-}
-
-# ── Random Forest Hyperparameters (tuned via Optuna, 100 trials, 2026-06-01) ──
-# CV accuracy: 62.49% +/- 2.41%  |  run: python ml/random_forest.py --tune --trials 100
-RF_PARAMS: dict = {
-    "n_estimators":      203,
-    "max_depth":         6,
-    "min_samples_split": 9,
-    "min_samples_leaf":  4,
-    "max_features":      0.3,
-    "class_weight":      None,
-}
-
-# ── LightGBM Hyperparameters (tuned via Optuna, 100 trials, 2026-06-01) ───────
-# CV accuracy: 61.94% +/- 2.89%  |  run: python ml/lightgbm_model.py --tune --trials 100
-LGBM_PARAMS: dict = {
-    "n_estimators":     316,
-    "learning_rate":    0.011995,
+    "n_estimators":     532,
+    "learning_rate":    0.03879,
     "max_depth":        3,
-    "num_leaves":       57,
-    "subsample":        0.7433,
-    "colsample_bytree": 0.5987,
-    "reg_alpha":        0.3932,
-    "reg_lambda":       0.004966,
+    "subsample":        0.9099,
+    "colsample_bytree": 0.4025,
+    "min_child_weight": 8,
+    "gamma":            0.4676,
+    "reg_alpha":        0.2099,
+    "reg_lambda":       2.2966,
+}
+
+# ── Logistic Regression Hyperparameters (tuned via Optuna, 100 trials, 2026-06-03) ──
+# CV accuracy: 61.17% (shrinkage+feature-sel features)  |  run: python ml/logistic_regression.py --tune --trials 100
+LR_PARAMS: dict = {
+    "C":            0.07865,
+    "solver":       "lbfgs",
+    "max_iter":     1583,
+    "class_weight": None,
+}
+
+# ── Random Forest Hyperparameters (tuned via Optuna, 100 trials, 2026-06-03) ──
+# CV accuracy: 61.82% (shrinkage+feature-sel features)  |  run: python ml/random_forest.py --tune --trials 100
+RF_PARAMS: dict = {
+    "n_estimators":      440,
+    "max_depth":         16,
+    "min_samples_split": 15,
+    "min_samples_leaf":  8,
+    "max_features":      0.3,
+    "class_weight":      "balanced",
+}
+
+# ── LightGBM Hyperparameters (tuned via Optuna, 100 trials, 2026-06-03) ───────
+# CV accuracy: 61.74% (shrinkage+feature-sel features)  |  run: python ml/lightgbm_model.py --tune --trials 100
+LGBM_PARAMS: dict = {
+    "n_estimators":     237,
+    "learning_rate":    0.06917,
+    "max_depth":        4,
+    "num_leaves":       73,
+    "subsample":        0.7087,
+    "colsample_bytree": 0.5237,
+    "reg_alpha":        0.6847,
+    "reg_lambda":       3.0785,
 }
 
 # ── Feature Engineering ───────────────────────────────────────────────────────
@@ -108,7 +107,16 @@ LGBM_PARAMS: dict = {
 # Columns excluded from the automatic difference-feature loop.
 # total_fight_time is a proxy for career length (wins+losses) used only
 # for debutant detection — its diff is a linear combo of wins_diff + losses_diff.
-EXCLUDE_STAT_KEYWORDS = ["stance", "dob", "opponent_id", "weight", "total_fight_time"]
+# Raw per-fight counts (_landed/_atmpted are cumulative totals for ONE fight only,
+# far noisier than the derived rolling accuracy/rate stats kept below).
+EXCLUDE_STAT_KEYWORDS = [
+    "stance", "dob", "opponent_id", "weight", "total_fight_time",
+    "_landed", "_atmpted", "sub_att", "ctrl", "kd",
+]
+
+# Prior weight for shrinkage toward division mean in ML_data_preparation.
+# A fighter needs ~SHRINKAGE_LAMBDA fights before their own stats dominate.
+SHRINKAGE_LAMBDA = 5
 
 # Minimum fight date included in the ML training set
 MIN_FIGHT_DATE = "2005-01-01"
