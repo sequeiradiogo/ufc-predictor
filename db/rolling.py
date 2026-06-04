@@ -60,7 +60,7 @@ _BUSY_TIMEOUT = 30_000
 def load_raw_data(conn: sqlite3.Connection) -> pd.DataFrame:
     """Load fight_stats joined with fight metadata."""
     query = """
-        SELECT fs.*, f.date, f.winner_id, f.match_time_sec,
+        SELECT fs.*, f.winner_id, f.match_time_sec,
                f.finish_round, f.r_fighter_id, f.b_fighter_id
         FROM fight_stats AS fs
         JOIN fights AS f ON fs.fight_id = f.fight_id
