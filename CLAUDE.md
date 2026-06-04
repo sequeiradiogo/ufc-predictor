@@ -130,6 +130,7 @@ Joins fights + fight_stats + ELO + recent form into a flat feature CSV. Key tran
 - **Strength of schedule**: `sos_diff` -- avg ELO of last 5 opponents (config: `SOS_WINDOW`)
 - **KO vulnerability**: `ko_vuln_diff` -- times stopped by KO/TKO as loser in last 3 fights (config: `KO_VULN_WINDOW`)
 - **Time-decay accuracy**: `ewma_str_acc_diff`, `ewma_td_acc_diff` -- EWMA of per-fight striking/TD accuracy (config: `EWMA_SPAN`); `str_acc_var_diff` -- rolling std of per-fight striking accuracy
+- **Trajectory/momentum**: `win_streak_diff`, `loss_streak_diff` -- consecutive W/L run entering the fight; `str_acc_slope_diff`, `td_acc_slope_diff`, `splm_slope_diff` -- `np.polyfit` slope of per-fight metric over last `TRAJECTORY_WINDOW=5` fights (min_periods=2; 0-imputed for fighters with <2 prior fights)
 - **Division**: 12-column one-hot encoding
 - Debutant imputation function exists (`impute_debutant_stats`) but is **not called** -- tested and hurt accuracy
 
@@ -139,11 +140,11 @@ All models are saved to `models/` as `.joblib` files and tracked in git.
 
 | Model | Script | Artifacts | Test Acc | Notes |
 |-------|--------|-----------|----------|-------|
-| XGBoost | `ml/XGBoost.py` | `xgboost.joblib`, `xgb_features.joblib` | 63.83% | Optuna-tuned params in `config.XGB_PARAMS` |
-| Logistic Regression | `ml/logistic_regression.py` | `logistic_regression.joblib`, `lr_scaler.joblib`, `lr_features.joblib` | 61.98% | Platt-calibrated; artifact is dict with `base`+`platt` keys |
-| Random Forest | `ml/random_forest.py` | `random_forest.joblib`, `rf_features.joblib` | 62.86% | Optuna-tuned params in `config.RF_PARAMS` |
-| LightGBM | `ml/lightgbm_model.py` | `lightgbm.joblib`, `lgbm_features.joblib` | 63.10% | Optuna-tuned params in `config.LGBM_PARAMS` |
-| Ensemble | `ml/soft_vote_ensemble.py` | `ensemble.joblib` | **64.07%** | Soft-vote over XGB+LR+RF+LightGBM; Optuna-tuned weights; recommended |
+| XGBoost | `ml/XGBoost.py` | `xgboost.joblib`, `xgb_features.joblib` | 63.42% | Optuna-tuned params in `config.XGB_PARAMS` |
+| Logistic Regression | `ml/logistic_regression.py` | `logistic_regression.joblib`, `lr_scaler.joblib`, `lr_features.joblib` | 61.41% | Platt-calibrated; artifact is dict with `base`+`platt` keys |
+| Random Forest | `ml/random_forest.py` | `random_forest.joblib`, `rf_features.joblib` | 61.98% | Optuna-tuned params in `config.RF_PARAMS` |
+| LightGBM | `ml/lightgbm_model.py` | `lightgbm.joblib`, `lgbm_features.joblib` | 64.55% | Optuna-tuned params in `config.LGBM_PARAMS` |
+| Ensemble | `ml/soft_vote_ensemble.py` | `ensemble.joblib` | **64.79%** | Calibrated soft-vote over XGB+LR+RF+LightGBM; isotonic calibrators + Optuna-tuned weights; recommended |
 | Finish type | `ml/finish_type_model.py` | `finish_type.joblib`, `finish_type_features.joblib` | ~51% | 3-class (Decision/KO-TKO/Submission); use as soft signal only |
 
 Accuracy figures are on the held-out test set (fights from 2023-06-17 to 2026-05-30, ~1244 fights). These models are trained on the UFCStats rolling DB with no leakage.
@@ -151,7 +152,7 @@ Out-of-sample backtest (2022-2026, 1832 fights): **65.01%** accuracy, +9.06% ove
 
 The LR artifact is a dict with `base` (raw model) and `platt` (calibration wrapper) -- load with `artifact["base"]` and `artifact["platt"]`.
 
-The ensemble artifact is a dict with `weights` (per-model float weights) and `test_accuracy`. Retrain it (step 10) whenever any base model is retrained.
+The ensemble artifact is a dict with `mode` (`"calibrated_soft_vote"`), `weights` (per-model float weights), `calibrators` (per-model `IsotonicRegression`), and `test_accuracy`. Retrain it (step 10) whenever any base model is retrained. Calibrators are fitted on the last 20% of training data (in-sample, but regularised models do not fully memorise it). At inference, raw probabilities from each base model are passed through their calibrator before the weighted average.
 
 Training uses `TimeSeriesSplit(5)` with chronological ordering. The train/test split point is set by `TRAIN_TEST_SPLIT=0.80` (most recent 20% is test). For honest out-of-sample evaluation, use `backtest.py --from-year 2022`.
 
