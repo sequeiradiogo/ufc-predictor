@@ -70,51 +70,51 @@ RANDOM_STATE     = 42
 TARGET_COL       = "target"   # 1 = Red wins, 0 = Blue wins
 META_COLS        = ["fight_id", "date", "division", "target"]
 
-# ── XGBoost Hyperparameters (tuned via Optuna, 100 trials, 2026-06-03) ───────
-# CV accuracy: 62.70% (shrinkage+feature-sel features)  |  run: python ml/XGBoost.py --tune --trials 100
+# ── XGBoost Hyperparameters (tuned via Optuna, 100 trials, 2026-06-04) ───────
+# CV accuracy: 61.14% (v4 trajectory features)  |  run: python ml/XGBoost.py --tune --trials 100
 XGB_PARAMS: dict = {
-    "n_estimators":     532,
-    "learning_rate":    0.03879,
-    "max_depth":        3,
-    "subsample":        0.9099,
-    "colsample_bytree": 0.4025,
-    "min_child_weight": 8,
-    "gamma":            0.4676,
-    "reg_alpha":        0.2099,
-    "reg_lambda":       2.2966,
+    "n_estimators":     364,
+    "learning_rate":    0.041175,
+    "max_depth":        2,
+    "subsample":        0.9376,
+    "colsample_bytree": 0.9525,
+    "min_child_weight": 9,
+    "gamma":            0.6687,
+    "reg_alpha":        0.5384,
+    "reg_lambda":       4.1889,
 }
 
-# ── Logistic Regression Hyperparameters (tuned via Optuna, 100 trials, 2026-06-03) ──
-# CV accuracy: 61.17% (shrinkage+feature-sel features)  |  run: python ml/logistic_regression.py --tune --trials 100
+# ── Logistic Regression Hyperparameters (tuned via Optuna, 100 trials, 2026-06-04) ──
+# CV accuracy: 61.12% (v4 trajectory features)  |  run: python ml/logistic_regression.py --tune --trials 100
 LR_PARAMS: dict = {
-    "C":            0.07865,
-    "solver":       "lbfgs",
-    "max_iter":     1583,
-    "class_weight": None,
+    "C":            2.0860,
+    "solver":       "saga",
+    "max_iter":     517,
+    "class_weight": "balanced",
 }
 
-# ── Random Forest Hyperparameters (tuned via Optuna, 100 trials, 2026-06-03) ──
-# CV accuracy: 61.82% (shrinkage+feature-sel features)  |  run: python ml/random_forest.py --tune --trials 100
+# ── Random Forest Hyperparameters (tuned via Optuna, 100 trials, 2026-06-04) ──
+# CV accuracy: 60.00% (v4 trajectory features)  |  run: python ml/random_forest.py --tune --trials 100
 RF_PARAMS: dict = {
-    "n_estimators":      440,
-    "max_depth":         16,
-    "min_samples_split": 15,
-    "min_samples_leaf":  8,
+    "n_estimators":      225,
+    "max_depth":         9,
+    "min_samples_split": 8,
+    "min_samples_leaf":  3,
     "max_features":      0.3,
     "class_weight":      "balanced",
 }
 
-# ── LightGBM Hyperparameters (tuned via Optuna, 100 trials, 2026-06-03) ───────
-# CV accuracy: 61.74% (shrinkage+feature-sel features)  |  run: python ml/lightgbm_model.py --tune --trials 100
+# ── LightGBM Hyperparameters (tuned via Optuna, 100 trials, 2026-06-04) ───────
+# CV accuracy: 60.98% (v4 trajectory features)  |  run: python ml/lightgbm_model.py --tune --trials 100
 LGBM_PARAMS: dict = {
-    "n_estimators":     237,
-    "learning_rate":    0.06917,
+    "n_estimators":     354,
+    "learning_rate":    0.017841,
     "max_depth":        4,
-    "num_leaves":       73,
-    "subsample":        0.7087,
-    "colsample_bytree": 0.5237,
-    "reg_alpha":        0.6847,
-    "reg_lambda":       3.0785,
+    "num_leaves":       53,
+    "subsample":        0.8431,
+    "colsample_bytree": 0.8923,
+    "reg_alpha":        0.2022,
+    "reg_lambda":       3.3206,
 }
 
 # ── Feature Engineering ───────────────────────────────────────────────────────
