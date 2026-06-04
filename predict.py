@@ -600,7 +600,8 @@ def compute_prediction(
     scaler        = joblib.load(scaler_path) if scaler_path and scaler_path.exists() else None
 
     if model_type == "ensemble":
-        ensemble_weights = artifact["weights"]
+        ensemble_weights     = artifact.get("weights", {})
+        ensemble_calibrators = artifact.get("calibrators", {})
         model = base_model = platt = None
     elif isinstance(artifact, dict):
         base_model  = artifact["base"]
@@ -681,10 +682,10 @@ def compute_prediction(
     # ── Build & predict ───────────────────────────────────────────────────────
     if model_type == "ensemble":
         _specs = [
-            ("xgb",  models_dir / "xgboost.joblib",           models_dir / "xgb_features.joblib",  None,                              False),
-            ("lr",   models_dir / "logistic_regression.joblib", models_dir / "lr_features.joblib",  models_dir / "lr_scaler.joblib",   True),
-            ("rf",   models_dir / "random_forest.joblib",      models_dir / "rf_features.joblib",   None,                              False),
-            ("lgbm", models_dir / "lightgbm.joblib",           models_dir / "lgbm_features.joblib", None,                              False),
+            ("xgb",  models_dir / "xgboost.joblib",            models_dir / "xgb_features.joblib",  None,                              False),
+            ("lr",   models_dir / "logistic_regression.joblib", models_dir / "lr_features.joblib",   models_dir / "lr_scaler.joblib",   True),
+            ("rf",   models_dir / "random_forest.joblib",       models_dir / "rf_features.joblib",   None,                              False),
+            ("lgbm", models_dir / "lightgbm.joblib",            models_dir / "lgbm_features.joblib", None,                              False),
         ]
         model_probas   = []
         active_weights = []
@@ -704,13 +705,20 @@ def compute_prediction(
             ).fillna(0)
             Xm_input = m_scaler.transform(Xm) if m_scaler is not None else Xm.values
             if m_is_lr:
-                m_base   = m_artifact["base"]
-                m_platt  = m_artifact["platt"]
-                raw_p    = m_base.predict_proba(Xm_input)[0, 1]
-                cal_p    = m_platt.predict_proba([[raw_p]])[0, 1]
-                m_proba  = [1 - cal_p, cal_p]
+                m_base = m_artifact["base"]
+                raw_p  = m_base.predict_proba(Xm_input)[0, 1]
+                if m_key in ensemble_calibrators:
+                    cal_p = float(ensemble_calibrators[m_key].predict([raw_p])[0])
+                else:
+                    cal_p = float(m_artifact["platt"].predict_proba([[raw_p]])[0, 1])
+                m_proba = [1 - cal_p, cal_p]
             else:
-                m_proba  = m_artifact.predict_proba(Xm_input)[0].tolist()
+                raw_p = m_artifact.predict_proba(Xm_input)[0, 1]
+                if m_key in ensemble_calibrators:
+                    cal_p   = float(ensemble_calibrators[m_key].predict([raw_p])[0])
+                    m_proba = [1 - cal_p, cal_p]
+                else:
+                    m_proba = m_artifact.predict_proba(Xm_input)[0].tolist()
             model_probas.append(m_proba)
             active_weights.append(ensemble_weights.get(m_key, 1.0))
         if not model_probas:
