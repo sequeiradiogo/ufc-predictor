@@ -74,6 +74,16 @@ _SHRINKAGE_COLS = [
 ]
 
 
+def compute_sample_weights(dates: pd.Series) -> np.ndarray | None:
+    """Exponential decay weights by fight year; returns None when SAMPLE_WEIGHT_ALPHA is 0."""
+    from config import SAMPLE_WEIGHT_ALPHA
+    if SAMPLE_WEIGHT_ALPHA == 0.0:
+        return None
+    years = pd.to_datetime(dates).dt.year.astype(float)
+    max_year = float(years.max())
+    return np.exp(SAMPLE_WEIGHT_ALPHA * (years - max_year)).values
+
+
 def apply_shrinkage(df: pd.DataFrame, lam: float = SHRINKAGE_LAMBDA) -> pd.DataFrame:
     """
     Shrink each fighter's rolling stats toward their division mean.
