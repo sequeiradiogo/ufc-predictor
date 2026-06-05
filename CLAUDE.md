@@ -140,15 +140,15 @@ All models are saved to `models/` as `.joblib` files and tracked in git.
 
 | Model | Script | Artifacts | Test Acc | Notes |
 |-------|--------|-----------|----------|-------|
-| XGBoost | `ml/XGBoost.py` | `xgboost.joblib`, `xgb_features.joblib` | 62.84% | Optuna-tuned params in `config.XGB_PARAMS` |
+| XGBoost | `ml/XGBoost.py` | `xgboost.joblib`, `xgb_features.joblib` | 63.28% | Optuna-tuned params in `config.XGB_PARAMS` |
 | Logistic Regression | `ml/logistic_regression.py` | `logistic_regression.joblib`, `lr_scaler.joblib`, `lr_features.joblib` | 64.93% | Platt-calibrated; artifact is dict with `base`+`platt` keys |
-| Random Forest | `ml/random_forest.py` | `random_forest.joblib`, `rf_features.joblib` | 62.69% | Optuna-tuned params in `config.RF_PARAMS` |
+| Random Forest | `ml/random_forest.py` | `random_forest.joblib`, `rf_features.joblib` | 64.03% | Optuna-tuned params in `config.RF_PARAMS` |
 | LightGBM | `ml/lightgbm_model.py` | `lightgbm.joblib`, `lgbm_features.joblib` | 61.94% | Optuna-tuned params in `config.LGBM_PARAMS` |
-| Ensemble | `ml/soft_vote_ensemble.py` | `ensemble.joblib` | **63.13%** | Calibrated soft-vote over XGB+LR+RF+LightGBM; isotonic calibrators + Optuna-tuned weights; recommended |
+| Ensemble | `ml/soft_vote_ensemble.py` | `ensemble.joblib` | **63.73%** | Calibrated soft-vote over XGB+LR+RF+LightGBM; isotonic calibrators + Optuna-tuned weights; recommended |
 | Finish type | `ml/finish_type_model.py` | `finish_type.joblib`, `finish_type_features.joblib` | ~51% | 3-class (Decision/KO-TKO/Submission); use as soft signal only |
 
-Accuracy figures are on the held-out test set (fights from 2018-01-01 to present, most recent 20%, ~669 fights). These models are trained on the UFCStats rolling DB with no leakage.
-Out-of-sample backtest (2022-2026, 1832 fights): **69.65%** accuracy, +13.70% over naive Red baseline.
+Accuracy figures are on the held-out test set (fights from 2018-01-01 to present, most recent 20%, ~670 fights). These models are trained on the UFCStats rolling DB with no leakage.
+Out-of-sample backtest (2022-2026, 1832 fights): **70.09%** accuracy, +14.14% over naive Red baseline.
 
 Training data cutoff: `MIN_FIGHT_DATE = "2018-01-01"` (issue #47 -- adversarial validation showed significant distribution shift pre-2018; cutting old-era data improved backtest by +4.64pp over baseline). Hyperparameters re-tuned on the 2018+ dataset.
 
@@ -180,6 +180,7 @@ Single source of truth for all paths, constants, and hyperparameters. Always imp
 - `XGB_PARAMS`, `LR_PARAMS`, `RF_PARAMS`, `LGBM_PARAMS` -- Optuna-tuned hyperparameters (tuned on 2018+ data)
 - `MIN_FIGHT_DATE` -- training data cutoff (currently `"2018-01-01"`; see issue #47)
 - `EXCLUDE_STAT_KEYWORDS` -- columns excluded from the diff feature loop
+- `EXCLUDED_FEATURES` -- features dropped at training and inference time after permutation-importance analysis (issue #43); currently removes 3 dead columns (`date_diff`, `outcome_diff`, `age_diff`) that carry zero signal
 - `SHRINKAGE_LAMBDA` -- prior weight for division-mean shrinkage (default 5)
 - `STARTING_ELO`, `DIVISIONS`, `FINISH_METHOD_MAP`, `TRAIN_TEST_SPLIT`
 
@@ -216,5 +217,5 @@ If any excluded files were previously committed, untrack them with `git rm --cac
 - **Corner assignment**: Red/Blue corners come from the fight detail page (`div.b-fight-details__person`), NOT the event listing (which puts the winner first). Getting this wrong causes ~100% Red win rate in training data.
 - **Symmetry augmentation**: during training, each fight is duplicated with corners swapped and target flipped. This is applied *per fold* to the training split only -- never to the validation/test split.
 - **SQLite TEXT affinity**: some numeric columns (e.g. `kd`, `ctrl`) are stored as TEXT. Always use `CAST(col AS REAL)` in numeric comparisons or aggregations.
-- **Model performance ceiling**: stats-only models trained on 2018+ data achieve ~69-70% on the 2022+ backtest (1832 fights). The naive "always pick Red" baseline is ~56% on recent data. The in-sample test accuracy (~63%) is lower than the backtest because the test set is a small slice of recent fights and the distribution match is tighter for the backtest period. Update `MODEL_RESULTS.md` after any significant retrain.
+- **Model performance ceiling**: stats-only models trained on 2018+ data achieve ~70% on the 2022+ backtest (1832 fights). The naive "always pick Red" baseline is ~56% on recent data. The in-sample test accuracy (~63-64%) is lower than the backtest because the test set is a small slice of recent fights and the distribution match is tighter for the backtest period. Update `MODEL_RESULTS.md` after any significant retrain.
 - **Shrinkage is training-only**: `apply_shrinkage()` in `ML_data_preparation.py` modifies the training CSV. It is NOT applied in `predict.py` at inference time -- acceptable approximation for established fighters.

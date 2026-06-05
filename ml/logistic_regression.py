@@ -37,6 +37,7 @@ from config import (
     TRAIN_TEST_SPLIT, RANDOM_STATE,
     MODEL_LR_PATH, MODEL_LR_SCALER, MODEL_LR_FEATURES,
     LR_PARAMS,
+    EXCLUDED_FEATURES,
 )
 from utils.logger import get_logger
 
@@ -241,6 +242,9 @@ def main(tune: bool = False, n_trials: int = 50) -> None:
     X_train, y_train = preprocess_data(df_train)
     X_cal,   y_cal   = preprocess_data(df_cal)
     X_test,  y_test  = preprocess_data(df_test)
+    X_train = X_train.drop(columns=[f for f in EXCLUDED_FEATURES if f in X_train.columns])
+    X_cal   = X_cal.drop(columns=[f for f in EXCLUDED_FEATURES if f in X_cal.columns])
+    X_test  = X_test.drop(columns=[f for f in EXCLUDED_FEATURES if f in X_test.columns])
     feature_names = list(X_train.columns)
 
     scaler    = StandardScaler()

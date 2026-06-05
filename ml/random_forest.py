@@ -29,6 +29,7 @@ from config import (
     TRAIN_TEST_SPLIT, RANDOM_STATE,
     MODEL_RF_PATH, MODEL_RF_FEATURES,
     RF_PARAMS,
+    EXCLUDED_FEATURES,
 )
 from utils.logger import get_logger
 
@@ -208,6 +209,8 @@ def main(tune: bool = False, n_trials: int = 50) -> None:
 
     X_train, y_train = preprocess_data(train_df)
     X_test,  y_test  = preprocess_data(test_df)
+    X_train = X_train.drop(columns=[f for f in EXCLUDED_FEATURES if f in X_train.columns])
+    X_test  = X_test.drop(columns=[f for f in EXCLUDED_FEATURES if f in X_test.columns])
     feature_names = list(X_train.columns)
 
     log.info("Training Random Forest model...")
