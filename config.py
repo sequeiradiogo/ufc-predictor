@@ -155,6 +155,10 @@ SHRINKAGE_LAMBDA = 5
 # show significant distribution shift and hurt out-of-sample accuracy.
 MIN_FIGHT_DATE = "2018-01-01"
 
+# Exponential decay weight for temporal sample weighting.
+# weight = exp(alpha * (year - max_year)); 0.0 disables weighting entirely.
+SAMPLE_WEIGHT_ALPHA = 0.0
+
 # Recent form window (number of prior fights to average)
 RECENT_FORM_WINDOW = 3
 
