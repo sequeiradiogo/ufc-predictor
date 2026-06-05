@@ -31,6 +31,7 @@ from config import (
     LGBM_PARAMS,
     EXCLUDED_FEATURES,
 )
+from ml.ML_data_preparation import compute_sample_weights
 from utils.logger import get_logger
 
 DEFAULT_PARAMS: dict = {**LGBM_PARAMS, "random_state": RANDOM_STATE}
@@ -97,9 +98,10 @@ def cross_validate(df: pd.DataFrame, params: dict | None = None, n_splits: int =
         X_tr, y_tr = preprocess_data(train_fold)
         X_val = X_all.iloc[val_idx]
         y_val = y_all.iloc[val_idx]
+        w_tr = compute_sample_weights(train_fold["date"])
 
         m = LGBMClassifier(**p, verbosity=-1)
-        m.fit(X_tr, y_tr)
+        m.fit(X_tr, y_tr, sample_weight=w_tr)
         score = accuracy_score(y_val, m.predict(X_val))
         scores.append(score)
         log.info("  Fold %d: %.2f%%", fold, score * 100)
@@ -143,9 +145,10 @@ def tune_hyperparameters(df: pd.DataFrame, n_trials: int = 50) -> dict:
             X_tr, y_tr = preprocess_data(train_fold)
             X_val = X_all.iloc[val_idx]
             y_val = y_all.iloc[val_idx]
+            w_tr = compute_sample_weights(train_fold["date"])
 
             m = LGBMClassifier(**params, verbosity=-1)
-            m.fit(X_tr, y_tr)
+            m.fit(X_tr, y_tr, sample_weight=w_tr)
             fold_scores.append(accuracy_score(y_val, m.predict(X_val)))
 
         return float(np.mean(fold_scores))
@@ -209,6 +212,8 @@ def main(tune: bool = False, n_trials: int = 50) -> None:
     train_df, test_df = time_series_split(df)
     train_df = make_symmetric(train_df)
 
+    w_train = compute_sample_weights(train_df["date"])
+
     X_train, y_train = preprocess_data(train_df)
     X_test,  y_test  = preprocess_data(test_df)
     X_train = X_train.drop(columns=[f for f in EXCLUDED_FEATURES if f in X_train.columns])
@@ -217,7 +222,7 @@ def main(tune: bool = False, n_trials: int = 50) -> None:
 
     log.info("Training LightGBM model...")
     model = LGBMClassifier(**best_params, verbosity=-1)
-    model.fit(X_train, y_train)
+    model.fit(X_train, y_train, sample_weight=w_train)
 
     predictions = model.predict(X_test)
     probs       = model.predict_proba(X_test)[:, 1]

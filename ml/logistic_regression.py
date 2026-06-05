@@ -39,6 +39,7 @@ from config import (
     LR_PARAMS,
     EXCLUDED_FEATURES,
 )
+from ml.ML_data_preparation import compute_sample_weights
 from utils.logger import get_logger
 
 DEFAULT_PARAMS = {**LR_PARAMS, "random_state": RANDOM_STATE}
@@ -120,13 +121,14 @@ def tune_hyperparameters(df: pd.DataFrame, n_trials: int = 50) -> dict:
             X_tr, y_tr = preprocess_data(train_fold)
             X_val = X_all.iloc[val_idx]
             y_val = y_all.iloc[val_idx]
+            w_tr = compute_sample_weights(train_fold["date"])
 
             scaler  = StandardScaler()
             X_tr_s  = scaler.fit_transform(X_tr)
             X_val_s = scaler.transform(X_val)
 
             m = LogisticRegression(**params, random_state=RANDOM_STATE)
-            m.fit(X_tr_s, y_tr)
+            m.fit(X_tr_s, y_tr, sample_weight=w_tr)
             fold_scores.append(accuracy_score(y_val, m.predict(X_val_s)))
 
         return float(np.mean(fold_scores))
@@ -157,13 +159,14 @@ def cross_validate(df: pd.DataFrame, n_splits: int = 5, params: dict | None = No
         X_tr, y_tr = preprocess_data(train_fold)
         X_val = X_all.iloc[val_idx]
         y_val = y_all.iloc[val_idx]
+        w_tr = compute_sample_weights(train_fold["date"])
 
         scaler  = StandardScaler()
         X_tr_s  = scaler.fit_transform(X_tr)
         X_val_s = scaler.transform(X_val)
 
         m = LogisticRegression(**params)
-        m.fit(X_tr_s, y_tr)
+        m.fit(X_tr_s, y_tr, sample_weight=w_tr)
         score = accuracy_score(y_val, m.predict(X_val_s))
         scores.append(score)
         log.info("  Fold %d: %.2f%%", fold, score * 100)
@@ -239,6 +242,8 @@ def main(tune: bool = False, n_trials: int = 50) -> None:
 
     log.info("Split — Train: %d  Cal: %d  Test: %d", len(df_train), len(df_cal), len(df_test))
 
+    w_train = compute_sample_weights(df_train["date"])
+
     X_train, y_train = preprocess_data(df_train)
     X_cal,   y_cal   = preprocess_data(df_cal)
     X_test,  y_test  = preprocess_data(df_test)
@@ -254,7 +259,7 @@ def main(tune: bool = False, n_trials: int = 50) -> None:
 
     log.info("Training Logistic Regression...")
     base_model = LogisticRegression(**best_params)
-    base_model.fit(X_train_s, y_train)
+    base_model.fit(X_train_s, y_train, sample_weight=w_train)
 
     # Platt scaling — fit a 1-feature logistic regression on the calibration set
     # to map raw scores → calibrated probabilities.  Equivalent to cv='prefit'
