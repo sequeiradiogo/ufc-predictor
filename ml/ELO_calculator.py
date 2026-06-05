@@ -20,7 +20,11 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 try:
-    from config import DB_PATH, STARTING_ELO, K_FACTOR_NORMAL, K_FACTOR_PROVISIONAL, PROVISIONAL_LIMIT
+    from config import (
+        DB_PATH,
+        STARTING_ELO, K_FACTOR_NORMAL, K_FACTOR_PROVISIONAL, PROVISIONAL_LIMIT,
+        GLICKO_START_R, GLICKO_START_RD, GLICKO_START_SIGMA, GLICKO_TAU,
+    )
     from logger import get_logger
 except ImportError:
     DB_PATH              = Path(__file__).parent.parent / "db" / "ufc_v2.db"
@@ -28,6 +32,10 @@ except ImportError:
     K_FACTOR_NORMAL      = 32
     K_FACTOR_PROVISIONAL = 90
     PROVISIONAL_LIMIT    = 3
+    GLICKO_START_R       = 1500
+    GLICKO_START_RD      = 350.0
+    GLICKO_START_SIGMA   = 0.06
+    GLICKO_TAU           = 0.5
     import logging
     def get_logger(name: str) -> logging.Logger:
         return logging.getLogger(name)
@@ -259,3 +267,276 @@ def get_current_ratings_by_division(
     div_ratings, _, _, _ = _replay_fights_by_division(df)
     log.info("Per-division ratings computed for %d (fighter, division) pairs.", len(div_ratings))
     return div_ratings
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Glicko-2 implementation
+# Reference: Glickman, M.E. (2012). "Example of the Glicko-2 system."
+# http://www.glicko.net/glicko/glicko2.pdf
+# ═══════════════════════════════════════════════════════════════════════════════
+
+import math as _math
+
+_G2_SCALE = 173.7178  # converts between Glicko-1 and Glicko-2 internal scale
+
+
+def _g(phi: float) -> float:
+    return 1.0 / _math.sqrt(1.0 + 3.0 * phi ** 2 / _math.pi ** 2)
+
+
+def _E(mu: float, mu_j: float, phi_j: float) -> float:
+    return 1.0 / (1.0 + _math.exp(-_g(phi_j) * (mu - mu_j)))
+
+
+def _glicko2_update(
+    r: float,
+    rd: float,
+    sigma: float,
+    outcomes: list[tuple[float, float, float]],
+    tau: float = GLICKO_TAU,
+) -> tuple[float, float, float]:
+    """
+    Apply one Glicko-2 rating-period update.
+
+    Parameters
+    ----------
+    r, rd, sigma : current rating, deviation, volatility (Glicko-1 scale)
+    outcomes     : list of (opponent_r, opponent_rd, score) for this period
+                   score = 1.0 win, 0.0 loss, 0.5 draw
+    tau          : system constant
+
+    Returns
+    -------
+    (new_r, new_rd, new_sigma) on Glicko-1 scale
+    """
+    # Convert to Glicko-2 internal scale
+    mu    = (r  - 1500.0) / _G2_SCALE
+    phi   = rd / _G2_SCALE
+
+    if not outcomes:
+        # No bouts: inflate RD by volatility (inactivity decay), rating unchanged
+        phi_star = _math.sqrt(phi ** 2 + sigma ** 2)
+        return r, phi_star * _G2_SCALE, sigma
+
+    # Step 3: compute v (estimated variance)
+    v_inv = 0.0
+    for opp_r, opp_rd, _s in outcomes:
+        mu_j  = (opp_r  - 1500.0) / _G2_SCALE
+        phi_j = opp_rd / _G2_SCALE
+        g_j   = _g(phi_j)
+        e_j   = _E(mu, mu_j, phi_j)
+        v_inv += g_j ** 2 * e_j * (1.0 - e_j)
+    v = 1.0 / v_inv
+
+    # Step 4: compute delta (performance rating)
+    delta_sum = 0.0
+    for opp_r, opp_rd, s_j in outcomes:
+        mu_j  = (opp_r  - 1500.0) / _G2_SCALE
+        phi_j = opp_rd / _G2_SCALE
+        g_j   = _g(phi_j)
+        e_j   = _E(mu, mu_j, phi_j)
+        delta_sum += g_j * (s_j - e_j)
+    delta = v * delta_sum
+
+    # Step 5: update volatility via Illinois algorithm (from Glickman 2012)
+    a = _math.log(sigma ** 2)
+    eps = 1e-6
+
+    def _f(x: float) -> float:
+        ex = _math.exp(x)
+        d2 = phi ** 2 + v + ex
+        return (ex * (delta ** 2 - d2) / (2.0 * d2 ** 2)
+                - (x - a) / tau ** 2)
+
+    # Bracket
+    A = a
+    if delta ** 2 > phi ** 2 + v:
+        B = _math.log(delta ** 2 - phi ** 2 - v)
+    else:
+        k = 1
+        while _f(a - k * tau) < 0:
+            k += 1
+        B = a - k * tau
+
+    fA, fB = _f(A), _f(B)
+    for _ in range(100):
+        C  = A + (A - B) * fA / (fB - fA)
+        fC = _f(C)
+        if fB * fC < 0:
+            A, fA = B, fB
+        else:
+            fA /= 2.0
+        B, fB = C, fC
+        if abs(B - A) < eps:
+            break
+    new_sigma = _math.exp(A / 2.0)
+
+    # Steps 6-7: update phi and mu
+    phi_star = _math.sqrt(phi ** 2 + new_sigma ** 2)
+    new_phi  = 1.0 / _math.sqrt(1.0 / phi_star ** 2 + 1.0 / v)
+    new_mu   = mu + new_phi ** 2 * delta_sum
+
+    # Convert back to Glicko-1 scale
+    return (new_mu * _G2_SCALE + 1500.0, new_phi * _G2_SCALE, new_sigma)
+
+
+def _replay_fights_glicko_by_division(
+    df: pd.DataFrame,
+) -> tuple[
+    dict[tuple[str, str], tuple[float, float, float]],
+    list[float],
+    list[float],
+    list[float],
+    list[float],
+]:
+    """
+    Replay fights using Glicko-2 with calendar-quarter rating periods.
+
+    Returns
+    -------
+    current_ratings : dict[(fighter_id, division), (r, rd, sigma)] after all periods
+    red_r_pre       : pre-fight Glicko-2 rating for red fighter
+    blue_r_pre      : pre-fight Glicko-2 rating for blue fighter
+    red_rd_pre      : pre-fight RD for red
+    blue_rd_pre     : pre-fight RD for blue
+    """
+    import numpy as np
+
+    df = df.copy()
+    df["date"] = pd.to_datetime(df["date"])
+    df = df.sort_values("date").reset_index(drop=True)
+
+    # Assign each fight to a calendar quarter
+    df["period"] = df["date"].dt.to_period("Q")
+    periods = df["period"].unique()
+    periods_sorted = sorted(periods)
+
+    # Current ratings dict: key=(fighter_id, division), value=(r, rd, sigma)
+    ratings: dict[tuple[str, str], tuple[float, float, float]] = {}
+
+    # Pre-fight arrays indexed by fight row
+    red_r_pre:  list[float] = [0.0] * len(df)
+    blue_r_pre: list[float] = [0.0] * len(df)
+    red_rd_pre: list[float] = [0.0] * len(df)
+    blue_rd_pre: list[float] = [0.0] * len(df)
+
+    # Track which fighters appear at all (to apply inactivity decay)
+    all_keys: set[tuple[str, str]] = set()
+
+    for period in periods_sorted:
+        period_mask = df["period"] == period
+        period_df   = df[period_mask]
+
+        # Record pre-period ratings as pre-fight values; collect outcomes per fighter
+        fighter_outcomes: dict[tuple[str, str], list[tuple[float, float, float]]] = {}
+        period_indices = period_df.index.tolist()
+
+        for idx in period_indices:
+            row   = df.loc[idx]
+            r_id  = row["r_fighter_id"]
+            b_id  = row["b_fighter_id"]
+            div   = str(row.get("division", "")).lower().strip()
+            r_key = (r_id, div)
+            b_key = (b_id, div)
+
+            r_curr = ratings.get(r_key, (GLICKO_START_R, GLICKO_START_RD, GLICKO_START_SIGMA))
+            b_curr = ratings.get(b_key, (GLICKO_START_R, GLICKO_START_RD, GLICKO_START_SIGMA))
+
+            all_keys.add(r_key)
+            all_keys.add(b_key)
+
+            # Record pre-fight (start-of-period) values
+            red_r_pre[idx]  = r_curr[0]
+            blue_r_pre[idx] = b_curr[0]
+            red_rd_pre[idx] = r_curr[1]
+            blue_rd_pre[idx] = b_curr[1]
+
+            winner = row["winner_id"]
+            score_r = 1.0 if winner == r_id else (0.0 if winner == b_id else 0.5)
+            score_b = 1.0 - score_r
+
+            if r_key not in fighter_outcomes:
+                fighter_outcomes[r_key] = []
+            fighter_outcomes[r_key].append((b_curr[0], b_curr[1], score_r))
+
+            if b_key not in fighter_outcomes:
+                fighter_outcomes[b_key] = []
+            fighter_outcomes[b_key].append((r_curr[0], r_curr[1], score_b))
+
+        # Apply updates for all fighters who fought this period
+        for key, outcomes in fighter_outcomes.items():
+            curr = ratings.get(key, (GLICKO_START_R, GLICKO_START_RD, GLICKO_START_SIGMA))
+            ratings[key] = _glicko2_update(curr[0], curr[1], curr[2], outcomes)
+
+        # Inactivity decay for fighters who did NOT fight this period
+        for key in all_keys - set(fighter_outcomes.keys()):
+            curr = ratings.get(key, (GLICKO_START_R, GLICKO_START_RD, GLICKO_START_SIGMA))
+            ratings[key] = _glicko2_update(curr[0], curr[1], curr[2], [])
+
+    return ratings, red_r_pre, blue_r_pre, red_rd_pre, blue_rd_pre
+
+
+# ── Glicko-2 public API ───────────────────────────────────────────────────────
+
+def build_glicko_features(conn: sqlite3.Connection | None = None) -> pd.DataFrame:
+    """
+    Compute pre-fight Glicko-2 ratings for every fight in the database.
+
+    Returns
+    -------
+    DataFrame with columns: fight_id, glicko_red, glicko_blue, glicko_rd_red, glicko_rd_blue
+    """
+    own_conn = conn is None
+    if own_conn:
+        conn = sqlite3.connect(str(DB_PATH))
+
+    query = """
+        SELECT fight_id, date, division, r_fighter_id, b_fighter_id, winner_id
+        FROM fights
+        ORDER BY date ASC
+    """
+    df = pd.read_sql_query(query, conn)
+
+    if own_conn:
+        conn.close()
+
+    log.info("Calculating Glicko-2 ratings for %d fights…", len(df))
+    _, red_r, blue_r, red_rd, blue_rd = _replay_fights_glicko_by_division(df)
+
+    df["glicko_red"]    = red_r
+    df["glicko_blue"]   = blue_r
+    df["glicko_rd_red"] = red_rd
+    df["glicko_rd_blue"] = blue_rd
+
+    log.info("Glicko-2 calculation complete.")
+    return df[["fight_id", "glicko_red", "glicko_blue", "glicko_rd_red", "glicko_rd_blue"]]
+
+
+def get_current_glicko_by_division(
+    conn: sqlite3.Connection | None = None,
+) -> dict[tuple[str, str], tuple[float, float, float]]:
+    """
+    Replay all fights and return each fighter's current Glicko-2 state.
+
+    Returns
+    -------
+    dict mapping (fighter_id, division_lower) -> (r, rd, sigma)
+    """
+    own_conn = conn is None
+    if own_conn:
+        conn = sqlite3.connect(str(DB_PATH))
+
+    query = """
+        SELECT fight_id, date, division, r_fighter_id, b_fighter_id, winner_id
+        FROM fights
+        ORDER BY date ASC
+    """
+    df = pd.read_sql_query(query, conn)
+
+    if own_conn:
+        conn.close()
+
+    log.info("Computing current Glicko-2 ratings for %d fights…", len(df))
+    current_ratings, _, _, _, _ = _replay_fights_glicko_by_division(df)
+    log.info("Glicko-2 ratings computed for %d (fighter, division) pairs.", len(current_ratings))
+    return current_ratings

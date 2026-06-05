@@ -54,7 +54,7 @@ from config import (
     TRAJECTORY_WINDOW,
 )
 from utils.logger import get_logger
-from ml.ELO_calculator import build_elo_features
+from ml.ELO_calculator import build_elo_features, build_glicko_features
 
 log = get_logger(__name__)
 
@@ -815,6 +815,11 @@ def build_ml_dataset() -> pd.DataFrame:
     log.info("Building ELO features…")
     elo_df = build_elo_features(conn)
     df = df.merge(elo_df, on="fight_id", how="left")
+
+    # ── Glicko-2 features ─────────────────────────────────────────────────────
+    log.info("Building Glicko-2 features…")
+    glicko_df = build_glicko_features(conn)
+    df = df.merge(glicko_df, on="fight_id", how="left")
 
     # ── Recent form per fighter ───────────────────────────────────────────────
     form_df = compute_recent_form(conn)

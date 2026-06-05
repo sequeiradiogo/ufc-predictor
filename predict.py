@@ -41,6 +41,7 @@ from config import (
     DB_PATH,
     MODELS_DIR,
     STARTING_ELO, K_FACTOR_NORMAL, K_FACTOR_PROVISIONAL, PROVISIONAL_LIMIT,
+    GLICKO_START_R, GLICKO_START_RD,
     MODEL_XGB_PATH, MODEL_XGB_FEATURES,
     MODEL_LR_PATH, MODEL_LR_SCALER, MODEL_LR_FEATURES,
     MODEL_RF_PATH, MODEL_RF_FEATURES,
@@ -56,7 +57,7 @@ from config import (
     KO_VULN_WINDOW,
     EWMA_SPAN,
 )
-from ml.ELO_calculator import get_current_ratings_by_division
+from ml.ELO_calculator import get_current_ratings_by_division, get_current_glicko_by_division
 from utils.odds import print_value_bet_summary
 from utils.logger import get_logger
 
@@ -524,6 +525,12 @@ def build_feature_vector(
         elif feat == "sos_diff":
             row[feat] = _er.get("sos", float(STARTING_ELO)) - _eb.get("sos", float(STARTING_ELO))
 
+        # ── Glicko-2 ──────────────────────────────────────────────────────────
+        elif feat == "glicko_diff":
+            row[feat] = _er.get("glicko", float(GLICKO_START_R)) - _eb.get("glicko", float(GLICKO_START_R))
+        elif feat == "glicko_rd_diff":
+            row[feat] = _er.get("glicko_rd", float(GLICKO_START_RD)) - _eb.get("glicko_rd", float(GLICKO_START_RD))
+
         # ── KO vulnerability ──────────────────────────────────────────────────
         elif feat == "ko_vuln_diff":
             row[feat] = _er.get("ko_vuln", 0.0) - _eb.get("ko_vuln", 0.0)
@@ -657,6 +664,19 @@ def compute_prediction(
         elo_r       = elo_ratings.get(r_id, STARTING_ELO)
         elo_b       = elo_ratings.get(b_id, STARTING_ELO)
 
+    # ── Glicko-2 ──────────────────────────────────────────────────────────────
+    log.info("Computing current Glicko-2 ratings...")
+    div_glicko = get_current_glicko_by_division(conn)
+    if div_lower:
+        glicko_r_tuple = div_glicko.get((r_id, div_lower), (GLICKO_START_R, GLICKO_START_RD, 0.06))
+        glicko_b_tuple = div_glicko.get((b_id, div_lower), (GLICKO_START_R, GLICKO_START_RD, 0.06))
+    else:
+        # Fall back to the most recent division the fighter appeared in
+        r_divs = [(k, v) for k, v in div_glicko.items() if k[0] == r_id]
+        b_divs = [(k, v) for k, v in div_glicko.items() if k[0] == b_id]
+        glicko_r_tuple = r_divs[0][1] if r_divs else (GLICKO_START_R, GLICKO_START_RD, 0.06)
+        glicko_b_tuple = b_divs[0][1] if b_divs else (GLICKO_START_R, GLICKO_START_RD, 0.06)
+
     # ── Recent form ───────────────────────────────────────────────────────────
     log.info("Computing recent form...")
     form_r = compute_recent_form(conn, r_id)
@@ -674,8 +694,10 @@ def compute_prediction(
     kovuln_b = compute_ko_vulnerability_single(conn, b_id)
     ewma_r   = compute_ewma_stats_single(conn, r_id)
     ewma_b   = compute_ewma_stats_single(conn, b_id)
-    extra_r  = {**finish_r, **inact_r, **sos_r, **kovuln_r, **ewma_r}
-    extra_b  = {**finish_b, **inact_b, **sos_b, **kovuln_b, **ewma_b}
+    glicko_extra_r = {"glicko": glicko_r_tuple[0], "glicko_rd": glicko_r_tuple[1]}
+    glicko_extra_b = {"glicko": glicko_b_tuple[0], "glicko_rd": glicko_b_tuple[1]}
+    extra_r  = {**finish_r, **inact_r, **sos_r, **kovuln_r, **ewma_r, **glicko_extra_r}
+    extra_b  = {**finish_b, **inact_b, **sos_b, **kovuln_b, **ewma_b, **glicko_extra_b}
 
     conn.close()
 
