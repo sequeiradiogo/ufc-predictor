@@ -107,14 +107,22 @@ Reads `fight_stats`, sorts by date, applies `shift(1)` so each row only contains
 
 `scrape_events_iter(since, existing_fighter_ids, skip_event_ids)` is a generator that yields `(event, data)` pairs. `scrape_history.py` uses it with checkpointing every 10 events. Resume support: already-ingested `event_id`s are skipped automatically.
 
-### ELO calculator (`ml/ELO_calculator.py`)
+### ELO / Glicko-2 calculator (`ml/ELO_calculator.py`)
 
-Replays all historical fights chronologically to produce pre-fight ELO ratings. Two modes:
+Replays all historical fights chronologically to produce pre-fight ratings. Two rating systems:
 
-- **Per-division** (used in training): keys ratings by `(fighter_id, division)` tuple -- `build_elo_features()` and `get_current_ratings_by_division()`
-- **Global** (fallback): `get_current_ratings()` -- used when no division is specified
+**ELO** (original):
+- Per-division: keys ratings by `(fighter_id, division)` tuple -- `build_elo_features()` and `get_current_ratings_by_division()`
+- Global (fallback): `get_current_ratings()` -- used when no division is specified
+- K-factor is `K_FACTOR_PROVISIONAL=90` for fighters with <=3 fights, then `K_FACTOR_NORMAL=32`. Starting ELO is 1400 (config).
 
-K-factor is `K_FACTOR_PROVISIONAL=90` for fighters with <=3 fights, then `K_FACTOR_NORMAL=32`. Starting ELO is 1400 (config).
+**Glicko-2** (issue #40, additive alongside ELO):
+- Same `(fighter_id, division)` key scheme
+- Tracks rating `r`, deviation `rd`, and volatility `sigma` per fighter
+- Fights grouped into calendar-quarter rating periods; fighters with no bouts get RD inflated (inactivity decay)
+- Produces `glicko_diff` (rating gap) and `glicko_rd_diff` (uncertainty gap) features
+- Public API: `build_glicko_features(conn)`, `get_current_glicko_by_division(conn)` -> `dict[(fighter_id, div), (r, rd, sigma)]`
+- Constants: `GLICKO_START_R=1500`, `GLICKO_START_RD=350`, `GLICKO_START_SIGMA=0.06`, `GLICKO_TAU=0.5`
 
 ### Feature dataset (`ml/ML_data_preparation.py`)
 
@@ -140,15 +148,15 @@ All models are saved to `models/` as `.joblib` files and tracked in git.
 
 | Model | Script | Artifacts | Test Acc | Notes |
 |-------|--------|-----------|----------|-------|
-| XGBoost | `ml/XGBoost.py` | `xgboost.joblib`, `xgb_features.joblib` | 63.28% | Optuna-tuned params in `config.XGB_PARAMS` |
-| Logistic Regression | `ml/logistic_regression.py` | `logistic_regression.joblib`, `lr_scaler.joblib`, `lr_features.joblib` | 64.93% | Platt-calibrated; artifact is dict with `base`+`platt` keys |
-| Random Forest | `ml/random_forest.py` | `random_forest.joblib`, `rf_features.joblib` | 64.03% | Optuna-tuned params in `config.RF_PARAMS` |
-| LightGBM | `ml/lightgbm_model.py` | `lightgbm.joblib`, `lgbm_features.joblib` | 61.94% | Optuna-tuned params in `config.LGBM_PARAMS` |
-| Ensemble | `ml/soft_vote_ensemble.py` | `ensemble.joblib` | **63.73%** | Calibrated soft-vote over XGB+LR+RF+LightGBM; isotonic calibrators + Optuna-tuned weights; recommended |
+| XGBoost | `ml/XGBoost.py` | `xgboost.joblib`, `xgb_features.joblib` | 62.54% | Optuna-tuned params in `config.XGB_PARAMS` |
+| Logistic Regression | `ml/logistic_regression.py` | `logistic_regression.joblib`, `lr_scaler.joblib`, `lr_features.joblib` | 63.73% | Platt-calibrated; artifact is dict with `base`+`platt` keys |
+| Random Forest | `ml/random_forest.py` | `random_forest.joblib`, `rf_features.joblib` | 62.69% | Optuna-tuned params in `config.RF_PARAMS` |
+| LightGBM | `ml/lightgbm_model.py` | `lightgbm.joblib`, `lgbm_features.joblib` | 62.39% | Optuna-tuned params in `config.LGBM_PARAMS` |
+| Ensemble | `ml/soft_vote_ensemble.py` | `ensemble.joblib` | **62.69%** | Calibrated soft-vote over XGB+LR+RF+LightGBM; isotonic calibrators + Optuna-tuned weights; recommended |
 | Finish type | `ml/finish_type_model.py` | `finish_type.joblib`, `finish_type_features.joblib` | ~51% | 3-class (Decision/KO-TKO/Submission); use as soft signal only |
 
 Accuracy figures are on the held-out test set (fights from 2018-01-01 to present, most recent 20%, ~670 fights). These models are trained on the UFCStats rolling DB with no leakage.
-Out-of-sample backtest (2022-2026, 1832 fights): **70.09%** accuracy, +14.14% over naive Red baseline.
+Out-of-sample backtest (2022-2026, 1832 fights): **69.21%** accuracy (XGBoost), +13.26% over naive Red baseline.
 
 Training data cutoff: `MIN_FIGHT_DATE = "2018-01-01"` (issue #47 -- adversarial validation showed significant distribution shift pre-2018; cutting old-era data improved backtest by +4.64pp over baseline). Hyperparameters re-tuned on the 2018+ dataset.
 
@@ -182,7 +190,8 @@ Single source of truth for all paths, constants, and hyperparameters. Always imp
 - `EXCLUDE_STAT_KEYWORDS` -- columns excluded from the diff feature loop
 - `EXCLUDED_FEATURES` -- features dropped at training and inference time after permutation-importance analysis (issue #43); currently removes 3 dead columns (`date_diff`, `outcome_diff`, `age_diff`) that carry zero signal
 - `SHRINKAGE_LAMBDA` -- prior weight for division-mean shrinkage (default 5)
-- `STARTING_ELO`, `DIVISIONS`, `FINISH_METHOD_MAP`, `TRAIN_TEST_SPLIT`
+- `STARTING_ELO`, `GLICKO_START_R`, `GLICKO_START_RD`, `GLICKO_START_SIGMA`, `GLICKO_TAU` -- rating system constants
+- `DIVISIONS`, `FINISH_METHOD_MAP`, `TRAIN_TEST_SPLIT`
 
 ### Encoding note (Windows)
 

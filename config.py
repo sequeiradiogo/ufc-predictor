@@ -64,6 +64,12 @@ K_FACTOR_NORMAL      = 32
 K_FACTOR_PROVISIONAL = 90     # large jumps for first few fights
 PROVISIONAL_LIMIT    = 3      # fights before becoming "established"
 
+# ── Glicko-2 ──────────────────────────────────────────────────────────────────
+GLICKO_START_R     = 1500    # initial rating (Glicko-2 scale)
+GLICKO_START_RD    = 350.0   # initial rating deviation (high = very uncertain)
+GLICKO_START_SIGMA = 0.06    # initial volatility
+GLICKO_TAU         = 0.5     # system constant; constrains how fast volatility changes
+
 # ── ML Training ───────────────────────────────────────────────────────────────
 TRAIN_TEST_SPLIT = 0.80        # 80 % history → train, 20 % recent → test
 RANDOM_STATE     = 42
@@ -71,50 +77,50 @@ TARGET_COL       = "target"   # 1 = Red wins, 0 = Blue wins
 META_COLS        = ["fight_id", "date", "division", "target"]
 
 # ── XGBoost Hyperparameters (tuned via Optuna, 100 trials, 2026-06-05) ───────
-# MIN_FIGHT_DATE=2018-01-01  |  run: python ml/XGBoost.py --tune --trials 100
+# MIN_FIGHT_DATE=2018-01-01 + Glicko-2 features  |  run: python ml/XGBoost.py --tune --trials 100
 XGB_PARAMS: dict = {
-    "n_estimators":     321,
-    "learning_rate":    0.017714,
+    "n_estimators":     490,
+    "learning_rate":    0.015480,
     "max_depth":        4,
-    "subsample":        0.7490,
-    "colsample_bytree": 0.8358,
-    "min_child_weight": 8,
-    "gamma":            0.5069,
-    "reg_alpha":        0.5085,
-    "reg_lambda":       1.3255,
+    "subsample":        0.7117,
+    "colsample_bytree": 0.4264,
+    "min_child_weight": 10,
+    "gamma":            0.7618,
+    "reg_alpha":        0.9211,
+    "reg_lambda":       2.7825,
 }
 
 # ── Logistic Regression Hyperparameters (tuned via Optuna, 100 trials, 2026-06-05) ──
-# MIN_FIGHT_DATE=2018-01-01  |  run: python ml/logistic_regression.py --tune --trials 100
+# MIN_FIGHT_DATE=2018-01-01 + Glicko-2 features  |  run: python ml/logistic_regression.py --tune --trials 100
 LR_PARAMS: dict = {
-    "C":            0.001024,
-    "solver":       "saga",
-    "max_iter":     868,
-    "class_weight": "balanced",
+    "C":            0.28894,
+    "solver":       "lbfgs",
+    "max_iter":     1765,
+    "class_weight": None,
 }
 
 # ── Random Forest Hyperparameters (tuned via Optuna, 100 trials, 2026-06-05) ──
-# MIN_FIGHT_DATE=2018-01-01  |  run: python ml/random_forest.py --tune --trials 100
+# MIN_FIGHT_DATE=2018-01-01 + Glicko-2 features  |  run: python ml/random_forest.py --tune --trials 100
 RF_PARAMS: dict = {
-    "n_estimators":      400,
-    "max_depth":         18,
-    "min_samples_split": 6,
+    "n_estimators":      541,
+    "max_depth":         12,
+    "min_samples_split": 10,
     "min_samples_leaf":  2,
     "max_features":      "log2",
     "class_weight":      "balanced",
 }
 
 # ── LightGBM Hyperparameters (tuned via Optuna, 100 trials, 2026-06-05) ───────
-# MIN_FIGHT_DATE=2018-01-01  |  run: python ml/lightgbm_model.py --tune --trials 100
+# MIN_FIGHT_DATE=2018-01-01 + Glicko-2 features  |  run: python ml/lightgbm_model.py --tune --trials 100
 LGBM_PARAMS: dict = {
-    "n_estimators":     432,
-    "learning_rate":    0.035000,
+    "n_estimators":     713,
+    "learning_rate":    0.025562,
     "max_depth":        3,
-    "num_leaves":       36,
-    "subsample":        0.9842,
-    "colsample_bytree": 0.4224,
-    "reg_alpha":        0.9178,
-    "reg_lambda":       0.9591,
+    "num_leaves":       64,
+    "subsample":        0.7438,
+    "colsample_bytree": 0.4916,
+    "reg_alpha":        0.7324,
+    "reg_lambda":       1.2711,
 }
 
 # ── Feature Engineering ───────────────────────────────────────────────────────
