@@ -30,6 +30,9 @@ from config import (
     CSV_WITH_ELO, DB_PATH,
     MODEL_XGB_PATH, MODEL_XGB_FEATURES,
     MODEL_LR_PATH, MODEL_LR_SCALER, MODEL_LR_FEATURES,
+    MODEL_RF_PATH, MODEL_RF_FEATURES,
+    MODEL_LGBM_PATH, MODEL_LGBM_FEATURES,
+    MODEL_ENSEMBLE_PATH,
     TARGET_COL, META_COLS,
 )
 from utils.logger import get_logger
@@ -45,6 +48,7 @@ def load_model(model_type: str) -> tuple:
     Load saved model artifacts.
 
     Returns (model_or_base, feature_names, scaler, platt, model_label)
+    For ensemble returns (None, None, None, None, "Ensemble") -- use score_dataset_ensemble instead.
     """
     if model_type == "xgb":
         if not MODEL_XGB_PATH.exists():
@@ -56,7 +60,7 @@ def load_model(model_type: str) -> tuple:
         scaler        = None
         platt         = None
         label         = "XGBoost"
-    else:
+    elif model_type == "lr":
         if not MODEL_LR_PATH.exists():
             print(f"[ERROR] LR model not found at '{MODEL_LR_PATH}'.")
             print("   Run: python ml/logistic_regression.py")
@@ -67,8 +71,78 @@ def load_model(model_type: str) -> tuple:
         model         = artifact["base"]
         platt         = artifact["platt"]
         label         = "Logistic Regression"
+    else:
+        return None, None, None, None, "Ensemble"
 
     return model, feature_names, scaler, platt, label
+
+
+def score_dataset_ensemble(df: pd.DataFrame) -> pd.DataFrame:
+    """Run the calibrated soft-vote ensemble over *df* and return a results DataFrame."""
+    if not MODEL_ENSEMBLE_PATH.exists():
+        print(f"[ERROR] Ensemble model not found at '{MODEL_ENSEMBLE_PATH}'.")
+        print("   Run: python ml/soft_vote_ensemble.py")
+        sys.exit(1)
+
+    ensemble = joblib.load(MODEL_ENSEMBLE_PATH)
+    weights      = ensemble.get("weights", {})
+    calibrators  = ensemble.get("calibrators", {})
+
+    _specs = [
+        ("xgb",  MODEL_XGB_PATH,  MODEL_XGB_FEATURES,  None,              False),
+        ("lr",   MODEL_LR_PATH,   MODEL_LR_FEATURES,   MODEL_LR_SCALER,   True),
+        ("rf",   MODEL_RF_PATH,   MODEL_RF_FEATURES,   None,              False),
+        ("lgbm", MODEL_LGBM_PATH, MODEL_LGBM_FEATURES, None,              False),
+    ]
+
+    meta_to_drop = [c for c in META_COLS if c in df.columns]
+    X_base = df.drop(columns=meta_to_drop).fillna(0)
+
+    model_probas   = []
+    active_weights = []
+
+    for m_key, m_path, m_feats_path, m_scaler_path, m_is_lr in _specs:
+        if not m_path.exists():
+            continue
+        m_artifact = joblib.load(m_path)
+        m_feats    = joblib.load(m_feats_path)
+        m_scaler   = joblib.load(m_scaler_path) if m_scaler_path and m_scaler_path.exists() else None
+
+        common  = [f for f in m_feats if f in X_base.columns]
+        X_aligned = X_base[common]
+        X_input = m_scaler.transform(X_aligned) if m_scaler is not None else X_aligned.values
+
+        if m_is_lr:
+            base   = m_artifact["base"]
+            raw_p  = base.predict_proba(X_input)[:, 1]
+        else:
+            raw_p  = m_artifact.predict_proba(X_input)[:, 1]
+
+        if m_key in calibrators:
+            cal_p = np.array([float(calibrators[m_key].predict([p])[0]) for p in raw_p])
+        else:
+            cal_p = raw_p
+
+        model_probas.append(cal_p)
+        active_weights.append(weights.get(m_key, 1.0))
+
+    total_w        = sum(active_weights)
+    active_weights = [w / total_w for w in active_weights]
+    prob_red = np.average(model_probas, axis=0, weights=active_weights)
+
+    predicted  = (prob_red >= 0.5).astype(int)
+    confidence = np.where(prob_red >= 0.5, prob_red, 1 - prob_red)
+
+    return pd.DataFrame({
+        "date":       df["date"].values,
+        "year":       pd.to_datetime(df["date"]).dt.year.values,
+        "division":   df["division"].values if "division" in df.columns else np.nan,
+        "target":     df[TARGET_COL].values,
+        "predicted":  predicted,
+        "correct":    (df[TARGET_COL].values == predicted).astype(int),
+        "prob_red":   prob_red,
+        "confidence": confidence,
+    })
 
 
 # -- Score dataset -------------------------------------------------------------
@@ -362,7 +436,10 @@ def main(
     model, feature_names, scaler, platt, label = load_model(model_type)
     log.info("Scoring full dataset...")
 
-    results = score_dataset(df, model, feature_names, scaler, platt)
+    if model_type == "ensemble":
+        results = score_dataset_ensemble(df)
+    else:
+        results = score_dataset(df, model, feature_names, scaler, platt)
     print_report(results, label, from_year)
 
     if run_odds:
@@ -400,7 +477,7 @@ Examples
   python scripts/backtest.py --odds --min-edge 0.05   # only bet when edge >= 5%
         """,
     )
-    parser.add_argument("--model",     choices=["xgb", "lr"], default="xgb")
+    parser.add_argument("--model",     choices=["xgb", "lr", "ensemble"], default="xgb")
     parser.add_argument("--from-year", type=int, default=None,
                         help="Only report from this year onwards.")
     parser.add_argument("--save-csv",  type=Path, default=None,
