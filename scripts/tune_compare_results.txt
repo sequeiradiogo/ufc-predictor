@@ -1,0 +1,82 @@
+Tune-compare experiment -- 2026-06-05 08:44
+
+
+=== Option_C_tuned (date>=2010-01-01, alpha=0.3) ===
+  XGBoost: 2026-06-05 08:53:34 | __main__                  | INFO     | Best params: {'n_estimators': 539, 'learning_rate': 0.010428692752966559, 'max_depth': 3, 'subsample': 0.5068791882195752, 'colsample_bytree': 0.9383552212735662, 'min_child_weight': 1, 'gamma': 0.06494319291789696, 'reg_alpha': 0.7974299162986856, 'reg_lambda': 1.565511099594663, 'random_state': 42}
+  XGBoost: 2026-06-05 08:53:42 | __main__                  | INFO     | Test Accuracy:    63.39%
+  XGBoost: Test Accuracy:    63.39%
+  XGBoost: Best params:      {'n_estimators': 539, 'learning_rate': 0.010428692752966559, 'max_depth': 3, 'subsample': 0.5068791882195752, 'colsample_bytree': 0.9383552212735662, 'min_child_weight': 1, 'gamma': 0.06494319291789696, 'reg_alpha': 0.7974299162986856, 'reg_lambda': 1.565511099594663, 'random_state': 42}
+  logistic_regression: 2026-06-05 08:54:36 | __main__                  | INFO     | Best params: {'C': 0.00354958794092326, 'solver': 'liblinear', 'max_iter': 569, 'class_weight': None, 'random_state': 42}
+  logistic_regression: 2026-06-05 08:54:36 | __main__                  | INFO     | Test Accuracy:    61.55%
+  logistic_regression: Test Accuracy:    61.55%
+  logistic_regression: Best params: {'C': 0.00354958794092326, 'solver': 'liblinear', 'max_iter': 569, 'class_weight': None, 'random_state': 42}
+  random_forest: 2026-06-05 10:25:17 | __main__                  | INFO     | Best params: {'n_estimators': 109, 'max_depth': 18, 'min_samples_split': 12, 'min_samples_leaf': 4, 'max_features': 'sqrt', 'class_weight': None, 'random_state': 42}
+  random_forest: 2026-06-05 10:25:27 | __main__                  | INFO     | Test Accuracy:    61.55%
+  random_forest: Test Accuracy:    61.55%
+  random_forest: Best params:      {'n_estimators': 109, 'max_depth': 18, 'min_samples_split': 12, 'min_samples_leaf': 4, 'max_features': 'sqrt', 'class_weight': None, 'random_state': 42}
+  lightgbm_model: 2026-06-05 10:29:36 | __main__                  | INFO     | Best params: {'n_estimators': 373, 'learning_rate': 0.10326960052395938, 'max_depth': 3, 'num_leaves': 50, 'subsample': 0.8468390350561285, 'colsample_bytree': 0.6358714645197201, 'reg_alpha': 0.4429451168287297, 'reg_lambda': 1.9306064758764365, 'random_state': 42}
+  lightgbm_model: 2026-06-05 10:29:37 | __main__                  | INFO     | Test Accuracy:    62.77%
+  lightgbm_model: Test Accuracy:    62.77%
+  lightgbm_model: Best params:      {'n_estimators': 373, 'learning_rate': 0.10326960052395938, 'max_depth': 3, 'num_leaves': 50, 'subsample': 0.8468390350561285, 'colsample_bytree': 0.6358714645197201, 'reg_alpha': 0.4429451168287297, 'reg_lambda': 1.9306064758764365, 'random_state': 42}
+\35193\AppData\Local\Python\pythoncore-3.14-64\Lib\site-packages\sklearn\utils\validation.py:2691: UserWarning: X does not have valid feature names, but LGBMClassifier was fitted with feature names
+  warnings.warn(
+2026-06-05 10:29:42 | soft_vote_ensemble        | INFO     |   lgbm     test accuracy: 62.95%
+2026-06-05 10:29:42 | soft_vote_ensemble        | INFO     | Saved ensemble to C:\Users\35193\Projects\ufc-predictor\models\ensemble.joblib
+
+Base model calibration holdout accuracy:
+  xgb       68.09%
+  lr        60.42%
+  rf        99.78%
+  lgbm      85.31%
+
+Base model test accuracy (calibrated):
+  xgb       63.74%
+  lr        61.37%
+  rf        60.93%
+  lgbm      62.95%
+
+Ensemble test accuracy: 65.06%
+Weights:
+  xgb       0.5046
+  lr        0.3208
+  rf        0.0008
+  lgbm      0.1738
+
+2026-06-05 10:29:43 | __main__                  | INFO     | Loading ML dataset from C:\Users\35193\Projects\ufc-predictor\ml\ufc_ml_data_with_debuts_and_elo.csv...
+2026-06-05 10:29:43 | __main__                  | INFO     | Loaded 5695 rows.
+2026-06-05 10:29:44 | __main__                  | INFO     | Scoring full dataset...
+
+============================================================
+  Backtest Report -- XGBoost
+  (from 2022 onwards)
+============================================================
+
+  Overall accuracy:  65.23%  (1195/1832 fights)
+  Mean confidence:   59.9%
+  Date range:        2022-01-15 00:00:00 to 2026-05-30 00:00:00
+  Brier score:       0.2199
+  Naive baseline:    55.95%  (always pick Red)
+  Model edge:        +9.28%
+
+  Year    Fights  Correct   Accuracy   Avg Conf
+  ----------------------------------------------
+  2022       419      284      67.8%      59.6%
+  2023       390      260      66.7%      59.9%
+  2024       429      272      63.4%      59.8%
+  2025       426      266      62.4%      59.7%
+  2026       168      113      67.3%      61.1%
+
+  Division                   Fights   Accuracy
+  ---------------------------------------------
+  bantamweight                  208 69.2%
+  middleweight                  231 68.4%
+  women's bantamweight           68 67.6%
+  heavyweight                   121 66.9%
+  women's strawweight           133 66.2%
+  featherweight                 206 66.0%
+  welterweight                  217 65.4%
+  flyweight                     127 65.4%
+  women's flyweight             111 63.1%
+  lightweight                   248 60.5%
+  light heavyweight             128 58.6%
+
