@@ -9,7 +9,8 @@ Conditions
 For each condition the script:
   1. Patches MIN_FIGHT_DATE and SAMPLE_WEIGHT_ALPHA in config.py.
   2. Re-generates the feature CSV (step 4) only when the date cutoff changes.
-  3. Optuna-tunes all four base models (100 trials each).
+  3. Option A: retrains with existing tuned params (already Optuna-tuned on 2018+ data).
+     Option C: Optuna-tunes all four base models (100 trials each) then retrains.
   4. Runs the 2025+ backtest (honest out-of-sample: all 2025 fights are post-training-cutoff).
 
 Results are printed to stdout and saved to scripts/era_experiment_results_2025.txt.
@@ -33,8 +34,8 @@ CONFIG_PATH = ROOT / "config.py"
 RESULTS_PATH = ROOT / "scripts" / "era_experiment_results_2025.txt"
 
 CONDITIONS = [
-    {"name": "Option_A", "date": "2018-01-01", "alpha": 0.0},
-    {"name": "Option_C", "date": "2010-01-01", "alpha": 0.3},
+    {"name": "Option_A", "date": "2018-01-01", "alpha": 0.0, "tune": False},
+    {"name": "Option_C", "date": "2010-01-01", "alpha": 0.3, "tune": True},
 ]
 
 RESTORE_DATE  = "2018-01-01"
@@ -131,15 +132,22 @@ def main() -> None:
 
         prev_date = date
 
-        print("  [tune + train] Optuna (100 trials each) + retrain all models...", flush=True)
-        t0 = time.time()
-        ok, out = run_tune_and_train(n_trials=100)
-        elapsed = time.time() - t0
-        print(f"  tune+train {'OK' if ok else 'FAILED'} ({elapsed:.0f}s)", flush=True)
+        if cond["tune"]:
+            print("  [tune + train] Optuna (100 trials each) + retrain all models...", flush=True)
+            t0 = time.time()
+            ok, out = run_tune_and_train(n_trials=100)
+            elapsed = time.time() - t0
+            print(f"  tune+train {'OK' if ok else 'FAILED'} ({elapsed:.0f}s)", flush=True)
+        else:
+            print("  [train] Retraining with existing tuned params + ensemble...", flush=True)
+            t0 = time.time()
+            ok, out = run_step("5,6,8,9,10")
+            elapsed = time.time() - t0
+            print(f"  train {'OK' if ok else 'FAILED'} ({elapsed:.0f}s)", flush=True)
         print(out[-600:], flush=True)
 
         if not ok:
-            lines.append(f"\n=== {name} ===\nFAILED during tune+train\n{out[-1000:]}\n")
+            lines.append(f"\n=== {name} ===\nFAILED during train\n{out[-1000:]}\n")
             continue
 
         print("  [backtest] Running 2025+ backtest...", flush=True)
