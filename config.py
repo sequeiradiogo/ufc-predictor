@@ -129,6 +129,17 @@ EXCLUDE_STAT_KEYWORDS = [
     "_landed", "_atmpted", "sub_att", "ctrl", "kd",
 ]
 
+# Features to drop at training and inference time after feature selection.
+# Populated from scripts/feature_importance.py analysis (issue #43).
+# Keep empty until the diagnostic run has been reviewed.
+EXCLUDED_FEATURES: list[str] = [
+    # Dead columns -- all zeros (phantom diffs from rolling stats join)
+    "date_diff",
+    "outcome_diff",
+    # Zero importance across all 4 models
+    "age_diff",
+]
+
 # Prior weight for shrinkage toward division mean in ML_data_preparation.
 # A fighter needs ~SHRINKAGE_LAMBDA fights before their own stats dominate.
 SHRINKAGE_LAMBDA = 5
