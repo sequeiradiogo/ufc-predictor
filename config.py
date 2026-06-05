@@ -70,51 +70,51 @@ RANDOM_STATE     = 42
 TARGET_COL       = "target"   # 1 = Red wins, 0 = Blue wins
 META_COLS        = ["fight_id", "date", "division", "target"]
 
-# ── XGBoost Hyperparameters (tuned via Optuna, 100 trials, 2026-06-04) ───────
-# CV accuracy: 61.14% (v4 trajectory features)  |  run: python ml/XGBoost.py --tune --trials 100
+# ── XGBoost Hyperparameters (tuned via Optuna, 100 trials, 2026-06-05) ───────
+# MIN_FIGHT_DATE=2018-01-01  |  run: python ml/XGBoost.py --tune --trials 100
 XGB_PARAMS: dict = {
-    "n_estimators":     364,
-    "learning_rate":    0.041175,
-    "max_depth":        2,
-    "subsample":        0.9376,
-    "colsample_bytree": 0.9525,
-    "min_child_weight": 9,
-    "gamma":            0.6687,
-    "reg_alpha":        0.5384,
-    "reg_lambda":       4.1889,
+    "n_estimators":     321,
+    "learning_rate":    0.017714,
+    "max_depth":        4,
+    "subsample":        0.7490,
+    "colsample_bytree": 0.8358,
+    "min_child_weight": 8,
+    "gamma":            0.5069,
+    "reg_alpha":        0.5085,
+    "reg_lambda":       1.3255,
 }
 
-# ── Logistic Regression Hyperparameters (tuned via Optuna, 100 trials, 2026-06-04) ──
-# CV accuracy: 61.12% (v4 trajectory features)  |  run: python ml/logistic_regression.py --tune --trials 100
+# ── Logistic Regression Hyperparameters (tuned via Optuna, 100 trials, 2026-06-05) ──
+# MIN_FIGHT_DATE=2018-01-01  |  run: python ml/logistic_regression.py --tune --trials 100
 LR_PARAMS: dict = {
-    "C":            2.0860,
+    "C":            0.001024,
     "solver":       "saga",
-    "max_iter":     517,
+    "max_iter":     868,
     "class_weight": "balanced",
 }
 
-# ── Random Forest Hyperparameters (tuned via Optuna, 100 trials, 2026-06-04) ──
-# CV accuracy: 60.00% (v4 trajectory features)  |  run: python ml/random_forest.py --tune --trials 100
+# ── Random Forest Hyperparameters (tuned via Optuna, 100 trials, 2026-06-05) ──
+# MIN_FIGHT_DATE=2018-01-01  |  run: python ml/random_forest.py --tune --trials 100
 RF_PARAMS: dict = {
-    "n_estimators":      225,
-    "max_depth":         9,
-    "min_samples_split": 8,
-    "min_samples_leaf":  3,
-    "max_features":      0.3,
+    "n_estimators":      400,
+    "max_depth":         18,
+    "min_samples_split": 6,
+    "min_samples_leaf":  2,
+    "max_features":      "log2",
     "class_weight":      "balanced",
 }
 
-# ── LightGBM Hyperparameters (tuned via Optuna, 100 trials, 2026-06-04) ───────
-# CV accuracy: 60.98% (v4 trajectory features)  |  run: python ml/lightgbm_model.py --tune --trials 100
+# ── LightGBM Hyperparameters (tuned via Optuna, 100 trials, 2026-06-05) ───────
+# MIN_FIGHT_DATE=2018-01-01  |  run: python ml/lightgbm_model.py --tune --trials 100
 LGBM_PARAMS: dict = {
-    "n_estimators":     354,
-    "learning_rate":    0.017841,
-    "max_depth":        4,
-    "num_leaves":       53,
-    "subsample":        0.8431,
-    "colsample_bytree": 0.8923,
-    "reg_alpha":        0.2022,
-    "reg_lambda":       3.3206,
+    "n_estimators":     432,
+    "learning_rate":    0.035000,
+    "max_depth":        3,
+    "num_leaves":       36,
+    "subsample":        0.9842,
+    "colsample_bytree": 0.4224,
+    "reg_alpha":        0.9178,
+    "reg_lambda":       0.9591,
 }
 
 # ── Feature Engineering ───────────────────────────────────────────────────────
@@ -133,8 +133,10 @@ EXCLUDE_STAT_KEYWORDS = [
 # A fighter needs ~SHRINKAGE_LAMBDA fights before their own stats dominate.
 SHRINKAGE_LAMBDA = 5
 
-# Minimum fight date included in the ML training set
-MIN_FIGHT_DATE = "2005-01-01"
+# Minimum fight date included in the ML training set.
+# Set to 2018-01-01 based on adversarial validation (issue #47) -- pre-2018 fights
+# show significant distribution shift and hurt out-of-sample accuracy.
+MIN_FIGHT_DATE = "2018-01-01"
 
 # Recent form window (number of prior fights to average)
 RECENT_FORM_WINDOW = 3
