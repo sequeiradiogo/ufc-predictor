@@ -53,8 +53,8 @@ def load_data(path: Path) -> pd.DataFrame:
 
 
 def preprocess_data(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
-    """Drop metadata columns, fill NaNs, return (X, y)."""
-    X = df.drop(columns=META_COLS).fillna(0)
+    """Drop metadata columns, fill NaNs/infs with 0, return (X, y)."""
+    X = df.drop(columns=META_COLS).fillna(0).replace([np.inf, -np.inf], 0)
     y = df[TARGET_COL]
     return X, y
 
