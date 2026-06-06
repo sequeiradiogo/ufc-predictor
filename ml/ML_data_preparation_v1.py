@@ -24,6 +24,7 @@ Usage:
 """
 
 import argparse
+import bisect
 import sqlite3
 import sys
 from pathlib import Path
@@ -42,6 +43,8 @@ from config import (
     FINISH_METHOD_MAP,
     META_COLS,
     MIN_FIGHT_DATE,
+    NAME_ALIASES,
+    RAW_DIR,
     RANDOM_STATE,
     RECENT_FORM_WINDOW,
     SAMPLE_WEIGHT_ALPHA,
@@ -64,6 +67,48 @@ from utils.logger import get_logger
 log = get_logger(__name__)
 
 _EPS = 1e-6
+
+# ── Rankings history lookup ────────────────────────────────────────────────────
+
+_RANKINGS_CSV = RAW_DIR / "rankings_history.csv"
+_RANKINGS_NAME_MAP: dict[str, str] = {
+    alt.lower().strip(): canonical.lower().strip()
+    for alt, canonical in NAME_ALIASES.items()
+}
+
+
+def _load_rankings_history(csv_path: Path = _RANKINGS_CSV) -> dict:
+    """Return {(fighter_canonical_lower, division_lower): [(date_str, rank), ...]} sorted by date."""
+    if not csv_path.exists():
+        return {}
+    df = pd.read_csv(csv_path, usecols=["date", "weightclass", "fighter", "rank"])
+    df = df[~df["weightclass"].str.contains("Pound-for-Pound", case=False, na=False)]
+    df = df.dropna(subset=["fighter", "rank"])
+    df["rank"] = df["rank"].astype(int)
+    df = df.sort_values("date").reset_index(drop=True)
+    lookup: dict = {}
+    for row in df.itertuples(index=False):
+        raw = str(row.fighter).lower().strip()
+        canonical = _RANKINGS_NAME_MAP.get(raw, raw)
+        div = str(row.weightclass).lower().strip()
+        key = (canonical, div)
+        if key not in lookup:
+            lookup[key] = []
+        lookup[key].append((str(row.date)[:10], int(row.rank)))
+    return lookup
+
+
+def _lookup_rank(rankings: dict, fighter_name: str, division: str, fight_date: str):
+    """Return most recent rank <= fight_date, or None if not found."""
+    key = (fighter_name.lower().strip(), division.lower().strip())
+    series = rankings.get(key)
+    if not series:
+        return None
+    dates = [s[0] for s in series]
+    pos = bisect.bisect_right(dates, fight_date) - 1
+    if pos < 0:
+        return None
+    return float(series[pos][1])
 
 # Career-aggregate columns from v1 fight_stats to diff
 _STAT_COLS = [

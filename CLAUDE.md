@@ -46,6 +46,10 @@ python ml/soft_vote_ensemble.py --trials 100
 python scripts/scrape_history.py --no-rolling
 python -c "from db.rolling import main; from config import DB_UFCSTATS_PATH; main(db_path=DB_UFCSTATS_PATH)"
 
+# Sync v1 career-average DB from UFCStats DB after each event (replaces manual CSV update)
+python scripts/sync_v1_from_v2.py
+python scripts/sync_v1_from_v2.py --dry-run   # preview without writing
+
 # Predict a fight (uses v1 DB + models by default)
 python predict.py "Islam Makhachev" "Charles Oliveira"
 python predict.py "Islam Makhachev" "Charles Oliveira" --model ensemble
@@ -107,7 +111,7 @@ The v2 pipeline has 10 numbered steps (defined in `run_pipeline.py`):
 
 `DB_PATH` in `config.py` points to `DB_UFCSTATS_PATH` (UFCStats). `DB_V1_PATH` points to `ufc_v2.db` (mdabbert).
 
-**Important**: The mdabbert DB (`ufc_v2.db`) does not auto-update from the scraper. After each event, run the scraper to update the UFCStats DB, then manually update the mdabbert CSV. Issue #56 tracks building `scripts/sync_v1_from_v2.py` to automate this.
+**Important**: The mdabbert DB (`ufc_v2.db`) does not auto-update from the scraper. After each event, run the scraper to update the UFCStats DB, then run `scripts/sync_v1_from_v2.py` to rebuild the mdabbert DB from the UFCStats data (replaces the old manual CSV update step).
 
 #### UFCStats DB schema (`db/ufc_ufcstats.db`)
 
@@ -200,9 +204,9 @@ All v1 models are saved to `models_v1/` as `.joblib` files and tracked in git. T
 | Logistic Regression | `logistic_regression.joblib`, `lr_scaler.joblib`, `lr_features.joblib` | -- | Platt-calibrated; artifact is dict with `base`+`platt` keys |
 | Random Forest | `random_forest.joblib`, `rf_features.joblib` | -- | Optuna-tuned params in `config.RF_PARAMS` |
 | LightGBM | `lightgbm.joblib`, `lgbm_features.joblib` | -- | Optuna-tuned params in `config.LGBM_PARAMS` |
-| Ensemble | `ensemble.joblib` | **68.3%** | Calibrated soft-vote; Optuna weights tuned on pre-2025 test rows only |
+| Ensemble | `ensemble.joblib` | **68.8%** | Calibrated soft-vote; Optuna weights tuned on pre-2025 test rows only |
 
-Honest out-of-sample backtest (2025-2026, 586 fights): **68.3%** accuracy (ensemble). Naive Red baseline ~55%.
+Honest out-of-sample backtest (2025-2026, 586 fights): **68.8%** accuracy (ensemble). Naive Red baseline ~55%.
 
 Note: `--from-year 2022` backtest numbers (82-90%) are inflated because 2022-2024 fights fall inside the training window with the 80/20 split. Always use `--from-year 2025` for honest evaluation.
 
@@ -308,6 +312,7 @@ If any excluded files were previously committed, untrack them with `git rm --cac
 - **SQLite TEXT affinity**: some numeric columns (e.g. `kd`, `ctrl`) are stored as TEXT. Always use `CAST(col AS REAL)` in numeric comparisons or aggregations.
 - **Ensemble holdout**: Optuna weight search must only see pre-2025 test rows (`_ENSEMBLE_HOLDOUT_YEAR = 2025`). The reported accuracy must be on the 2025+ holdout. Violating this leaks the backtest evaluation window into weight tuning.
 - **Backtest year for v1**: Use `--from-year 2025` for honest evaluation. The 80/20 split puts 2022-2024 fights inside the training window; `--from-year 2022` numbers are inflated.
-- **v1 DB does not auto-update**: After each event, the UFCStats DB is updated by the scraper but the mdabbert DB must be updated separately. Issue #56 tracks automating this via `scripts/sync_v1_from_v2.py`.
-- **Model performance ceiling**: v1 career-average models achieve ~68% on the 2025+ backtest (586 fights). The naive "always pick Red" baseline is ~55% on recent data. Update `MODEL_RESULTS.md` after any significant retrain.
+- **v1 DB does not auto-update**: After each event, run `scripts/scrape_history.py` then `scripts/sync_v1_from_v2.py` to rebuild the mdabbert DB from the UFCStats data. The sync script is a full rebuild (reads all fights chronologically, applies shift(1) leakage prevention).
+- **Sync script accuracy caveat**: `sync_v1_from_v2.py` produces correct per-minute `splm` (strikes/min) from UFCStats rolling stats, while the Kaggle-sourced `ufc-master.csv` has a different `splm` scale for early-career fighters that happens to be more discriminative for tree models (69% vs 60% accuracy). After running sync, always backtest with `--from-year 2025` before committing retrained models. The current `ufc_v2.db` and `models_v1/` artifacts use the Kaggle-sourced pipeline (68.8% accuracy).
+- **Model performance ceiling**: v1 career-average models achieve ~69% on the 2025+ backtest (586 fights). The naive "always pick Red" baseline is ~55% on recent data. Update `MODEL_RESULTS.md` after any significant retrain.
 - **Shrinkage is v2 training-only**: `apply_shrinkage()` in `ML_data_preparation.py` modifies the training CSV. It is NOT applied in `predict.py` at inference time. v1 uses raw career averages with no shrinkage.

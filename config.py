@@ -206,3 +206,80 @@ FINISH_CLASS_NAMES = ["Decision", "KO/TKO", "Submission"]
 # ── Finish Type Model Artifacts ───────────────────────────────────────────────
 MODEL_FINISH_PATH     = MODELS_DIR / "finish_type.joblib"
 MODEL_FINISH_FEATURES = MODELS_DIR / "finish_type_features.joblib"
+
+# ── Fighter name aliases ──────────────────────────────────────────────────────
+# Maps alternate/historical names (lowercased) -> canonical UFCStats name.
+# Covers Kaggle CSV typos, married name changes, nickname vs legal name, and
+# transliteration differences between the Kaggle dataset and UFCStats.
+# Keys must be lowercase; values must match the name in the fighters table.
+NAME_ALIASES: dict[str, str] = {
+    # Kaggle CSV typos
+    "alekander volkov":     "Alexander Volkov",
+    "caludia gadelha":      "Claudia Gadelha",
+    "caludio puelles":      "Claudio Puelles",
+    "krzystof jotko":       "Krzysztof Jotko",
+    "vincente luque":       "Vicente Luque",
+    "isabela de pauda":     "Isabela de Padua",
+    "ode obsourne":         "Ode Osbourne",
+    "youssef zalel":        "Youssef Zalal",
+    "zhalgas zhamagulov":   "Zhalgas Zhumagulov",
+    # Married name changes
+    "ariane lipski":        "Ariane Carnelossi",
+    "cheyanne buys":        "Cheyanne Vlismas",
+    "joanne calderwood":    "Joanne Wood",
+    "katlyn chookagian":    "Katlyn Cerminara",
+    "michelle waterson":    "Michelle Waterson-Gomez",
+    "nina ansaroff":        "Nina Nunes",
+    "tecia torres":         "Tecia Pennington",
+    # Nickname / ring name vs legal name
+    "cris cyborg":          "Cristiane Justino",
+    "mirko cro cop":        "Mirko Filipovic",
+    "rampage jackson":      "Quinton Jackson",
+    "minotauro nogueira":   "Antonio Rodrigo Nogueira",
+    "patricio freire":      "Patricio Pitbull",
+    # Name format differences (spacing, transliteration, Chinese name order)
+    "weili zhang":          "Zhang Weili",
+    "tiequan zhang":        "Zhang Tiequan",
+    "na liang":             "Liang Na",
+    "aori qileng":          "Aoriqileng",
+    "rong zhu":             "Rongzhu",
+    "su mudaerji":          "Sumudaerji",
+    "wuliji buren":         "Wulijiburen",
+    "heili alateng":        "Alatengheili",
+    "an ying wang":         "Anying Wang",
+    "seohee ham":           "Seo Hee Ham",
+    "da un jung":           "Da Woon Jung",
+    "da-un jung":           "Da Woon Jung",
+    "jun yong park":        "JunYong Park",
+    "chanmi jeon":          "Chan-Mi Jeon",
+    "roldan sangcha-an":    "Roldan Sangcha'an",
+    # Shortened / informal vs full name
+    "alex munoz":           "Alexander Munoz",
+    "alexandra albu":       "Aleksandra Albu",
+    "ali qaisi":            "Ali AlQaisi",
+    "benny alloway":        "Ben Alloway",
+    "bradley scott":        "Brad Scott",
+    "carlo pedersoli":      "Carlo Pedersoli Jr.",
+    "costas philippou":     "Constantinos Philippou",
+    "grigorii popov":       "Grigory Popov",
+    "heather jo clark":     "Heather Clark",
+    "ian garry":            "Ian Machado Garry",
+    "jim crute":            "Jimmy Crute",
+    "jimmy wallhead":       "Jim Wallhead",
+    "joshua culibao":       "Josh Culibao",
+    "joshua sampo":         "Josh Sampo",
+    "kai kamaka":           "Kai Kamaka III",
+    "kai kara france":      "Kai Kara-France",
+    "luci pudilova":        "Lucie Pudilova",
+    "montserrat conejo":    "Montserrat Conejo Ruiz",
+    "montserrat rendon":    "Montse Rendon",
+    "nico musoke":          "Nicholas Musoke",
+    "peter yan":            "Petr Yan",
+    "philip rowe":          "Phil Rowe",
+    "phillip hawes":        "Phil Hawes",
+    "rick glenn":           "Ricky Glenn",
+    "rob whiteford":        "Robert Whiteford",
+    "roberto sanchez":      "Robert Sanchez",
+    "waldo cortes-acosta":  "Waldo Cortes Acosta",
+    "zachary reese":        "Zach Reese",
+}
