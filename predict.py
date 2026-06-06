@@ -56,6 +56,7 @@ from config import (
     SOS_WINDOW,
     KO_VULN_WINDOW,
     EWMA_SPAN,
+    NAME_ALIASES,
 )
 from ml.ELO_calculator import get_current_ratings_by_division, get_current_glicko_by_division
 from utils.odds import print_value_bet_summary
@@ -102,8 +103,14 @@ def _get_v2_defensive_stats(conn_v2: sqlite3.Connection, fighter_name: str) -> d
 
 # ── Fighter Resolution ────────────────────────────────────────────────────────
 
+def _resolve_alias(name: str) -> str:
+    """Substitute a known alternate name with its canonical UFCStats name."""
+    return NAME_ALIASES.get(name.lower().strip(), name)
+
+
 def search_fighter(conn: sqlite3.Connection, name: str) -> list[tuple]:
     """Return (fighter_id, name) pairs whose name contains *name* (case-insensitive)."""
+    name = _resolve_alias(name)
     cur = conn.cursor()
     cur.execute(
         "SELECT fighter_id, name FROM fighters WHERE name LIKE ? ORDER BY name",
