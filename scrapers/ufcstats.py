@@ -481,6 +481,102 @@ def _scrape_fighter_bio(fighter_id: str, fighter_url: str, name: str, get) -> di
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
+def scrape_upcoming_event() -> dict | None:
+    """
+    Scrape the next upcoming event from UFCStats.
+
+    Returns a dict:
+        {
+            "name":   "UFC 317",
+            "date":   "2026-06-07",
+            "url":    "http://www.ufcstats.com/event-details/...",
+            "fights": [
+                {
+                    "r_id": "<hex>", "r_name": "Fighter A",
+                    "b_id": "<hex>", "b_name": "Fighter B",
+                    "division": "lightweight",
+                    "title_fight": 0,
+                },
+                ...
+            ],
+        }
+    Returns None if no upcoming events are found.
+
+    Upcoming event pages list fighters but contain no fight stats, so only
+    fighter links and division are extracted -- no visit to individual fight
+    detail pages is needed.
+    """
+    with _browser_session() as get:
+        soup = get(f"{BASE}/statistics/events/upcoming?page=all")
+
+        events = []
+        for row in soup.select("tr.b-statistics__table-row"):
+            a = row.select_one("a.b-link")
+            if not a:
+                continue
+            date_span = row.select_one("span.b-statistics__date")
+            if not date_span:
+                continue
+            iso = _parse_date(date_span.get_text(strip=True))
+            if not iso:
+                continue
+            event_url = a["href"].strip()
+            events.append({
+                "name":     a.get_text(strip=True),
+                "date":     iso,
+                "url":      event_url,
+                "event_id": _id_from_url(event_url),
+            })
+
+        if not events:
+            log.warning("No upcoming events found on UFCStats.")
+            return None
+
+        # Take the earliest upcoming event
+        events.sort(key=lambda e: e["date"])
+        event = events[0]
+        log.info("Next upcoming event: %s (%s)", event["name"], event["date"])
+
+        soup = get(event["url"])
+        fights = []
+
+        # Upcoming events use tr.b-fight-details__table-row (no __hover suffix)
+        # Completed events use __hover; try both to be safe.
+        rows = soup.select("tr.b-fight-details__table-row")
+
+        for row in rows:
+            fighter_links = row.select("a[href*='fighter-details']")
+            if len(fighter_links) < 2:
+                continue
+
+            r_url  = fighter_links[0]["href"].strip()
+            b_url  = fighter_links[1]["href"].strip()
+            r_id   = _id_from_url(r_url)
+            b_id   = _id_from_url(b_url)
+            r_name = fighter_links[0].get_text(strip=True)
+            b_name = fighter_links[1].get_text(strip=True)
+
+            if not r_id or not b_id or r_id == b_id:
+                continue
+
+            tds        = row.find_all("td", class_="b-fight-details__table-col")
+            division   = _normalize_division(_col_ps_text(tds, 6, 0)) if len(tds) > 6 else ""
+            title_fight = 1 if row.select("img[src*='belt'], img[alt*='belt']") else 0
+
+            fights.append({
+                "r_id":       r_id,
+                "r_name":     r_name,
+                "b_id":       b_id,
+                "b_name":     b_name,
+                "division":   division,
+                "title_fight": title_fight,
+            })
+
+        log.info("Found %d fights on the card.", len(fights))
+        event["fights"] = fights
+        return event
+
+
 def scrape_events_iter(
     since: date,
     existing_fighter_ids: set[str] | None = None,

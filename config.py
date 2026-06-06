@@ -27,6 +27,7 @@ CSV_MASTER         = RAW_DIR / "ufc-master.csv"          # mdabbert source CSV w
 CSV_WITH_ELO       = ML_DIR / "ufc_ml_data_with_debuts_and_elo.csv"
 CSV_WITH_DEBUTS    = ML_DIR / "ufc_ml_data_with_debuts.csv"
 CSV_WITHOUT_DEBUTS = ML_DIR / "ufc_ml_data_without_debuts.csv"
+CSV_V1_WITH_ELO    = ML_DIR / "ufc_ml_data_v1.csv"
 
 # ── Saved Model Artifacts ─────────────────────────────────────────────────────
 MODEL_LR_PATH      = MODELS_DIR / "logistic_regression.joblib"
