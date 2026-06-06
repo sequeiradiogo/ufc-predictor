@@ -363,10 +363,7 @@ def _tune_lgbm(df: pd.DataFrame, n_trials: int) -> dict:
     return best
 
 
-# Fights from this year onward are held out of Optuna weight search entirely.
-# Optuna tunes weights on pre-holdout data; holdout accuracy is the honest metric.
-_ENSEMBLE_HOLDOUT_YEAR = 2025
-_OPTUNA_MIN_ROWS = 50   # fall back to full test set if tuning window is thinner
+_OPTUNA_MIN_ROWS = 50   # fall back to equal weights if tuning window is thinner
 
 
 # ── Calibrated soft-vote ensemble ─────────────────────────────────────────────
@@ -386,27 +383,33 @@ def train_ensemble(df: pd.DataFrame, n_trials: int = 100) -> None:
     X_test = X_all.iloc[split_idx:]
     y_test = y_all[split_idx:]
 
-    # Split test into Optuna tuning window (pre-holdout) and true hold-out.
-    # This prevents the weight search from seeing the same fights the backtest
-    # evaluates on, which would inflate reported accuracy.
-    test_dates   = df.iloc[split_idx:]["date"].dt.year.values
-    pre_mask     = test_dates < _ENSEMBLE_HOLDOUT_YEAR
-    X_tune = X_test.iloc[pre_mask]
-    y_tune = y_test[pre_mask]
-    X_hold = X_test.iloc[~pre_mask]
-    y_hold = y_test[~pre_mask]
+    # Split test set at its midpoint: first half for Optuna weight tuning,
+    # second half for honest hold-out evaluation. Dynamic -- no hardcoded year.
+    tune_end = len(X_test) // 2
+    X_tune = X_test.iloc[:tune_end]
+    y_tune = y_test[:tune_end]
+    X_hold = X_test.iloc[tune_end:]
+    y_hold = y_test[tune_end:]
+
+    tune_dates = df.iloc[split_idx:split_idx + tune_end]["date"]
+    hold_dates = df.iloc[split_idx + tune_end:]["date"]
 
     if len(X_tune) < _OPTUNA_MIN_ROWS:
         log.warning(
-            "Pre-%d tuning window too thin (%d rows) -- ensemble will use equal weights.",
-            _ENSEMBLE_HOLDOUT_YEAR, len(X_tune),
+            "Tune window too thin (%d rows) -- ensemble will use equal weights.",
+            len(X_tune),
         )
         X_tune, y_tune = None, None
 
     log.info(
-        "Ensemble split: %d cal | %d tune (pre-%d) | %d hold-out (%d+)",
-        len(y_cal), len(X_tune) if X_tune is not None else 0, _ENSEMBLE_HOLDOUT_YEAR,
-        len(y_hold), _ENSEMBLE_HOLDOUT_YEAR,
+        "Ensemble split: %d cal | %d tune (%s to %s) | %d hold-out (%s to %s)",
+        len(y_cal),
+        len(X_tune) if X_tune is not None else 0,
+        tune_dates.min().date() if X_tune is not None else "n/a",
+        tune_dates.max().date() if X_tune is not None else "n/a",
+        len(y_hold),
+        hold_dates.min().date(),
+        hold_dates.max().date(),
     )
 
     specs = [
@@ -453,7 +456,7 @@ def train_ensemble(df: pd.DataFrame, n_trials: int = 100) -> None:
     model_keys  = []
     tune_probas = []   # used by Optuna (pre-holdout only); empty when X_tune is None
     hold_probas = []   # used for honest accuracy reporting
-    print(f"\nBase model hold-out accuracy ({_ENSEMBLE_HOLDOUT_YEAR}+, calibrated):")
+    print(f"\nBase model hold-out accuracy ({hold_dates.min().date()} to {hold_dates.max().date()}, calibrated):")
     for m_key, artifact, feat_names, scaler, is_lr in loaded:
         if X_tune is not None:
             raw_tune = _raw_proba(artifact, feat_names, scaler, is_lr, X_tune)
@@ -505,7 +508,7 @@ def train_ensemble(df: pd.DataFrame, n_trials: int = 100) -> None:
         "test_accuracy": hold_acc,
     }, MODEL_V1_ENSEMBLE_PATH)
 
-    print(f"\nEnsemble hold-out accuracy ({_ENSEMBLE_HOLDOUT_YEAR}+): {hold_acc:.2%}")
+    print(f"\nEnsemble hold-out accuracy ({hold_dates.min().date()} to {hold_dates.max().date()}): {hold_acc:.2%}")
     print("Weights:")
     for k, w in best_weights.items():
         print(f"  {k:<8s}  {w:.4f}")
