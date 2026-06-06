@@ -66,6 +66,40 @@ log = get_logger(__name__)
 _EPS = 1e-6
 
 
+# ── v2 defensive stats lookup (for v1 inference) ─────────────────────────────
+
+def _get_v2_defensive_stats(conn_v2: sqlite3.Connection, fighter_name: str) -> dict:
+    """
+    Return the most recent pre-fight sapm/str_def/td_def for a fighter from
+    the v2 (UFCStats) DB, matched by exact name.  Returns zeros on no match.
+    """
+    row = conn_v2.execute(
+        "SELECT fighter_id FROM fighters WHERE name = ? LIMIT 1",
+        (fighter_name,),
+    ).fetchone()
+    if not row:
+        return {"sapm": 0.0, "str_def": 0.0, "td_def": 0.0}
+    fid = row[0]
+    stats = conn_v2.execute(
+        """
+        SELECT CAST(fs.sapm AS REAL), CAST(fs.str_def AS REAL), CAST(fs.td_def AS REAL)
+        FROM fight_stats fs
+        JOIN fights f ON fs.fight_id = f.fight_id
+        WHERE fs.fighter_id = ?
+        ORDER BY f.date DESC, f.fight_id DESC
+        LIMIT 1
+        """,
+        (fid,),
+    ).fetchone()
+    if not stats:
+        return {"sapm": 0.0, "str_def": 0.0, "td_def": 0.0}
+    return {
+        "sapm":    float(stats[0] or 0),
+        "str_def": float(stats[1] or 0),
+        "td_def":  float(stats[2] or 0),
+    }
+
+
 # ── Fighter Resolution ────────────────────────────────────────────────────────
 
 def search_fighter(conn: sqlite3.Connection, name: str) -> list[tuple]:
@@ -365,21 +399,25 @@ def compute_ewma_stats_single(
     fighter_id: str,
     span: int = EWMA_SPAN,
 ) -> dict[str, float]:
-    """Return EWMA striking/TD accuracy and striking accuracy variance."""
-    df = pd.read_sql_query(
-        """
-        SELECT CAST(fs.sig_str_landed  AS REAL) AS str_land,
-               CAST(fs.sig_str_atmpted AS REAL) AS str_att,
-               CAST(fs.td_landed       AS REAL) AS td_land,
-               CAST(fs.td_atmpted      AS REAL) AS td_att
-        FROM fight_stats fs
-        JOIN fights f ON fs.fight_id = f.fight_id
-        WHERE fs.fighter_id = ?
-        ORDER BY f.date ASC, f.fight_id ASC
-        """,
-        conn,
-        params=(fighter_id,),
-    )
+    """Return EWMA striking/TD accuracy and striking accuracy variance.
+    Returns zeros on schema mismatch (e.g. v1 career-aggregate DB)."""
+    try:
+        df = pd.read_sql_query(
+            """
+            SELECT CAST(fs.sig_str_landed  AS REAL) AS str_land,
+                   CAST(fs.sig_str_atmpted AS REAL) AS str_att,
+                   CAST(fs.td_landed       AS REAL) AS td_land,
+                   CAST(fs.td_atmpted      AS REAL) AS td_att
+            FROM fight_stats fs
+            JOIN fights f ON fs.fight_id = f.fight_id
+            WHERE fs.fighter_id = ?
+            ORDER BY f.date ASC, f.fight_id ASC
+            """,
+            conn,
+            params=(fighter_id,),
+        )
+    except Exception:
+        return {"ewma_str_acc": 0.0, "ewma_td_acc": 0.0, "str_acc_var": 0.0}
     if df.empty:
         return {"ewma_str_acc": 0.0, "ewma_td_acc": 0.0, "str_acc_var": 0.0}
 
@@ -543,6 +581,27 @@ def build_feature_vector(
         elif feat == "str_acc_var_diff":
             row[feat] = _er.get("str_acc_var", 0.0) - _eb.get("str_acc_var", 0.0)
 
+        # ── v2 defensive metrics (extra_r/extra_b for v1; red_stats for v2) ──
+        elif feat == "sapm_diff":
+            r_val = _er["sapm"] if "sapm" in _er else float(pd.to_numeric(red_stats.get("sapm",    0), errors="coerce") or 0)
+            b_val = _eb["sapm"] if "sapm" in _eb else float(pd.to_numeric(blue_stats.get("sapm",   0), errors="coerce") or 0)
+            row[feat] = r_val - b_val
+        elif feat == "str_def_diff":
+            r_val = _er["str_def"] if "str_def" in _er else float(pd.to_numeric(red_stats.get("str_def",  0), errors="coerce") or 0)
+            b_val = _eb["str_def"] if "str_def" in _eb else float(pd.to_numeric(blue_stats.get("str_def", 0), errors="coerce") or 0)
+            row[feat] = r_val - b_val
+        elif feat == "td_def_diff":
+            r_val = _er["td_def"] if "td_def" in _er else float(pd.to_numeric(red_stats.get("td_def",  0), errors="coerce") or 0)
+            b_val = _eb["td_def"] if "td_def" in _eb else float(pd.to_numeric(blue_stats.get("td_def", 0), errors="coerce") or 0)
+            row[feat] = r_val - b_val
+
+        # ── UFC ranking differential (v1 only; unranked encoded as 16) ───────
+        elif feat == "weightclass_rank_diff":
+            _UNRANKED = 16.0
+            r_rank = float(pd.to_numeric(red_stats.get("weightclass_rank",  0), errors="coerce") or 0)
+            b_rank = float(pd.to_numeric(blue_stats.get("weightclass_rank", 0), errors="coerce") or 0)
+            row[feat] = (_UNRANKED if r_rank <= 0 else r_rank) - (_UNRANKED if b_rank <= 0 else b_rank)
+
         # ── Standard _diff features ───────────────────────────────────────────
         elif feat.endswith("_diff"):
             base  = feat[: -len("_diff")]
@@ -559,13 +618,15 @@ def build_feature_vector(
 # ── Core Prediction Logic ─────────────────────────────────────────────────────
 
 def compute_prediction(
-    red_name:   str,
-    blue_name:  str,
-    model_type: str = "ensemble",
-    division:   str | None = None,
+    red_name:    str,
+    blue_name:   str,
+    model_type:  str = "ensemble",
+    division:    str | None = None,
     title_fight: int = 0,
-    db_path:    Path | None = None,
-    models_dir: Path | None = None,
+    db_path:     Path | None = None,
+    models_dir:  Path | None = None,
+    r_fighter_id: str | None = None,
+    b_fighter_id: str | None = None,
 ) -> dict:
     """
     Compute a fight prediction and return a result dict.
@@ -574,6 +635,8 @@ def compute_prediction(
                   confidence, elo_red, elo_blue, form_red, form_blue.
 
     db_path defaults to DB_PATH; models_dir defaults to MODELS_DIR.
+    Pass r_fighter_id / b_fighter_id to bypass name resolution (useful when
+    the caller already has the UFCStats fighter IDs).
     """
     db_path    = db_path    or DB_PATH
     models_dir = models_dir or MODELS_DIR
@@ -635,8 +698,15 @@ def compute_prediction(
     conn = sqlite3.connect(str(db_path))
 
     # ── Resolve fighters ──────────────────────────────────────────────────────
-    r_id, r_name = resolve_fighter(conn, red_name)
-    b_id, b_name = resolve_fighter(conn, blue_name)
+    if r_fighter_id:
+        r_id, r_name = r_fighter_id, red_name
+    else:
+        r_id, r_name = resolve_fighter(conn, red_name)
+
+    if b_fighter_id:
+        b_id, b_name = b_fighter_id, blue_name
+    else:
+        b_id, b_name = resolve_fighter(conn, blue_name)
 
     if r_id == b_id:
         print("\n[WARN]  Both names resolved to the same fighter — please check the names.")
@@ -656,10 +726,14 @@ def compute_prediction(
     log.info("Computing current ELO ratings...")
     div_lower = (division or "").lower().strip()
     div_elo   = get_current_ratings_by_division(conn)   # always needed for SOS
-    if div_lower:
-        elo_r = div_elo.get((r_id, div_lower), STARTING_ELO)
-        elo_b = div_elo.get((b_id, div_lower), STARTING_ELO)
+    if div_lower and (r_id, div_lower) in div_elo and (b_id, div_lower) in div_elo:
+        elo_r = div_elo[(r_id, div_lower)]
+        elo_b = div_elo[(b_id, div_lower)]
     else:
+        # Fall back to global ELO when division is unknown or either fighter
+        # hasn't fought at that division (e.g. catch weight bouts).
+        if div_lower and ((r_id, div_lower) not in div_elo or (b_id, div_lower) not in div_elo):
+            log.info("Division '%s' not found for one or both fighters -- using global ELO.", div_lower)
         elo_ratings = compute_current_elo(conn)
         elo_r       = elo_ratings.get(r_id, STARTING_ELO)
         elo_b       = elo_ratings.get(b_id, STARTING_ELO)
@@ -667,9 +741,15 @@ def compute_prediction(
     # ── Glicko-2 ──────────────────────────────────────────────────────────────
     log.info("Computing current Glicko-2 ratings...")
     div_glicko = get_current_glicko_by_division(conn)
-    if div_lower:
-        glicko_r_tuple = div_glicko.get((r_id, div_lower), (GLICKO_START_R, GLICKO_START_RD, 0.06))
-        glicko_b_tuple = div_glicko.get((b_id, div_lower), (GLICKO_START_R, GLICKO_START_RD, 0.06))
+    if div_lower and (r_id, div_lower) in div_glicko and (b_id, div_lower) in div_glicko:
+        glicko_r_tuple = div_glicko[(r_id, div_lower)]
+        glicko_b_tuple = div_glicko[(b_id, div_lower)]
+    elif div_lower:
+        # Partial miss -- use per-fighter fallback to any available division rating
+        r_divs = [(k, v) for k, v in div_glicko.items() if k[0] == r_id]
+        b_divs = [(k, v) for k, v in div_glicko.items() if k[0] == b_id]
+        glicko_r_tuple = r_divs[0][1] if r_divs else (GLICKO_START_R, GLICKO_START_RD, 0.06)
+        glicko_b_tuple = b_divs[0][1] if b_divs else (GLICKO_START_R, GLICKO_START_RD, 0.06)
     else:
         # Fall back to the most recent division the fighter appeared in
         r_divs = [(k, v) for k, v in div_glicko.items() if k[0] == r_id]
@@ -700,6 +780,18 @@ def compute_prediction(
     extra_b  = {**finish_b, **inact_b, **sos_b, **kovuln_b, **ewma_b, **glicko_extra_b}
 
     conn.close()
+
+    # For v1 predictions (db_path != v2 DB): enrich with v2 defensive stats by name
+    if db_path != DB_PATH and DB_PATH.exists():
+        try:
+            conn_v2 = sqlite3.connect(str(DB_PATH))
+            v2_def_r = _get_v2_defensive_stats(conn_v2, r_name)
+            v2_def_b = _get_v2_defensive_stats(conn_v2, b_name)
+            conn_v2.close()
+            extra_r.update(v2_def_r)
+            extra_b.update(v2_def_b)
+        except Exception as exc:
+            log.warning("v2 defensive stats lookup failed: %s", exc)
 
     # ── Build & predict ───────────────────────────────────────────────────────
     if model_type == "ensemble":
