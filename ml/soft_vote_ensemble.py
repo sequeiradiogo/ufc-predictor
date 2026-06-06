@@ -93,6 +93,11 @@ def _calibrated_proba(artifact, feature_names, scaler, m_is_lr, calibrator, X_df
     return np.column_stack([1 - cal, cal])
 
 
+# Fights from this year onward are held out of Optuna weight search entirely.
+_ENSEMBLE_HOLDOUT_YEAR = 2025
+_OPTUNA_MIN_ROWS = 50
+
+
 def main(n_trials: int = 100) -> None:
     df = pd.read_csv(CSV_WITH_ELO).sort_values("date").reset_index(drop=True)
     feature_cols = [c for c in df.columns if c not in META_COLS]
@@ -106,6 +111,27 @@ def main(n_trials: int = 100) -> None:
     y_cal  = y_all[cal_idx:split_idx]
     X_test = X_all.iloc[split_idx:]
     y_test = y_all[split_idx:]
+
+    # Split test into Optuna tuning window (pre-holdout) and true hold-out.
+    test_dates = df.iloc[split_idx:]["date"]
+    pre_mask   = pd.to_datetime(test_dates).dt.year.values < _ENSEMBLE_HOLDOUT_YEAR
+    X_tune = X_test.iloc[pre_mask]
+    y_tune = y_test[pre_mask]
+    X_hold = X_test.iloc[~pre_mask]
+    y_hold = y_test[~pre_mask]
+
+    if len(X_tune) < _OPTUNA_MIN_ROWS:
+        log.warning(
+            "Pre-%d tuning window too thin (%d rows) -- ensemble will use equal weights.",
+            _ENSEMBLE_HOLDOUT_YEAR, len(X_tune),
+        )
+        X_tune, y_tune = None, None
+
+    log.info(
+        "Ensemble split: %d cal | %d tune (pre-%d) | %d hold-out (%d+)",
+        len(y_cal), len(X_tune) if X_tune is not None else 0, _ENSEMBLE_HOLDOUT_YEAR,
+        len(y_hold), _ENSEMBLE_HOLDOUT_YEAR,
+    )
 
     loaded_models = _load_available_models()
     if len(loaded_models) < 2:
@@ -124,46 +150,62 @@ def main(n_trials: int = 100) -> None:
         cal_acc = ((raw >= 0.5).astype(int) == y_cal).mean()
         print(f"  {m_key:<8s}  {cal_acc:.2%}")
 
-    # ── Score base models on test set (calibrated) ────────────────────────────
-    log.info("Scoring base models on held-out test set (%d samples)...", len(y_test))
-    model_keys = []
-    probas     = []
-    print("\nBase model test accuracy (calibrated):")
+    # ── Score base models on hold-out set (calibrated) ────────────────────────
+    log.info("Scoring base models on hold-out set (%d+, %d samples)...",
+             _ENSEMBLE_HOLDOUT_YEAR, len(y_hold))
+    model_keys  = []
+    tune_probas = []
+    hold_probas = []
+    print(f"\nBase model hold-out accuracy ({_ENSEMBLE_HOLDOUT_YEAR}+, calibrated):")
     for m_key, artifact, feature_names, scaler, m_is_lr in loaded_models:
-        p   = _calibrated_proba(artifact, feature_names, scaler, m_is_lr, calibrators[m_key], X_test)
-        acc = ((p[:, 1] >= 0.5).astype(int) == y_test).mean()
-        log.info("  %-8s test accuracy: %.2f%%", m_key, acc * 100)
+        if X_tune is not None:
+            tune_probas.append(
+                _calibrated_proba(artifact, feature_names, scaler, m_is_lr, calibrators[m_key], X_tune)
+            )
+        p_hold = _calibrated_proba(artifact, feature_names, scaler, m_is_lr, calibrators[m_key], X_hold)
+        acc = ((p_hold[:, 1] >= 0.5).astype(int) == y_hold).mean()
+        log.info("  %-8s hold-out accuracy: %.2f%%", m_key, acc * 100)
         print(f"  {m_key:<8s}  {acc:.2%}")
         model_keys.append(m_key)
-        probas.append(p)
+        hold_probas.append(p_hold)
 
-    # ── Optuna soft-vote weight search ────────────────────────────────────────
-    def objective(trial: optuna.Trial) -> float:
-        raw_w  = [trial.suggest_float(f"w_{k}", 0.0, 1.0) for k in model_keys]
-        total  = sum(raw_w) + 1e-9
-        w_norm = [w / total for w in raw_w]
-        ens    = np.average(probas, axis=0, weights=w_norm)
-        return ((ens[:, 1] >= 0.5).astype(int) == y_test).mean()
-
+    # ── Optuna soft-vote weight search (pre-holdout data only) ────────────────
+    # Falls back to equal weights when the pre-holdout window is too thin.
     optuna.logging.set_verbosity(optuna.logging.WARNING)
-    study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=n_trials)
 
-    best_raw   = [study.best_params[f"w_{k}"] for k in model_keys]
-    best_total = sum(best_raw)
-    best_weights = {k: w / best_total for k, w in zip(model_keys, best_raw)}
-    best_acc   = study.best_value
+    if X_tune is not None:
+        def objective(trial: optuna.Trial) -> float:
+            raw_w  = [trial.suggest_float(f"w_{k}", 0.0, 1.0) for k in model_keys]
+            total  = sum(raw_w) + 1e-9
+            w_norm = [w / total for w in raw_w]
+            ens    = np.average(tune_probas, axis=0, weights=w_norm)
+            return ((ens[:, 1] >= 0.5).astype(int) == y_tune).mean()
+
+        study = optuna.create_study(direction="maximize")
+        study.optimize(objective, n_trials=n_trials)
+        best_raw     = [study.best_params[f"w_{k}"] for k in model_keys]
+        best_total   = sum(best_raw)
+        best_weights = {k: w / best_total for k, w in zip(model_keys, best_raw)}
+    else:
+        equal = 1.0 / len(model_keys)
+        best_weights = {k: equal for k in model_keys}
+        log.info("Using equal weights: %s", best_weights)
+
+    # Honest hold-out accuracy with the tuned weights
+    ens_hold = np.average(hold_probas, axis=0,
+                          weights=[best_weights[k] for k in model_keys])
+    hold_acc = ((ens_hold[:, 1] >= 0.5).astype(int) == y_hold).mean()
 
     joblib.dump({
-        "mode":        "calibrated_soft_vote",
-        "weights":     best_weights,
-        "calibrators": calibrators,
-        "model_keys":  model_keys,
-        "test_accuracy": best_acc,
+        "mode":          "calibrated_soft_vote",
+        "weights":       best_weights,
+        "calibrators":   calibrators,
+        "model_keys":    model_keys,
+        "test_accuracy": hold_acc,
     }, MODEL_ENSEMBLE_PATH)
     log.info("Saved ensemble to %s", MODEL_ENSEMBLE_PATH)
 
-    print(f"\nEnsemble test accuracy: {best_acc:.2%}")
+    print(f"\nEnsemble hold-out accuracy ({_ENSEMBLE_HOLDOUT_YEAR}+): {hold_acc:.2%}")
     print("Weights:")
     for k, w in best_weights.items():
         print(f"  {k:<8s}  {w:.4f}")
