@@ -125,11 +125,11 @@ def _normalize_method(text: str) -> str:
         return "KO/TKO"
     if "sub" in t:
         return "Submission"
-    if "split" in t:
+    if "s-dec" in t or "split" in t:
         return "Decision - Split"
-    if "majority" in t:
+    if "m-dec" in t or "majority" in t:
         return "Decision - Majority"
-    if "dec" in t or "unanimous" in t:
+    if "u-dec" in t or "dec" in t or "unanimous" in t:
         return "Decision - Unanimous"
     return text.strip()
 

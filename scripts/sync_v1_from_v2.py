@@ -414,6 +414,8 @@ def build_v1_db(v2_db_path: Path, v1_db_path: Path, dry_run: bool = False) -> No
 
     # Merge pre-computed rolling stats and bio from fight_stats.
     # These columns are already shift(1) leakage-free (rolling.py does the shift).
+    # _load_v2_data already aliases UFCStats column names to mdabbert v1 names
+    # (sig_str_acc->avg_sig_str_pct, td_acc->avg_td_pct, sub_avg->avg_sub_att).
     rolling_cols = [
         "fight_id", "fighter_id",
         "splm", "avg_sig_str_pct", "td_avg", "avg_td_pct", "avg_sub_att",

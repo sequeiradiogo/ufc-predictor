@@ -88,9 +88,13 @@ def load_raw_data(conn: sqlite3.Connection) -> pd.DataFrame:
         for col, src in _loc_map.items():
             df[col] = (df[src] / _sig).fillna(0)
 
-    # UFCStats schema: wins/losses not stored in fight_stats; initialise to 0
-    # so _compute_win_loss knows to use purely DB-derived values.
-    if "wins" not in df.columns:
+    # UFCStats schema: wins/losses not stored natively in fight_stats; rolling.py
+    # computes and upserts them on each run. Detect UFCStats schema by the presence
+    # of raw per-fight columns (kd) that only exist in UFCStats, not mdabbert.
+    # On UFCStats schema, always reset to 0 so _compute_win_loss uses pure DB-derived
+    # cumulative counts -- avoids corruption on second and subsequent runs.
+    is_ufcstats = "kd" in df.columns
+    if "wins" not in df.columns or is_ufcstats:
         df["wins"]   = 0
         df["losses"] = 0
         df["_wins_losses_absent"] = True
@@ -344,10 +348,18 @@ def upsert_to_db(prior_df: pd.DataFrame, db_path: Path) -> None:
         """)
         conn.commit()
 
-        # Determine write columns (intersection of DF and DB)
+        # Determine write columns (intersection of DF and DB).
+        # Exclude raw per-fight stats written by the scraper -- rolling.py only
+        # writes derived/computed stats to avoid double-cumulation on repeated runs.
+        _SCRAPER_COLS = set(
+            _LANDED_COLS + _ATMPTED_COLS + _SUM_STATS + ["total_fight_time"]
+        )
         cur.execute(f'PRAGMA table_info("{_TARGET_TABLE}");')
         tgt_cols  = {r[1] for r in cur.fetchall()}
-        write_cols = [c for c in df_export.columns if c in tgt_cols]
+        write_cols = [
+            c for c in df_export.columns
+            if c in tgt_cols and c not in _SCRAPER_COLS
+        ]
         if not write_cols:
             raise RuntimeError("No matching columns to write.")
 
