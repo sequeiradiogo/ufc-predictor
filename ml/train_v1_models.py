@@ -233,7 +233,7 @@ def _tune_lr(df: pd.DataFrame, n_trials: int) -> dict:
             sym = make_symmetric(df.iloc[tr_idx].copy())
             Xtr, ytr = preprocess(sym)
             Xtr_s = StandardScaler().fit_transform(Xtr)
-            Xva_s = StandardScaler().fit(Xtr).transform(X_all[va_idx])
+            Xva_s = StandardScaler().fit(Xtr).transform(X_all.iloc[va_idx])
             m = LogisticRegression(**p)
             m.fit(Xtr_s, ytr, sample_weight=compute_sample_weights(sym["date"]))
             scores.append(accuracy_score(y_all[va_idx], m.predict(Xva_s)))
