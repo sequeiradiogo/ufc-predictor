@@ -174,6 +174,10 @@ def ingest(csv_path: Path, db_path: Path) -> None:
         "win_by_sub":           ("R_win_by_Submission",  "B_win_by_Submission"),
         "win_by_dec_unanimous": ("R_win_by_Decision_Unanimous", "B_win_by_Decision_Unanimous"),
         "win_by_dec_split":     ("R_win_by_Decision_Split",     "B_win_by_Decision_Split"),
+        # Defensive metrics (from UFCStats, now stored in CSV)
+        "sapm":    ("R_sapm",    "B_sapm"),
+        "str_def": ("R_str_def", "B_str_def"),
+        "td_def":  ("R_td_def",  "B_td_def"),
     }
 
     r_stats = df[["fight_id", "r_fighter_id"]].rename(columns={"r_fighter_id": "fighter_id"}).copy()

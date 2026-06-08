@@ -240,13 +240,16 @@ def _rolling_stats(
     """Get pre-fight rolling stats for fighter_id in fight fight_id."""
     row = conn.execute(
         """
-        SELECT CAST(fs.wins       AS REAL),
-               CAST(fs.losses     AS REAL),
-               CAST(fs.splm       AS REAL),
-               CAST(fs.td_avg     AS REAL),
-               CAST(fs.sub_avg    AS REAL),
+        SELECT CAST(fs.wins        AS REAL),
+               CAST(fs.losses      AS REAL),
+               CAST(fs.splm        AS REAL),
+               CAST(fs.td_avg      AS REAL),
+               CAST(fs.sub_avg     AS REAL),
                CAST(fs.sig_str_acc AS REAL),
-               CAST(fs.td_acc     AS REAL),
+               CAST(fs.td_acc      AS REAL),
+               CAST(fs.sapm        AS REAL),
+               CAST(fs.str_def     AS REAL),
+               CAST(fs.td_def      AS REAL),
                fi.height, fi.reach, fi.stance, fi.dob
         FROM fight_stats fs
         JOIN fighters fi ON fs.fighter_id = fi.fighter_id
@@ -257,7 +260,7 @@ def _rolling_stats(
     if row is None:
         return {}
     (wins, losses, splm, td_avg, sub_avg, sig_str_acc, td_acc,
-     height, reach, stance, dob) = row
+     sapm, str_def, td_def, height, reach, stance, dob) = row
     return {
         "wins":         wins or 0,
         "losses":       losses or 0,
@@ -266,6 +269,9 @@ def _rolling_stats(
         "sub_avg":      sub_avg or np.nan,
         "sig_str_acc":  sig_str_acc or np.nan,
         "td_acc":       td_acc or np.nan,
+        "sapm":         sapm or np.nan,
+        "str_def":      str_def or np.nan,
+        "td_def":       td_def or np.nan,
         "height":       height,
         "reach":        reach,
         "stance":       stance,
@@ -472,6 +478,13 @@ def build_rows(
             "b_sub_odds": np.nan,
             "r_ko_odds":  np.nan,
             "b_ko_odds":  np.nan,
+            # Defensive metrics (from UFCStats rolling stats)
+            "R_sapm":    round(r_roll.get("sapm",    np.nan) or np.nan, 2),
+            "B_sapm":    round(b_roll.get("sapm",    np.nan) or np.nan, 2),
+            "R_str_def": round(r_roll.get("str_def", np.nan) or np.nan, 2),
+            "B_str_def": round(b_roll.get("str_def", np.nan) or np.nan, 2),
+            "R_td_def":  round(r_roll.get("td_def",  np.nan) or np.nan, 2),
+            "B_td_def":  round(b_roll.get("td_def",  np.nan) or np.nan, 2),
         }
         rows.append(row)
 
