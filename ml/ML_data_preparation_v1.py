@@ -441,8 +441,12 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
             how="left",
         ).drop(columns=["fighter_id"])
 
-    # ── v2 defensive metrics (sapm, str_def, td_def) via name matching ────────
-    wide = enrich_from_v2(wide, conn)
+    # ── Defensive metrics (sapm, str_def, td_def) -- now in mdabbert DB ─────────
+    # fight_stats join produces r_sapm/b_sapm etc.; alias to {stat}_{corner}
+    # so the diff-building section below stays unchanged.
+    for stat in ("sapm", "str_def", "td_def"):
+        wide[f"{stat}_red"]  = pd.to_numeric(wide.get(f"r_{stat}"), errors="coerce").fillna(0.0)
+        wide[f"{stat}_blue"] = pd.to_numeric(wide.get(f"b_{stat}"), errors="coerce").fillna(0.0)
 
     # ── Build output ──────────────────────────────────────────────────────────
     log.info("Building diff and derived features...")
