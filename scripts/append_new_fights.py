@@ -159,6 +159,11 @@ NAME_ALIASES: dict[str, str] = {
     "vincente luque":               "Vicente Luque",
     "youssef zalel":                "Youssef Zalal",
     "zhalgas zhamagulov":           "Zhalgas Zhumagulov",
+    "nina ansaroff":                "Nina Nunes",
+    "ariane lipski":                "Ariane da Silva",
+    "brianna van buren":            "Brianna Fortino",
+    "ulka sasaki":                  "Yuta Sasaki",
+    "roberto sanchez":              "Robert Sanchez",
 }
 
 # Reverse: UFCStats_name_lower -> Kaggle name
@@ -593,6 +598,9 @@ def main(dry_run: bool = False, from_date: str | None = None) -> None:
         return
 
     combined = pd.concat([df, new_df], ignore_index=True)
+    combined["date"] = pd.to_datetime(combined["date"])
+    combined = combined.sort_values("date", ascending=False, kind="stable").reset_index(drop=True)
+    combined["date"] = combined["date"].dt.strftime("%Y-%m-%d")
     combined.to_csv(KAGGLE_CSV, index=False)
     print(f"\nAppended {len(new_df)} rows. CSV now has {len(combined)} fights.")
     print("\nNext steps:")

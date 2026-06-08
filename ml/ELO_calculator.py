@@ -194,7 +194,7 @@ def build_elo_features(conn: sqlite3.Connection | None = None) -> pd.DataFrame:
         conn = sqlite3.connect(str(DB_PATH))
 
     query = """
-        SELECT fight_id, date, division, r_fighter_id, b_fighter_id, winner_id
+        SELECT fight_id, date, r_fighter_id, b_fighter_id, winner_id
         FROM fights
         ORDER BY date ASC
     """
@@ -203,8 +203,8 @@ def build_elo_features(conn: sqlite3.Connection | None = None) -> pd.DataFrame:
     if own_conn:
         conn.close()
 
-    log.info("Calculating per-division ELO ratings for %d fights…", len(df))
-    _, _, red_elo_pre, blue_elo_pre = _replay_fights_by_division(df)
+    log.info("Calculating global ELO ratings for %d fights…", len(df))
+    _, _, red_elo_pre, blue_elo_pre = _replay_fights(df)
 
     df["elo_red"]  = red_elo_pre
     df["elo_blue"] = blue_elo_pre
