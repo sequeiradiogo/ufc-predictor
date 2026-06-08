@@ -115,6 +115,11 @@ NAME_ALIASES: dict[str, str] = {
     "vincente luque":               "Vicente Luque",
     "youssef zalel":                "Youssef Zalal",
     "zhalgas zhamagulov":           "Zhalgas Zhumagulov",
+    "nina ansaroff":                "Nina Nunes",
+    "ariane lipski":                "Ariane da Silva",
+    "brianna van buren":            "Brianna Fortino",
+    "ulka sasaki":                  "Yuta Sasaki",
+    "roberto sanchez":              "Robert Sanchez",
 }
 
 DEFENSIVE_COLS = ("sapm", "str_def", "td_def")

@@ -485,9 +485,17 @@ def train_ensemble(df: pd.DataFrame, n_trials: int = 100) -> None:
             ens    = np.average(tune_probas, axis=0, weights=w_norm)
             return ((ens[:, 1] >= 0.5).astype(int) == y_tune).mean()
 
-        study = optuna.create_study(direction="maximize")
-        study.optimize(objective, n_trials=n_trials)
-        best_raw     = [study.best_params[f"w_{k}"] for k in model_keys]
+        # Run multiple independent studies and keep the best to reduce variance.
+        _n_restarts = 5
+        _trials_each = max(n_trials, 100)  # at least 100 trials per restart
+        best_value  = -1.0
+        best_raw    = None
+        for _ in range(_n_restarts):
+            study = optuna.create_study(direction="maximize")
+            study.optimize(objective, n_trials=_trials_each)
+            if study.best_value > best_value:
+                best_value = study.best_value
+                best_raw   = [study.best_params[f"w_{k}"] for k in model_keys]
         best_total   = sum(best_raw)
         best_weights = {k: w / best_total for k, w in zip(model_keys, best_raw)}
     else:

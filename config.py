@@ -223,6 +223,11 @@ NAME_ALIASES: dict[str, str] = {
     "ode obsourne":         "Ode Osbourne",
     "youssef zalel":        "Youssef Zalal",
     "zhalgas zhamagulov":   "Zhalgas Zhumagulov",
+    "nina ansaroff":        "Nina Nunes",
+    "ariane lipski":        "Ariane da Silva",
+    "brianna van buren":    "Brianna Fortino",
+    "ulka sasaki":          "Yuta Sasaki",
+    "roberto sanchez":      "Robert Sanchez",
     # Married name changes
     "ariane lipski":        "Ariane Carnelossi",
     "cheyanne buys":        "Cheyanne Vlismas",

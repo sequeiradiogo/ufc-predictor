@@ -1,0 +1,255 @@
+"""
+scripts/add_computed_features_to_csv.py
+
+Pre-compute ELO, Glicko-2, recent form, SOS, slope features, finish rates,
+inactivity, and KO vulnerability for every fight and write them into ufc-master.csv.
+
+These are all deterministic per-fight values (no leakage -- each uses shift(1)
+or fights before that date). Storing them in the CSV makes the pipeline
+self-contained and simplifies ML_data_preparation_v1.py to pure diff-building.
+
+Run after ingest_mdabbert.py rebuilds the DB:
+    python db/ingest_mdabbert.py --csv raw_data/ufc-master.csv
+    python scripts/add_computed_features_to_csv.py
+    python db/ingest_mdabbert.py --csv raw_data/ufc-master.csv   (re-ingest with new cols)
+
+Usage:
+    python scripts/add_computed_features_to_csv.py
+    python scripts/add_computed_features_to_csv.py --dry-run
+"""
+import argparse
+import hashlib
+import sqlite3
+import sys
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from config import DB_V1_PATH
+from ml.ELO_calculator import build_elo_features, build_glicko_features
+from ml.ML_data_preparation import (
+    compute_finish_rates,
+    compute_inactivity,
+    compute_ko_vulnerability,
+    compute_sos_features,
+)
+from ml.ML_data_preparation_v1 import compute_slope_features_v1, _compute_recent_form_v1
+
+KAGGLE_CSV = ROOT / "raw_data" / "ufc-master.csv"
+
+# Maps (wide column) -> CSV column name
+_FIGHT_COLS = {
+    "elo_red":    "R_elo",
+    "elo_blue":   "B_elo",
+    "glicko_red":    "R_glicko",
+    "glicko_blue":   "B_glicko",
+    "glicko_rd_red":  "R_glicko_rd",
+    "glicko_rd_blue": "B_glicko_rd",
+}
+
+# Per-fighter features: (db_col, red_csv_col, blue_csv_col)
+_PER_FIGHTER_COLS = [
+    ("recent_win_rate",    "R_recent_win_rate",    "B_recent_win_rate"),
+    ("recent_finish_rate", "R_recent_finish_rate", "B_recent_finish_rate"),
+    ("sos",                "R_sos",                "B_sos"),
+    ("str_acc_slope",      "R_str_acc_slope",      "B_str_acc_slope"),
+    ("splm_slope",         "R_splm_slope",         "B_splm_slope"),
+    ("td_acc_slope",       "R_td_acc_slope",       "B_td_acc_slope"),
+    ("ko_rate",            "R_ko_rate",            "B_ko_rate"),
+    ("sub_rate",           "R_sub_rate",           "B_sub_rate"),
+    ("dec_rate",           "R_dec_rate",           "B_dec_rate"),
+    ("days_since_last",    "R_days_since_last",     "B_days_since_last"),
+    ("ko_vuln",            "R_ko_vuln",            "B_ko_vuln"),
+]
+
+
+def _fight_id(r_name: str, b_name: str, date: str) -> str:
+    key = f"{r_name.lower().strip()}|{b_name.lower().strip()}|{date}"
+    return hashlib.md5(key.encode()).hexdigest()[:16]
+
+
+def _assign_per_fighter(
+    base: pd.DataFrame,
+    feat_df: pd.DataFrame,
+    db_col: str,
+    red_col: str,
+    blue_col: str,
+    r_fid: str = "r_fighter_id",
+    b_fid: str = "b_fighter_id",
+) -> pd.DataFrame:
+    """Merge a per-fighter feature into the base DataFrame for red and blue corners."""
+    red = feat_df[["fight_id", "fighter_id", db_col]].rename(columns={db_col: red_col})
+    blue = feat_df[["fight_id", "fighter_id", db_col]].rename(columns={db_col: blue_col})
+    base = base.merge(red,  left_on=["fight_id", r_fid], right_on=["fight_id", "fighter_id"], how="left").drop(columns=["fighter_id"])
+    base = base.merge(blue, left_on=["fight_id", b_fid], right_on=["fight_id", "fighter_id"], how="left").drop(columns=["fighter_id"])
+    return base
+
+
+def main(dry_run: bool = False) -> None:
+    print(f"Reading {KAGGLE_CSV.name} ...")
+    df = pd.read_csv(KAGGLE_CSV, low_memory=False)
+    df["date"] = pd.to_datetime(df["date"])
+
+    df["_fight_id"] = df.apply(
+        lambda r: _fight_id(r["R_fighter"], r["B_fighter"], str(r["date"])[:10]),
+        axis=1,
+    )
+    print(f"  {len(df)} rows, fight_id computed.")
+
+    print(f"Computing features from mdabbert DB ({DB_V1_PATH.name}) ...")
+    conn = sqlite3.connect(str(DB_V1_PATH))
+
+    fights_meta = pd.read_sql_query(
+        "SELECT fight_id, date, r_fighter_id, b_fighter_id FROM fights ORDER BY date ASC",
+        conn,
+    )
+    fights_meta["date"] = pd.to_datetime(fights_meta["date"])
+
+    # ── ELO ───────────────────────────────────────────────────────────────────
+    print("  ELO ...")
+    elo_df = build_elo_features(conn)
+
+    # ── Glicko-2 ──────────────────────────────────────────────────────────────
+    print("  Glicko-2 ...")
+    glicko_df = build_glicko_features(conn)
+
+    # ── SOS (needs ELO) ───────────────────────────────────────────────────────
+    print("  SOS ...")
+    elo_for_sos = fights_meta.merge(elo_df, on="fight_id", how="left")
+    sos_df = compute_sos_features(
+        elo_for_sos[["fight_id", "date", "r_fighter_id", "b_fighter_id", "elo_red", "elo_blue"]]
+    )
+
+    # ── Recent form ───────────────────────────────────────────────────────────
+    print("  Recent form ...")
+    form_df = _compute_recent_form_v1(conn)
+
+    # ── Finish rates ──────────────────────────────────────────────────────────
+    print("  Finish rates ...")
+    fin_df = compute_finish_rates(conn)
+
+    # ── Inactivity ────────────────────────────────────────────────────────────
+    print("  Inactivity ...")
+    inact_df = compute_inactivity(conn)
+
+    # ── KO vulnerability ──────────────────────────────────────────────────────
+    print("  KO vulnerability ...")
+    kovuln_df = compute_ko_vulnerability(conn)
+
+    # ── Slope features ────────────────────────────────────────────────────────
+    print("  Slope features ...")
+    slope_df = compute_slope_features_v1(conn)
+
+    conn.close()
+
+    # ── Build wide table: fight_id + all per-fighter features ─────────────────
+    wide = fights_meta[["fight_id", "r_fighter_id", "b_fighter_id"]].copy()
+
+    wide = wide.merge(elo_df,    on="fight_id", how="left")
+    wide = wide.merge(glicko_df, on="fight_id", how="left")
+
+    per_fighter_data = [
+        (form_df,      "recent_win_rate",    "R_recent_win_rate",    "B_recent_win_rate"),
+        (form_df,      "recent_finish_rate", "R_recent_finish_rate", "B_recent_finish_rate"),
+        (sos_df,       "sos",                "R_sos",                "B_sos"),
+        (slope_df,     "str_acc_slope",      "R_str_acc_slope",      "B_str_acc_slope"),
+        (slope_df,     "splm_slope",         "R_splm_slope",         "B_splm_slope"),
+        (slope_df,     "td_acc_slope",       "R_td_acc_slope",       "B_td_acc_slope"),
+        (fin_df,       "ko_rate",            "R_ko_rate",            "B_ko_rate"),
+        (fin_df,       "sub_rate",           "R_sub_rate",           "B_sub_rate"),
+        (fin_df,       "dec_rate",           "R_dec_rate",           "B_dec_rate"),
+        (inact_df,     "days_since_last",    "R_days_since_last",    "B_days_since_last"),
+        (kovuln_df,    "ko_vuln",            "R_ko_vuln",            "B_ko_vuln"),
+    ]
+
+    for feat_df, db_col, red_col, blue_col in per_fighter_data:
+        wide = _assign_per_fighter(wide, feat_df, db_col, red_col, blue_col)
+
+    # Rename fight-level ELO/Glicko columns to CSV convention
+    wide = wide.rename(columns=_FIGHT_COLS)
+
+    # ── Build unique list of all new per-fighter columns ──────────────────────
+    seen: set[str] = set()
+    csv_feature_cols: list[str] = []
+    for _, _, rc, bc in per_fighter_data:
+        for c in (rc, bc):
+            if c not in seen:
+                csv_feature_cols.append(c)
+                seen.add(c)
+    all_new_cols = list(_FIGHT_COLS.values()) + csv_feature_cols
+
+    wide_slim = wide[["fight_id"] + all_new_cols].copy()
+    num_cols = wide_slim.select_dtypes(include="number").columns
+    wide_slim[num_cols] = wide_slim[num_cols].round(4)
+
+    before = df.shape[1]
+    df = df.drop(columns=[c for c in all_new_cols if c in df.columns], errors="ignore")
+    df = df.merge(wide_slim, left_on="_fight_id", right_on="fight_id", how="left")
+    df = df.drop(columns=["_fight_id", "fight_id"], errors="ignore")
+
+    # ── Fight-level derived features (computed from existing CSV columns) ──────
+    print("  Style matchup, stance, division, rank features ...")
+    _EPS = 1e-6
+    r_splm   = pd.to_numeric(df["R_avg_SIG_STR_landed"], errors="coerce").fillna(0)
+    r_td_avg = pd.to_numeric(df["R_avg_TD_landed"],      errors="coerce").fillna(0)
+    b_splm   = pd.to_numeric(df["B_avg_SIG_STR_landed"], errors="coerce").fillna(0)
+    b_td_avg = pd.to_numeric(df["B_avg_TD_landed"],      errors="coerce").fillna(0)
+    r_denom  = r_splm + r_td_avg + _EPS
+    b_denom  = b_splm + b_td_avg + _EPS
+    r_strike  = r_splm   / r_denom
+    r_grapple = r_td_avg / r_denom
+    b_strike  = b_splm   / b_denom
+    b_grapple = b_td_avg / b_denom
+    df["grapple_ratio_diff"]  = (r_grapple - b_grapple).round(4)
+    df["striker_vs_wrestler"] = (r_strike  * b_grapple).round(4)
+    df["wrestler_vs_striker"] = (r_grapple * b_strike).round(4)
+
+    stance_r = df["R_Stance"].fillna("Orthodox").str.strip().str.lower()
+    stance_b = df["B_Stance"].fillna("Orthodox").str.strip().str.lower()
+    red_sp   = stance_r == "southpaw"
+    blue_sp  = stance_b == "southpaw"
+    red_or   = stance_r == "orthodox"
+    blue_or  = stance_b == "orthodox"
+    df["southpaw_adv_diff"] = ((red_sp & blue_or).astype(int) - (red_or & blue_sp).astype(int))
+    df["both_southpaw"]     = (red_sp & blue_sp).astype(int)
+
+    _UNRANKED = 16.0
+    r_rank = pd.to_numeric(df["R_match_weightclass_rank"], errors="coerce").fillna(0)
+    b_rank = pd.to_numeric(df["B_match_weightclass_rank"], errors="coerce").fillna(0)
+    df["weightclass_rank_diff"] = (r_rank.where(r_rank > 0, _UNRANKED) - b_rank.where(b_rank > 0, _UNRANKED))
+
+    from config import DIVISIONS
+    div_lower = df["weight_class"].str.lower().str.strip().fillna("")
+    for div in DIVISIONS:
+        col = "div_" + div.replace(" ", "_").replace("'", "")
+        df[col] = (div_lower == div).astype(int)
+
+    matched = df["R_elo"].notna().sum()
+    print(f"\n  Matched {matched}/{len(df)} rows ({matched/len(df):.1%})")
+    print(f"  Columns: {before} -> {df.shape[1]} (+{df.shape[1]-before})")
+
+    if dry_run:
+        print("\nSample (first 3 matched rows):")
+        sample = df[df["R_elo"].notna()].head(3)[["date", "R_fighter", "B_fighter", "R_elo", "B_elo", "R_recent_win_rate", "R_sos"]]
+        print(sample.to_string(index=False))
+        print("\nDry run -- no changes written.")
+        return
+
+    df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
+    df.to_csv(KAGGLE_CSV, index=False)
+    print(f"\nSaved {KAGGLE_CSV.name}: {len(df)} rows, {df.shape[1]} columns")
+    print(f"  Added {df.shape[1]-before} computed feature columns")
+    print("\nNext steps:")
+    print("  python db/ingest_mdabbert.py --csv raw_data/ufc-master.csv")
+    print("  python ml/ML_data_preparation_v1.py")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+    main(dry_run=args.dry_run)
