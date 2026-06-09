@@ -31,8 +31,12 @@ from config import (
     MODEL_V1_LR_FEATURES,
     MODEL_V1_LR_PATH,
     MODEL_V1_LR_SCALER,
+    MODEL_V1_MLP_FEATURES,
+    MODEL_V1_MLP_PATH,
+    MODEL_V1_MLP_SCALER,
     MODEL_V1_RF_FEATURES,
     MODEL_V1_RF_PATH,
+    MODEL_V1_STACKING_PATH,
     MODEL_V1_XGB_FEATURES,
     MODEL_V1_XGB_PATH,
     MODELS_V1_DIR,
@@ -64,10 +68,13 @@ def _score(df: pd.DataFrame, model_type: str) -> pd.DataFrame:
         "lr":   (MODEL_V1_LR_PATH,   MODEL_V1_LR_FEATURES,   MODEL_V1_LR_SCALER, True),
         "rf":   (MODEL_V1_RF_PATH,   MODEL_V1_RF_FEATURES,   None,               False),
         "lgbm": (MODEL_V1_LGBM_PATH, MODEL_V1_LGBM_FEATURES, None,               False),
+        "mlp":  (MODEL_V1_MLP_PATH,  MODEL_V1_MLP_FEATURES,  MODEL_V1_MLP_SCALER, True),
     }
 
     if model_type == "ensemble":
         return _score_ensemble(df)
+    if model_type == "stacking":
+        return _score_stacking(df)
 
     m_path, f_path, s_path, is_lr = specs[model_type]
     artifact  = joblib.load(m_path)
@@ -91,6 +98,7 @@ def _score_ensemble(df: pd.DataFrame) -> pd.DataFrame:
         ("lr",   MODEL_V1_LR_PATH,   MODEL_V1_LR_FEATURES,   MODEL_V1_LR_SCALER, True),
         ("rf",   MODEL_V1_RF_PATH,   MODEL_V1_RF_FEATURES,   None,               False),
         ("lgbm", MODEL_V1_LGBM_PATH, MODEL_V1_LGBM_FEATURES, None,               False),
+        ("mlp",  MODEL_V1_MLP_PATH,  MODEL_V1_MLP_FEATURES,  MODEL_V1_MLP_SCALER, True),
     ]
 
     model_probas   = []
@@ -116,6 +124,36 @@ def _score_ensemble(df: pd.DataFrame) -> pd.DataFrame:
     total_w = sum(active_weights)
     active_weights = [w / total_w for w in active_weights]
     prob_red = np.average(model_probas, axis=0, weights=active_weights)
+    return _make_results(df, prob_red)
+
+
+def _score_stacking(df: pd.DataFrame) -> pd.DataFrame:
+    stk        = joblib.load(MODEL_V1_STACKING_PATH)
+    meta_lr    = stk["meta"]
+    meta_sc    = stk["meta_scaler"]
+    stk_specs  = stk.get("specs", [])
+
+    base_probs = []
+    for m_key, m_path, f_path, s_path, is_lr in stk_specs:
+        m_path = Path(m_path)
+        f_path = Path(f_path)
+        if not m_path.exists() or not f_path.exists():
+            log.warning("Stacking backtest: base model %s not found, using 0.5", m_key)
+            base_probs.append(np.full(len(df), 0.5))
+            continue
+        artifact   = joblib.load(m_path)
+        feat_names = joblib.load(f_path)
+        scaler     = joblib.load(s_path) if s_path and Path(s_path).exists() else None
+
+        X  = df.reindex(columns=feat_names, fill_value=0).fillna(0)
+        Xi = scaler.transform(X) if scaler else X.values
+        base = artifact["base"] if is_lr else artifact
+        raw_p = base.predict_proba(Xi)[:, 1]
+        base_probs.append(raw_p)
+
+    stacked   = np.column_stack(base_probs)
+    stacked_s = meta_sc.transform(stacked)
+    prob_red  = meta_lr.predict_proba(stacked_s)[:, 1]
     return _make_results(df, prob_red)
 
 
@@ -154,7 +192,7 @@ def _print_report(results: pd.DataFrame, label: str, from_year: int | None) -> N
 def main() -> None:
     parser = argparse.ArgumentParser(description="Backtest v1 (mdabbert) models.")
     parser.add_argument("--from-year", type=int, default=None)
-    parser.add_argument("--model", choices=["xgb", "lr", "rf", "lgbm", "ensemble"],
+    parser.add_argument("--model", choices=["xgb", "lr", "rf", "lgbm", "mlp", "ensemble", "stacking"],
                         default="ensemble")
     args = parser.parse_args()
 
