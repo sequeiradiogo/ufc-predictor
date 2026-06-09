@@ -83,7 +83,7 @@ def load_models() -> None:
 class PredictRequest(BaseModel):
     red_fighter:  str = Field(...,  example="Islam Makhachev")
     blue_fighter: str = Field(...,  example="Charles Oliveira")
-    model:        str = Field("xgb", pattern="^(xgb|lr)$", description="'xgb' or 'lr'")
+    model:        str = Field("xgb", pattern="^(xgb|lr|rf|lgbm|mlp|ensemble|stacking)$", description="'xgb', 'lr', 'rf', 'lgbm', 'mlp', 'ensemble', or 'stacking'")
     division:     Optional[str]   = Field(None, example="lightweight")
     title_fight:  Optional[int]   = Field(0,    ge=0, le=1)
     odds_red:     Optional[float] = Field(None, example=-150.0,
