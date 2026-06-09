@@ -189,7 +189,7 @@ def _get_h2h(conn: sqlite3.Connection, id_a: str, id_b: str) -> list[H2HFight]:
     cur.execute(
         """
         SELECT f.date, f.winner_id, f.method,
-               fr.name AS r_name, fb.name AS b_name
+               f.r_fighter_id, fr.name AS r_name, fb.name AS b_name
         FROM fights f
         JOIN fighters fr ON fr.fighter_id = f.r_fighter_id
         JOIN fighters fb ON fb.fighter_id = f.b_fighter_id
@@ -200,10 +200,11 @@ def _get_h2h(conn: sqlite3.Connection, id_a: str, id_b: str) -> list[H2HFight]:
         (id_a, id_b, id_b, id_a),
     )
     results = []
-    for date, winner_id, method, r_name, b_name in cur.fetchall():
-        if winner_id == id_a:
+    for date, winner_id, method, r_fighter_id, r_name, b_name in cur.fetchall():
+        # Resolve winner name from the original corner assignments, not the request order
+        if winner_id == r_fighter_id:
             winner_name = r_name
-        elif winner_id == id_b:
+        elif winner_id:
             winner_name = b_name
         else:
             winner_name = "Draw"
