@@ -16,6 +16,7 @@ POST /card                      Predict a full event card
 GET  /fighters/{id}             Fighter profile, stats, and current ELO
 GET  /fighters/{id}/elo-history Per-fight ELO snapshots (chronological)
 GET  /fighters/{id}/recent-form Last N fights with result and method
+GET  /compare?red=&blue=        Side-by-side stats, ELO diff, head-to-head history
 
 Interactive docs: http://localhost:8000/docs
 """
@@ -147,6 +148,13 @@ class ValueBet(BaseModel):
     value:        bool
 
 
+class H2HFight(BaseModel):
+    date:   str
+    winner: str
+    method: str
+    round:  Optional[int]
+
+
 class PredictResponse(BaseModel):
     red:              FighterResult
     blue:             FighterResult
@@ -155,6 +163,8 @@ class PredictResponse(BaseModel):
     model:            str
     finish_proba:     Optional[FinishProba]
     value_bets:       Optional[list[ValueBet]]
+    prior_fights:     Optional[int]       = None
+    head_to_head:     Optional[list[H2HFight]] = None
 
 
 # ── DB helpers ────────────────────────────────────────────────────────────────
@@ -172,6 +182,73 @@ def _search_fighters(conn: sqlite3.Connection, name: str) -> list[dict]:
         (f"%{name}%",),
     )
     return [{"fighter_id": r[0], "name": r[1]} for r in cur.fetchall()]
+
+
+def _get_h2h(conn: sqlite3.Connection, id_a: str, id_b: str) -> list[H2HFight]:
+    """Return all fights between two fighters, newest first."""
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT f.date, f.winner_id, f.method, f.rounds,
+               fr.name AS r_name, fb.name AS b_name
+        FROM fights f
+        JOIN fighters fr ON fr.fighter_id = f.r_fighter_id
+        JOIN fighters fb ON fb.fighter_id = f.b_fighter_id
+        WHERE (f.r_fighter_id = ? AND f.b_fighter_id = ?)
+           OR (f.r_fighter_id = ? AND f.b_fighter_id = ?)
+        ORDER BY f.date DESC
+        """,
+        (id_a, id_b, id_b, id_a),
+    )
+    results = []
+    for date, winner_id, method, rounds, r_name, b_name in cur.fetchall():
+        winner_name = r_name if winner_id == id_a or winner_id not in (id_b,) else b_name
+        if winner_id == id_a:
+            winner_name = r_name if r_name else b_name
+        elif winner_id == id_b:
+            winner_name = b_name if b_name else r_name
+        else:
+            winner_name = "Draw"
+        results.append(H2HFight(
+            date=date,
+            winner=winner_name,
+            method=method or "",
+            round=rounds,
+        ))
+    return results
+
+
+def _get_fighter_stats(conn: sqlite3.Connection, fighter_id: str) -> dict:
+    """Return latest rolling stats and career record for a fighter."""
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT fs.splm, fs.sapm, fs.str_def, fs.td_avg, fs.td_def
+        FROM fight_stats fs
+        JOIN fights f ON f.fight_id = fs.fight_id
+        WHERE fs.fighter_id = ?
+        ORDER BY f.date DESC
+        LIMIT 1
+        """,
+        (fighter_id,),
+    )
+    row = cur.fetchone()
+    stats = {}
+    if row:
+        for key, val in zip(["splm", "sapm", "str_def", "td_avg", "td_def"], row):
+            stats[key] = round(float(val), 3) if val is not None else None
+
+    cur.execute(
+        """
+        SELECT
+            COUNT(CASE WHEN winner_id = ? THEN 1 END),
+            COUNT(CASE WHEN winner_id != ? AND winner_id IS NOT NULL AND winner_id != '' THEN 1 END)
+        FROM fights WHERE r_fighter_id = ? OR b_fighter_id = ?
+        """,
+        (fighter_id, fighter_id, fighter_id, fighter_id),
+    )
+    wins, losses = cur.fetchone()
+    return {"stats": stats, "record": f"{wins}-{losses}"}
 
 
 # ── Prediction logic (shared) ─────────────────────────────────────────────────
@@ -237,6 +314,9 @@ def _run_prediction(req: PredictRequest) -> PredictResponse:
         # Recent form
         form_r = compute_recent_form(conn, r["fighter_id"])
         form_b = compute_recent_form(conn, b["fighter_id"])
+
+        # Head-to-head history
+        h2h = _get_h2h(conn, r["fighter_id"], b["fighter_id"])
 
     finally:
         conn.close()
@@ -331,6 +411,8 @@ def _run_prediction(req: PredictRequest) -> PredictResponse:
         model=model_label,
         finish_proba=finish_proba_resp,
         value_bets=value_bets_resp,
+        prior_fights=len(h2h) if h2h else None,
+        head_to_head=h2h if h2h else None,
     )
 
 
@@ -565,6 +647,78 @@ def get_fighter_recent_form(
         })
 
     return {"fighter_id": fighter_id, "name": name, "fights": fights}
+
+
+@app.get("/compare", summary="Compare two fighters side-by-side")
+def compare_fighters(
+    red:  str = Query(..., description="Red fighter name (partial OK)"),
+    blue: str = Query(..., description="Blue fighter name (partial OK)"),
+):
+    """
+    Return a side-by-side stat comparison, ELO diff, record, and full
+    head-to-head fight history for two fighters.
+    Diffs follow the model convention: red - blue (positive = red advantage).
+    """
+    conn = _get_conn()
+    try:
+        r_matches = _search_fighters(conn, red)
+        b_matches = _search_fighters(conn, blue)
+
+        if not r_matches:
+            raise HTTPException(status_code=404, detail=f"Fighter not found: '{red}'")
+        if not b_matches:
+            raise HTTPException(status_code=404, detail=f"Fighter not found: '{blue}'")
+
+        def _best(matches: list[dict], query: str) -> dict:
+            for m in matches:
+                if m["name"].lower() == query.lower():
+                    return m
+            return matches[0]
+
+        r = _best(r_matches, red)
+        b = _best(b_matches, blue)
+
+        if r["fighter_id"] == b["fighter_id"]:
+            raise HTTPException(status_code=400, detail="Both names resolved to the same fighter.")
+
+        r_data = _get_fighter_stats(conn, r["fighter_id"])
+        b_data = _get_fighter_stats(conn, b["fighter_id"])
+        h2h    = _get_h2h(conn, r["fighter_id"], b["fighter_id"])
+    finally:
+        conn.close()
+
+    elo_r = _elo_global.get(r["fighter_id"], STARTING_ELO)
+    elo_b = _elo_global.get(b["fighter_id"], STARTING_ELO)
+
+    stat_keys = ["splm", "sapm", "str_def", "td_avg", "td_def"]
+    r_stats   = r_data["stats"]
+    b_stats   = b_data["stats"]
+
+    diff = {}
+    for k in stat_keys:
+        rv = r_stats.get(k)
+        bv = b_stats.get(k)
+        diff[k] = round(rv - bv, 3) if rv is not None and bv is not None else None
+    diff["elo"] = round(elo_r - elo_b, 1)
+
+    return {
+        "red": {
+            "fighter_id": r["fighter_id"],
+            "name":       r["name"],
+            "elo":        round(elo_r, 1),
+            "record":     r_data["record"],
+            "stats":      r_stats,
+        },
+        "blue": {
+            "fighter_id": b["fighter_id"],
+            "name":       b["name"],
+            "elo":        round(elo_b, 1),
+            "record":     b_data["record"],
+            "stats":      b_stats,
+        },
+        "diff":        diff,
+        "head_to_head": h2h,
+    }
 
 
 @app.post("/predict", response_model=PredictResponse, summary="Predict fight outcome")
