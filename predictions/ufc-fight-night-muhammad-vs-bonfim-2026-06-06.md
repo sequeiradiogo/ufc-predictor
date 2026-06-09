@@ -26,6 +26,31 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 
 ---
 
+## Post-Event Summary
+
+- Fights predicted: 11
+- Correct: 7/11 (63.6%)
+
+### P/L (EUR 1 flat on each predicted winner)
+
+| Fight | Model Pick | Odds (dec) | Result | P/L |
+|---|---|---|---|---|
+| Muhammad vs Bonfim | Gabriel Bonfim | 1.98 | Win | +EUR 0.98 |
+| Allen vs Shahbazyan | Brendan Allen | 1.49 | Win | +EUR 0.49 |
+| Ziam vs Nolan | Fares Ziam | 1.31 | Loss | -EUR 1.00 |
+| Mitchell vs Luna | Santiago Luna | 2.12 | Loss | -EUR 1.00 |
+| Baraniewski vs Tafa | Iwo Baraniewski | 1.22 | Win | +EUR 0.22 |
+| Schnell vs Costa | Matt Schnell | 4.40 | Loss | -EUR 1.00 |
+| McGhee vs Yannis | Marcus McGhee | 1.17 | Win | +EUR 0.17 |
+| Silva vs Chairez | Bruno Silva | 1.89 | Loss | -EUR 1.00 |
+| Cachoeira vs Chandler | Chelsea Chandler | 1.74 | Win | +EUR 0.74 |
+| Leavitt vs Brito | Joanderson Brito | 1.60 | Win | +EUR 0.60 |
+| Souza vs Carnelossi | Ketlen Souza | 1.31 | Win | +EUR 0.31 |
+
+**Net P/L: -EUR 0.49 on EUR 11.00 staked (-4.5% ROI)**
+
+---
+
 ## Raw Model Output
 
 ### Belal Muhammad vs Gabriel Bonfim
