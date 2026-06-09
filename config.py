@@ -45,6 +45,10 @@ MODEL_LGBM_FEATURES = MODELS_DIR / "lgbm_features.joblib"
 
 MODEL_ENSEMBLE_PATH = MODELS_DIR / "ensemble.joblib"
 
+MODEL_MLP_PATH     = MODELS_DIR / "mlp.joblib"
+MODEL_MLP_FEATURES = MODELS_DIR / "mlp_features.joblib"
+MODEL_MLP_SCALER   = MODELS_DIR / "mlp_scaler.joblib"
+
 # ── v1 (mdabbert) Model Artifacts ─────────────────────────────────────────────
 MODELS_V1_DIR          = ROOT_DIR / "models_v1"
 MODEL_V1_XGB_PATH      = MODELS_V1_DIR / "xgboost.joblib"
@@ -57,6 +61,10 @@ MODEL_V1_RF_FEATURES   = MODELS_V1_DIR / "rf_features.joblib"
 MODEL_V1_LGBM_PATH     = MODELS_V1_DIR / "lightgbm.joblib"
 MODEL_V1_LGBM_FEATURES = MODELS_V1_DIR / "lgbm_features.joblib"
 MODEL_V1_ENSEMBLE_PATH = MODELS_V1_DIR / "ensemble.joblib"
+MODEL_V1_MLP_PATH      = MODELS_V1_DIR / "mlp.joblib"
+MODEL_V1_MLP_FEATURES  = MODELS_V1_DIR / "mlp_features.joblib"
+MODEL_V1_MLP_SCALER    = MODELS_V1_DIR / "mlp_scaler.joblib"
+MODEL_V1_STACKING_PATH = MODELS_V1_DIR / "stacking.joblib"
 DB_V1_PATH             = _DB_MDABBERT    # public alias for v1 DB
 
 # ── ELO ───────────────────────────────────────────────────────────────────────
@@ -111,7 +119,7 @@ RF_PARAMS: dict = {
     "class_weight":      "balanced",
 }
 
-# ── LightGBM Hyperparameters (tuned via Optuna, 100 trials, 2026-06-05) ───────
+# ── LightGBM Hyperparameters (tuned via Optuna, 100 trials, 2026-06-05) ─────
 # MIN_FIGHT_DATE=2018-01-01 + Glicko-2 features  |  run: python ml/lightgbm_model.py --tune --trials 100
 LGBM_PARAMS: dict = {
     "n_estimators":     713,
@@ -122,6 +130,19 @@ LGBM_PARAMS: dict = {
     "colsample_bytree": 0.4916,
     "reg_alpha":        0.7324,
     "reg_lambda":       1.2711,
+}
+
+# ── MLP Hyperparameters (PyTorch; tuned via PurgedWalkForwardCV, 50 trials, 2026-06-09) ──
+# run: python ml/train_v1_models.py --model mlp --tune --trials 50
+MLP_PARAMS: dict = {
+    "hidden_sizes": (256, 128, 64, 32),
+    "dropout":      0.4214,
+    "lr":           8.570e-4,
+    "weight_decay": 2.137e-3,
+    "batch_size":   64,
+    "max_epochs":   300,
+    "patience":     20,
+    "batch_norm":   False,
 }
 
 # ── Feature Engineering ───────────────────────────────────────────────────────
@@ -206,3 +227,85 @@ FINISH_CLASS_NAMES = ["Decision", "KO/TKO", "Submission"]
 # ── Finish Type Model Artifacts ───────────────────────────────────────────────
 MODEL_FINISH_PATH     = MODELS_DIR / "finish_type.joblib"
 MODEL_FINISH_FEATURES = MODELS_DIR / "finish_type_features.joblib"
+
+# ── Fighter name aliases ──────────────────────────────────────────────────────
+# Maps alternate/historical names (lowercased) -> canonical UFCStats name.
+# Covers Kaggle CSV typos, married name changes, nickname vs legal name, and
+# transliteration differences between the Kaggle dataset and UFCStats.
+# Keys must be lowercase; values must match the name in the fighters table.
+NAME_ALIASES: dict[str, str] = {
+    # Kaggle CSV typos
+    "alekander volkov":     "Alexander Volkov",
+    "caludia gadelha":      "Claudia Gadelha",
+    "caludio puelles":      "Claudio Puelles",
+    "krzystof jotko":       "Krzysztof Jotko",
+    "vincente luque":       "Vicente Luque",
+    "isabela de pauda":     "Isabela de Padua",
+    "ode obsourne":         "Ode Osbourne",
+    "youssef zalel":        "Youssef Zalal",
+    "zhalgas zhamagulov":   "Zhalgas Zhumagulov",
+    "nina ansaroff":        "Nina Nunes",
+    "ariane lipski":        "Ariane da Silva",
+    "brianna van buren":    "Brianna Fortino",
+    "ulka sasaki":          "Yuta Sasaki",
+    "roberto sanchez":      "Robert Sanchez",
+    # Married name changes
+    "ariane lipski":        "Ariane Carnelossi",
+    "cheyanne buys":        "Cheyanne Vlismas",
+    "joanne calderwood":    "Joanne Wood",
+    "katlyn chookagian":    "Katlyn Cerminara",
+    "michelle waterson":    "Michelle Waterson-Gomez",
+    "nina ansaroff":        "Nina Nunes",
+    "tecia torres":         "Tecia Pennington",
+    # Nickname / ring name vs legal name
+    "cris cyborg":          "Cristiane Justino",
+    "mirko cro cop":        "Mirko Filipovic",
+    "rampage jackson":      "Quinton Jackson",
+    "minotauro nogueira":   "Antonio Rodrigo Nogueira",
+    "patricio freire":      "Patricio Pitbull",
+    # Name format differences (spacing, transliteration, Chinese name order)
+    "weili zhang":          "Zhang Weili",
+    "tiequan zhang":        "Zhang Tiequan",
+    "na liang":             "Liang Na",
+    "aori qileng":          "Aoriqileng",
+    "rong zhu":             "Rongzhu",
+    "su mudaerji":          "Sumudaerji",
+    "wuliji buren":         "Wulijiburen",
+    "heili alateng":        "Alatengheili",
+    "an ying wang":         "Anying Wang",
+    "seohee ham":           "Seo Hee Ham",
+    "da un jung":           "Da Woon Jung",
+    "da-un jung":           "Da Woon Jung",
+    "jun yong park":        "JunYong Park",
+    "chanmi jeon":          "Chan-Mi Jeon",
+    "roldan sangcha-an":    "Roldan Sangcha'an",
+    # Shortened / informal vs full name
+    "alex munoz":           "Alexander Munoz",
+    "alexandra albu":       "Aleksandra Albu",
+    "ali qaisi":            "Ali AlQaisi",
+    "benny alloway":        "Ben Alloway",
+    "bradley scott":        "Brad Scott",
+    "carlo pedersoli":      "Carlo Pedersoli Jr.",
+    "costas philippou":     "Constantinos Philippou",
+    "grigorii popov":       "Grigory Popov",
+    "heather jo clark":     "Heather Clark",
+    "ian garry":            "Ian Machado Garry",
+    "jim crute":            "Jimmy Crute",
+    "jimmy wallhead":       "Jim Wallhead",
+    "joshua culibao":       "Josh Culibao",
+    "joshua sampo":         "Josh Sampo",
+    "kai kamaka":           "Kai Kamaka III",
+    "kai kara france":      "Kai Kara-France",
+    "luci pudilova":        "Lucie Pudilova",
+    "montserrat conejo":    "Montserrat Conejo Ruiz",
+    "montserrat rendon":    "Montse Rendon",
+    "nico musoke":          "Nicholas Musoke",
+    "peter yan":            "Petr Yan",
+    "philip rowe":          "Phil Rowe",
+    "phillip hawes":        "Phil Hawes",
+    "rick glenn":           "Ricky Glenn",
+    "rob whiteford":        "Robert Whiteford",
+    "roberto sanchez":      "Robert Sanchez",
+    "waldo cortes-acosta":  "Waldo Cortes Acosta",
+    "zachary reese":        "Zach Reese",
+}

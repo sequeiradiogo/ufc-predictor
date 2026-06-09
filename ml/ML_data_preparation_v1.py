@@ -42,6 +42,7 @@ from config import (
     FINISH_METHOD_MAP,
     META_COLS,
     MIN_FIGHT_DATE,
+    NAME_ALIASES,
     RANDOM_STATE,
     RECENT_FORM_WINDOW,
     SAMPLE_WEIGHT_ALPHA,
@@ -50,20 +51,14 @@ from config import (
     TRAIN_TEST_SPLIT,
     TRAJECTORY_WINDOW,
 )
-from ml.ELO_calculator import build_elo_features, build_glicko_features
 from ml.ML_data_preparation import (
     _rolling_slope,
-    compute_finish_rates,
-    compute_inactivity,
-    compute_ko_vulnerability,
     compute_sample_weights,
-    compute_sos_features,
 )
 from utils.logger import get_logger
 
 log = get_logger(__name__)
 
-_EPS = 1e-6
 
 # Career-aggregate columns from v1 fight_stats to diff
 _STAT_COLS = [
@@ -273,12 +268,7 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
     log.info("Loading fights and fight_stats from v1 DB...")
 
     fights = pd.read_sql_query(
-        """
-        SELECT fight_id, date, division,
-               r_fighter_id, b_fighter_id, winner_id, method, title_fight
-        FROM fights
-        ORDER BY date ASC, fight_id ASC
-        """,
+        "SELECT * FROM fights ORDER BY date ASC, fight_id ASC",
         conn,
     )
     fights["date"] = pd.to_datetime(fights["date"])
@@ -302,102 +292,21 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
         .merge(b_stats, on="fight_id", how="left")
     )
 
-    # ── ELO ──────────────────────────────────────────────────────────────────
-    log.info("Building ELO features...")
-    elo_df = build_elo_features(conn)
-    wide = wide.merge(elo_df, on="fight_id", how="left")
-
-    # ── Glicko-2 (PR 52) ─────────────────────────────────────────────────────
-    log.info("Building Glicko-2 features...")
-    glicko_df = build_glicko_features(conn)
-    wide = wide.merge(glicko_df, on="fight_id", how="left")
-
-    # ── Recent form ───────────────────────────────────────────────────────────
-    form_df = _compute_recent_form_v1(conn)
-
-    form_red  = form_df.rename(columns={
-        "recent_win_rate":    "recent_win_rate_red",
-        "recent_finish_rate": "recent_finish_rate_red",
-    })
-    form_blue = form_df.rename(columns={
-        "recent_win_rate":    "recent_win_rate_blue",
-        "recent_finish_rate": "recent_finish_rate_blue",
-    })
-    wide = wide.merge(
-        form_red[["fight_id", "fighter_id", "recent_win_rate_red", "recent_finish_rate_red"]],
-        left_on=["fight_id", "r_fighter_id"], right_on=["fight_id", "fighter_id"],
-        how="left",
-    ).drop(columns=["fighter_id"])
-    wide = wide.merge(
-        form_blue[["fight_id", "fighter_id", "recent_win_rate_blue", "recent_finish_rate_blue"]],
-        left_on=["fight_id", "b_fighter_id"], right_on=["fight_id", "fighter_id"],
-        how="left",
-    ).drop(columns=["fighter_id"])
-
-    # ── Finish rates (PR 36) ─────────────────────────────────────────────────
-    fin_df = compute_finish_rates(conn)
-    for corner, fid_col in [("red", "r_fighter_id"), ("blue", "b_fighter_id")]:
-        suffix = f"_{corner}"
-        fin_renamed = fin_df.rename(columns={
-            "ko_rate":  f"ko_rate{suffix}",
-            "sub_rate": f"sub_rate{suffix}",
-            "dec_rate": f"dec_rate{suffix}",
-        })
-        wide = wide.merge(
-            fin_renamed[["fight_id", "fighter_id", f"ko_rate{suffix}", f"sub_rate{suffix}", f"dec_rate{suffix}"]],
-            left_on=["fight_id", fid_col], right_on=["fight_id", "fighter_id"],
-            how="left",
-        ).drop(columns=["fighter_id"])
-
-    # ── Inactivity (PR 36) ────────────────────────────────────────────────────
-    inact_df = compute_inactivity(conn)
-    for corner, fid_col in [("red", "r_fighter_id"), ("blue", "b_fighter_id")]:
-        suffix = f"_{corner}"
-        inact_renamed = inact_df.rename(columns={"days_since_last": f"days_since_last{suffix}"})
-        wide = wide.merge(
-            inact_renamed[["fight_id", "fighter_id", f"days_since_last{suffix}"]],
-            left_on=["fight_id", fid_col], right_on=["fight_id", "fighter_id"],
-            how="left",
-        ).drop(columns=["fighter_id"])
-
-    # ── KO vulnerability (PR 36) ──────────────────────────────────────────────
-    kovuln_df = compute_ko_vulnerability(conn)
-    for corner, fid_col in [("red", "r_fighter_id"), ("blue", "b_fighter_id")]:
-        suffix = f"_{corner}"
-        kv_renamed = kovuln_df.rename(columns={"ko_vuln": f"ko_vuln{suffix}"})
-        wide = wide.merge(
-            kv_renamed[["fight_id", "fighter_id", f"ko_vuln{suffix}"]],
-            left_on=["fight_id", fid_col], right_on=["fight_id", "fighter_id"],
-            how="left",
-        ).drop(columns=["fighter_id"])
-
-    # ── Slope features (PR 46 equivalent) ────────────────────────────────────
-    slope_df = compute_slope_features_v1(conn)
-    slope_cols = ["str_acc_slope", "splm_slope", "td_acc_slope"]
-    for corner, fid_col in [("red", "r_fighter_id"), ("blue", "b_fighter_id")]:
-        suffix = f"_{corner}"
-        sl_renamed = slope_df.rename(columns={c: f"{c}{suffix}" for c in slope_cols})
-        wide = wide.merge(
-            sl_renamed[["fight_id", "fighter_id"] + [f"{c}{suffix}" for c in slope_cols]],
-            left_on=["fight_id", fid_col], right_on=["fight_id", "fighter_id"],
-            how="left",
-        ).drop(columns=["fighter_id"])
-
-    # ── SOS (PR 36) -- uses elo_red/blue already in wide ─────────────────────
-    sos_df = compute_sos_features(
-        wide[["fight_id", "date", "r_fighter_id", "b_fighter_id", "elo_red", "elo_blue"]]
+    # ── Pre-computed features (stored in fight_stats via ingest_mdabbert.py) ──
+    # All features were pre-computed by add_computed_features_to_csv.py and
+    # ingested as r_<col>/b_<col> in fight_stats. Alias to <col>_red/<col>_blue
+    # for the diff section below.
+    _PRECOMPUTED = (
+        "elo", "glicko", "glicko_rd",
+        "recent_win_rate", "recent_finish_rate",
+        "sos", "ko_rate", "sub_rate", "dec_rate",
+        "days_since_last", "ko_vuln",
+        "str_acc_slope", "splm_slope", "td_acc_slope",
+        "sapm", "str_def", "td_def",
     )
-    for corner, fid_col in [("red", "r_fighter_id"), ("blue", "b_fighter_id")]:
-        suffix = f"_{corner}"
-        sos_renamed = sos_df.rename(columns={"sos": f"sos{suffix}"})
-        wide = wide.merge(
-            sos_renamed[["fight_id", "fighter_id", f"sos{suffix}"]],
-            left_on=["fight_id", fid_col], right_on=["fight_id", "fighter_id"],
-            how="left",
-        ).drop(columns=["fighter_id"])
-
-    # ── v2 defensive metrics (sapm, str_def, td_def) via name matching ────────
-    wide = enrich_from_v2(wide, conn)
+    for col in _PRECOMPUTED:
+        wide[f"{col}_red"]  = pd.to_numeric(wide.get(f"r_{col}"), errors="coerce")
+        wide[f"{col}_blue"] = pd.to_numeric(wide.get(f"b_{col}"), errors="coerce")
 
     # ── Build output ──────────────────────────────────────────────────────────
     log.info("Building diff and derived features...")
@@ -425,81 +334,34 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
         b_col = wide[f"{stat}_blue"].fillna(0)
         ml[f"{stat}_diff"] = (r_col - b_col).values
 
-    # Style ratios
-    r_splm   = pd.to_numeric(wide.get("r_splm",   0), errors="coerce").fillna(0)
-    r_td_avg = pd.to_numeric(wide.get("r_td_avg", 0), errors="coerce").fillna(0)
-    b_splm   = pd.to_numeric(wide.get("b_splm",   0), errors="coerce").fillna(0)
-    b_td_avg = pd.to_numeric(wide.get("b_td_avg", 0), errors="coerce").fillna(0)
+    # Style, stance, division, rank features -- pre-computed in fights table
+    for col in (
+        "grapple_ratio_diff", "striker_vs_wrestler", "wrestler_vs_striker",
+        "southpaw_adv_diff", "both_southpaw", "weightclass_rank_diff",
+    ):
+        ml[col] = pd.to_numeric(wide[col] if col in wide.columns else 0, errors="coerce").fillna(0).values
 
-    r_denom = r_splm + r_td_avg + _EPS
-    b_denom = b_splm + b_td_avg + _EPS
-    r_grapple = r_td_avg / r_denom
-    r_strike  = r_splm   / r_denom
-    b_grapple = b_td_avg / b_denom
-    b_strike  = b_splm   / b_denom
-
-    ml["grapple_ratio_diff"]  = r_grapple - b_grapple
-    ml["striker_vs_wrestler"] = r_strike  * b_grapple
-    ml["wrestler_vs_striker"] = r_grapple * b_strike
-
-    # Stance matchup (PR 36) -- fight_stats already has stance per row
-    stance_r = wide["r_stance"].fillna("Orthodox").str.strip().str.lower()
-    stance_b = wide["b_stance"].fillna("Orthodox").str.strip().str.lower()
-    red_sp  = stance_r == "southpaw"
-    blue_sp = stance_b == "southpaw"
-    red_or  = stance_r == "orthodox"
-    blue_or = stance_b == "orthodox"
-    ml["southpaw_adv_diff"] = ((red_sp & blue_or).astype(int) - (red_or & blue_sp).astype(int)).values
-    ml["both_southpaw"]     = (red_sp & blue_sp).astype(int).values
-
-    # Finish rate diffs (PR 36)
-    for stat in ("ko_rate", "sub_rate", "dec_rate"):
-        r_col = pd.to_numeric(wide[f"{stat}_red"],  errors="coerce").fillna(0)
-        b_col = pd.to_numeric(wide[f"{stat}_blue"], errors="coerce").fillna(0)
-        ml[f"{stat}_diff"] = (r_col - b_col).values
-
-    # Inactivity (PR 36)
-    inact_r = pd.to_numeric(wide["days_since_last_red"],  errors="coerce").fillna(365)
-    inact_b = pd.to_numeric(wide["days_since_last_blue"], errors="coerce").fillna(365)
-    ml["days_since_last_diff"] = (inact_r - inact_b).values
-
-    # SOS (PR 36)
-    sos_r = pd.to_numeric(wide["sos_red"],  errors="coerce").fillna(STARTING_ELO)
-    sos_b = pd.to_numeric(wide["sos_blue"], errors="coerce").fillna(STARTING_ELO)
-    ml["sos_diff"] = (sos_r - sos_b).values
-
-    # KO vulnerability (PR 36)
-    kv_r = pd.to_numeric(wide["ko_vuln_red"],  errors="coerce").fillna(0)
-    kv_b = pd.to_numeric(wide["ko_vuln_blue"], errors="coerce").fillna(0)
-    ml["ko_vuln_diff"] = (kv_r - kv_b).values
-
-    # Slope features (PR 46 equivalent for v1)
-    for stat in ("str_acc_slope", "splm_slope", "td_acc_slope"):
-        r_col = pd.to_numeric(wide[f"{stat}_red"],  errors="coerce").fillna(0)
-        b_col = pd.to_numeric(wide[f"{stat}_blue"], errors="coerce").fillna(0)
-        ml[f"{stat}_diff"] = (r_col - b_col).values
-
-    # v2 defensive metrics (sapm, str_def, td_def)
-    for stat in ("sapm", "str_def", "td_def"):
-        r_col = pd.to_numeric(wide[f"{stat}_red"],  errors="coerce").fillna(0)
-        b_col = pd.to_numeric(wide[f"{stat}_blue"], errors="coerce").fillna(0)
-        ml[f"{stat}_diff"] = (r_col - b_col).values
-
-    # UFC ranking differential (unranked encoded as 16)
-    _UNRANKED = 16.0
-    r_rank = pd.to_numeric(wide.get("r_weightclass_rank", 0), errors="coerce").fillna(0)
-    b_rank = pd.to_numeric(wide.get("b_weightclass_rank", 0), errors="coerce").fillna(0)
-    r_rank_enc = r_rank.where(r_rank > 0, _UNRANKED)
-    b_rank_enc = b_rank.where(b_rank > 0, _UNRANKED)
-    ml["weightclass_rank_diff"] = (r_rank_enc - b_rank_enc).values
-
-    # Division one-hot
-    def _div_col(name: str) -> str:
-        return "div_" + name.replace(" ", "_").replace("'", "")
-
-    div_lower = wide["division"].str.lower().str.strip().fillna("")
     for div in DIVISIONS:
-        ml[_div_col(div)] = (div_lower == div).astype(int).values
+        col = "div_" + div.replace(" ", "_").replace("'", "")
+        ml[col] = pd.to_numeric(wide[col] if col in wide.columns else 0, errors="coerce").fillna(0).astype(int).values
+
+    # Simple diffs for all pre-stored per-fighter features
+    _DIFF_STATS = (
+        "recent_win_rate", "recent_finish_rate",
+        "ko_rate", "sub_rate", "dec_rate",
+        "days_since_last", "sos", "ko_vuln",
+        "str_acc_slope", "splm_slope", "td_acc_slope",
+        "sapm", "str_def", "td_def",
+    )
+    _FILLNA = {
+        "days_since_last": 365,
+        "sos": STARTING_ELO,
+    }
+    for stat in _DIFF_STATS:
+        fill = _FILLNA.get(stat, 0)
+        r_col = wide[f"{stat}_red"].fillna(fill)
+        b_col = wide[f"{stat}_blue"].fillna(fill)
+        ml[f"{stat}_diff"] = (r_col - b_col).values
 
     ml["title_fight"] = pd.to_numeric(wide["title_fight"], errors="coerce").fillna(0).astype(int).values
 

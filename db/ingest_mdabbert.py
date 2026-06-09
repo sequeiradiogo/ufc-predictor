@@ -125,12 +125,22 @@ def ingest(csv_path: Path, db_path: Path) -> None:
 
     # ── fights ────────────────────────────────────────────────────────────────
     log.info("Building fights table…")
+
+    # Pre-computed fight-level features (from add_computed_features_to_csv.py)
+    _DIV_COLS = [
+        c for c in df.columns
+        if c.startswith("div_") or c in (
+            "grapple_ratio_diff", "striker_vs_wrestler", "wrestler_vs_striker",
+            "southpaw_adv_diff", "both_southpaw", "weightclass_rank_diff",
+        )
+    ]
+
     fights = df[[
         "fight_id", "date", "r_fighter_id", "b_fighter_id",
         "winner_id", "method", "weight_class", "title_bout",
         "R_odds", "B_odds", "finish_round", "total_fight_time_secs",
         "no_of_rounds", "gender",
-    ]].rename(columns={
+    ] + _DIV_COLS].rename(columns={
         "weight_class":          "division",
         "title_bout":            "title_fight",
         "R_odds":                "odds_red",
@@ -138,7 +148,7 @@ def ingest(csv_path: Path, db_path: Path) -> None:
         "total_fight_time_secs": "match_time_sec",
     }).copy()
 
-    fights["division"]   = fights["division"].str.lower()
+    fights["division"]    = fights["division"].str.lower()
     fights["title_fight"] = fights["title_fight"].astype(int)
     fights.to_sql("fights", conn, if_exists="replace", index=False)
     log.info("Inserted %d fights.", len(fights))
@@ -174,6 +184,25 @@ def ingest(csv_path: Path, db_path: Path) -> None:
         "win_by_sub":           ("R_win_by_Submission",  "B_win_by_Submission"),
         "win_by_dec_unanimous": ("R_win_by_Decision_Unanimous", "B_win_by_Decision_Unanimous"),
         "win_by_dec_split":     ("R_win_by_Decision_Split",     "B_win_by_Decision_Split"),
+        # Defensive metrics (from UFCStats, now stored in CSV)
+        "sapm":    ("R_sapm",    "B_sapm"),
+        "str_def": ("R_str_def", "B_str_def"),
+        "td_def":  ("R_td_def",  "B_td_def"),
+        # Pre-computed features (from add_computed_features_to_csv.py)
+        "elo":               ("R_elo",               "B_elo"),
+        "glicko":            ("R_glicko",            "B_glicko"),
+        "glicko_rd":         ("R_glicko_rd",         "B_glicko_rd"),
+        "recent_win_rate":   ("R_recent_win_rate",   "B_recent_win_rate"),
+        "recent_finish_rate":("R_recent_finish_rate","B_recent_finish_rate"),
+        "sos":               ("R_sos",               "B_sos"),
+        "str_acc_slope":     ("R_str_acc_slope",     "B_str_acc_slope"),
+        "splm_slope":        ("R_splm_slope",        "B_splm_slope"),
+        "td_acc_slope":      ("R_td_acc_slope",      "B_td_acc_slope"),
+        "ko_rate":           ("R_ko_rate",           "B_ko_rate"),
+        "sub_rate":          ("R_sub_rate",          "B_sub_rate"),
+        "dec_rate":          ("R_dec_rate",          "B_dec_rate"),
+        "days_since_last":   ("R_days_since_last",   "B_days_since_last"),
+        "ko_vuln":           ("R_ko_vuln",           "B_ko_vuln"),
     }
 
     r_stats = df[["fight_id", "r_fighter_id"]].rename(columns={"r_fighter_id": "fighter_id"}).copy()
