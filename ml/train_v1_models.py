@@ -37,12 +37,17 @@ from config import (
     LGBM_PARAMS,
     LR_PARAMS,
     META_COLS,
+    MLP_PARAMS,
     MODEL_V1_ENSEMBLE_PATH,
+    MODEL_V1_STACKING_PATH,
     MODEL_V1_LGBM_FEATURES,
     MODEL_V1_LGBM_PATH,
     MODEL_V1_LR_FEATURES,
     MODEL_V1_LR_PATH,
     MODEL_V1_LR_SCALER,
+    MODEL_V1_MLP_FEATURES,
+    MODEL_V1_MLP_PATH,
+    MODEL_V1_MLP_SCALER,
     MODEL_V1_RF_FEATURES,
     MODEL_V1_RF_PATH,
     MODEL_V1_XGB_FEATURES,
@@ -56,6 +61,8 @@ from config import (
 )
 from ml.ML_data_preparation import compute_sample_weights
 from ml.ML_data_preparation_v1 import make_symmetric
+from ml.purged_cv import PurgedWalkForwardCV
+from ml.pytorch_mlp import PyTorchMLP
 from utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -65,7 +72,7 @@ MODELS_V1_DIR.mkdir(exist_ok=True)
 # Calibration holdout fraction of training data
 CAL_FRAC = 0.20
 
-_ALL_MODELS = ["xgb", "lr", "rf", "lgbm", "ensemble"]
+_ALL_MODELS = ["xgb", "lr", "rf", "lgbm", "mlp", "ensemble", "stacking"]
 
 
 # ── Data helpers ──────────────────────────────────────────────────────────────
@@ -135,7 +142,7 @@ def _tune_xgb(df: pd.DataFrame, n_trials: int) -> dict:
     import optuna
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     log.info("Tuning XGBoost (%d trials)...", n_trials)
-    tss = TimeSeriesSplit(n_splits=5)
+    pcv = PurgedWalkForwardCV(n_splits=5, gap_days=180)
     X_all, y_all = preprocess(df)
 
     def objective(trial) -> float:
@@ -152,7 +159,7 @@ def _tune_xgb(df: pd.DataFrame, n_trials: int) -> dict:
             "random_state":     RANDOM_STATE,
         }
         scores = []
-        for tr_idx, va_idx in tss.split(X_all):
+        for tr_idx, va_idx in pcv.split(df["date"]):
             sym = make_symmetric(df.iloc[tr_idx].copy())
             Xtr, ytr = preprocess(sym)
             Xva, yva = preprocess(df.iloc[va_idx])
@@ -216,10 +223,8 @@ def _tune_lr(df: pd.DataFrame, n_trials: int) -> dict:
     import optuna
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     log.info("Tuning LR (%d trials)...", n_trials)
-    tss = TimeSeriesSplit(n_splits=5)
+    pcv = PurgedWalkForwardCV(n_splits=5, gap_days=180)
     X_all, y_all = preprocess(df)
-    scaler_all = StandardScaler()
-    X_sc = scaler_all.fit_transform(X_all)
 
     def objective(trial) -> float:
         p = {
@@ -229,14 +234,15 @@ def _tune_lr(df: pd.DataFrame, n_trials: int) -> dict:
             "class_weight": trial.suggest_categorical("class_weight", [None, "balanced"]),
         }
         scores = []
-        for tr_idx, va_idx in tss.split(X_sc):
+        for tr_idx, va_idx in pcv.split(df["date"]):
             sym = make_symmetric(df.iloc[tr_idx].copy())
             Xtr, ytr = preprocess(sym)
-            Xtr_s = StandardScaler().fit_transform(Xtr)
-            Xva_s = StandardScaler().fit(Xtr).transform(X_all[va_idx])
+            sc = StandardScaler()
+            Xtr_s = sc.fit_transform(Xtr)
+            Xva_s = sc.transform(X_all.iloc[va_idx])
             m = LogisticRegression(**p)
             m.fit(Xtr_s, ytr, sample_weight=compute_sample_weights(sym["date"]))
-            scores.append(accuracy_score(y_all[va_idx], m.predict(Xva_s)))
+            scores.append(accuracy_score(y_all.iloc[va_idx], m.predict(Xva_s)))
         return float(np.mean(scores))
 
     study = optuna.create_study(direction="maximize")
@@ -274,7 +280,7 @@ def _tune_rf(df: pd.DataFrame, n_trials: int) -> dict:
     import optuna
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     log.info("Tuning RF (%d trials)...", n_trials)
-    tss = TimeSeriesSplit(n_splits=5)
+    pcv = PurgedWalkForwardCV(n_splits=5, gap_days=180)
     X_all, y_all = preprocess(df)
 
     def objective(trial) -> float:
@@ -288,12 +294,12 @@ def _tune_rf(df: pd.DataFrame, n_trials: int) -> dict:
             "random_state":      RANDOM_STATE,
         }
         scores = []
-        for tr_idx, va_idx in tss.split(X_all):
+        for tr_idx, va_idx in pcv.split(df["date"]):
             sym = make_symmetric(df.iloc[tr_idx].copy())
             Xtr, ytr = preprocess(sym)
             m = RandomForestClassifier(**p)
             m.fit(Xtr, ytr, sample_weight=compute_sample_weights(sym["date"]))
-            scores.append(accuracy_score(y_all[va_idx], m.predict(X_all.iloc[va_idx])))
+            scores.append(accuracy_score(y_all.iloc[va_idx], m.predict(X_all.iloc[va_idx])))
         return float(np.mean(scores))
 
     study = optuna.create_study(direction="maximize")
@@ -332,7 +338,7 @@ def _tune_lgbm(df: pd.DataFrame, n_trials: int) -> dict:
     import optuna
     optuna.logging.set_verbosity(optuna.logging.WARNING)
     log.info("Tuning LightGBM (%d trials)...", n_trials)
-    tss = TimeSeriesSplit(n_splits=5)
+    pcv = PurgedWalkForwardCV(n_splits=5, gap_days=180)
     X_all, y_all = preprocess(df)
 
     def objective(trial) -> float:
@@ -348,12 +354,12 @@ def _tune_lgbm(df: pd.DataFrame, n_trials: int) -> dict:
             "random_state":     RANDOM_STATE,
         }
         scores = []
-        for tr_idx, va_idx in tss.split(X_all):
+        for tr_idx, va_idx in pcv.split(df["date"]):
             sym = make_symmetric(df.iloc[tr_idx].copy())
             Xtr, ytr = preprocess(sym)
             m = LGBMClassifier(**p, verbosity=-1)
             m.fit(Xtr.values, ytr, sample_weight=compute_sample_weights(sym["date"]))
-            scores.append(accuracy_score(y_all[va_idx], m.predict(X_all.iloc[va_idx].values)))
+            scores.append(accuracy_score(y_all.iloc[va_idx], m.predict(X_all.iloc[va_idx].values)))
         return float(np.mean(scores))
 
     study = optuna.create_study(direction="maximize")
@@ -361,6 +367,191 @@ def _tune_lgbm(df: pd.DataFrame, n_trials: int) -> dict:
     best = {**study.best_params, "random_state": RANDOM_STATE}
     log.info("LightGBM best CV: %.2f%%  params: %s", study.best_value * 100, best)
     return best
+
+
+# ── MLP Neural Network ────────────────────────────────────────────────────────
+
+def train_mlp(df: pd.DataFrame, tune: bool = False, n_trials: int = 50) -> None:
+    log.info("=== MLP Neural Network (PyTorch) ===")
+    params = _tune_mlp(df, n_trials) if tune else {**MLP_PARAMS, "random_state": RANDOM_STATE}
+
+    # 70 / 10 / 20 chronological split: train / calibration / test
+    n       = len(df)
+    tr_end  = int(n * 0.70)
+    cal_end = int(n * 0.80)
+
+    train_sym  = make_symmetric(df.iloc[:tr_end].copy())
+    df_cal     = df.iloc[tr_end:cal_end]
+    df_test    = df.iloc[cal_end:]
+
+    X_tr, y_tr   = preprocess(train_sym)
+    X_cal, y_cal = preprocess(df_cal)
+    X_te, y_te   = preprocess(df_test)
+    feature_names = list(X_tr.columns)
+
+    scaler = StandardScaler()
+    X_tr_s  = scaler.fit_transform(X_tr)
+    X_cal_s = scaler.transform(X_cal)
+    X_te_s  = scaler.transform(X_te)
+
+    base = PyTorchMLP(**params)
+    base.fit(X_tr_s, y_tr.values)
+
+    # Isotonic calibration fitted on holdout slice inside the training window
+    raw_cal    = base.predict_proba(X_cal_s)[:, 1]
+    calibrator = IsotonicRegression(out_of_bounds="clip")
+    calibrator.fit(raw_cal, y_cal.values)
+
+    raw_te   = base.predict_proba(X_te_s)[:, 1]
+    probs_te = calibrator.predict(raw_te)
+    acc = accuracy_score(y_te, (probs_te >= 0.5).astype(int))
+    log.info("MLP test accuracy: %.2f%%", acc * 100)
+    print(f"MLP test accuracy: {acc:.2%}")
+
+    joblib.dump({"base": base, "platt": calibrator}, MODEL_V1_MLP_PATH)
+    joblib.dump(scaler,        MODEL_V1_MLP_SCALER)
+    joblib.dump(feature_names, MODEL_V1_MLP_FEATURES)
+    log.info("Saved mlp.joblib + mlp_scaler.joblib + mlp_features.joblib")
+
+
+def _tune_mlp(df: pd.DataFrame, n_trials: int) -> dict:
+    import optuna
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+    log.info("Tuning MLP (%d trials)...", n_trials)
+    pcv = PurgedWalkForwardCV(n_splits=5, gap_days=180)
+    X_all, y_all = preprocess(df)
+
+    def objective(trial) -> float:
+        p = {
+            "hidden_sizes": trial.suggest_categorical(
+                "hidden_sizes",
+                [(64, 64), (128, 64), (128, 128), (256, 128, 64), (256, 128, 64, 32)],
+            ),
+            "dropout":       trial.suggest_float("dropout",       0.1, 0.5),
+            "lr":            trial.suggest_float("lr",            1e-4, 1e-2, log=True),
+            "weight_decay":  trial.suggest_float("weight_decay",  1e-5, 1e-2, log=True),
+            "batch_size":    trial.suggest_categorical("batch_size", [32, 64, 128]),
+            "batch_norm":    trial.suggest_categorical("batch_norm", [True, False]),
+            "max_epochs":    200,
+            "patience":      15,
+            "random_state":  RANDOM_STATE,
+        }
+        scores = []
+        for tr_idx, va_idx in pcv.split(df["date"]):
+            sym = make_symmetric(df.iloc[tr_idx].copy())
+            Xtr, ytr = preprocess(sym)
+            sc = StandardScaler()
+            Xtr_s = sc.fit_transform(Xtr)
+            Xva_s = sc.transform(X_all.iloc[va_idx])
+            m = PyTorchMLP(**p)
+            m.fit(Xtr_s, ytr.values)
+            scores.append(accuracy_score(y_all.iloc[va_idx], m.predict(Xva_s)))
+        return float(np.mean(scores))
+
+    study = optuna.create_study(direction="maximize")
+    study.optimize(objective, n_trials=n_trials, show_progress_bar=True, catch=(Exception,))
+    best = {**study.best_params, "random_state": RANDOM_STATE, "max_epochs": 300, "patience": 20}
+    log.info("MLP best CV: %.2f%%  params: %s", study.best_value * 100, best)
+    return best
+
+
+# ── Stacking meta-learner ─────────────────────────────────────────────────────
+
+def train_stacking(df: pd.DataFrame) -> None:
+    """
+    Train a LogisticRegression meta-learner on top of the 5 calibrated base models.
+
+    Uses the 70/10/20 chronological split:
+      - 70%  training window  -- base models were already trained here (no leakage)
+      - 10%  meta-train slice -- base model predictions on unseen data feed meta-LR
+      - 20%  test             -- honest hold-out for accuracy reporting
+
+    The stacking artifact is a dict with:
+      "meta": LogisticRegression fitted on stacked probs
+      "meta_scaler": StandardScaler for the stacked probability matrix
+      "specs": list of (m_key, m_path, f_path, s_path, is_lr)
+    """
+    log.info("=== Stacking Meta-Learner ===")
+
+    n       = len(df)
+    tr_end  = int(n * 0.70)
+    cal_end = int(n * 0.80)
+
+    df_meta = df.iloc[tr_end:cal_end]   # meta-train slice
+    df_test = df.iloc[cal_end:]          # honest hold-out
+
+    feature_cols = [c for c in df.columns if c not in META_COLS]
+
+    specs = [
+        ("xgb",  MODEL_V1_XGB_PATH,  MODEL_V1_XGB_FEATURES,  None,                False),
+        ("lr",   MODEL_V1_LR_PATH,   MODEL_V1_LR_FEATURES,   MODEL_V1_LR_SCALER,  True),
+        ("rf",   MODEL_V1_RF_PATH,   MODEL_V1_RF_FEATURES,   None,                False),
+        ("lgbm", MODEL_V1_LGBM_PATH, MODEL_V1_LGBM_FEATURES, None,                False),
+        ("mlp",  MODEL_V1_MLP_PATH,  MODEL_V1_MLP_FEATURES,  MODEL_V1_MLP_SCALER, True),
+    ]
+
+    def _raw_proba(artifact, feat_names, scaler, is_lr, X_df) -> np.ndarray:
+        Xm = X_df.reindex(columns=feat_names, fill_value=0).fillna(0)
+        Xi = scaler.transform(Xm) if scaler else Xm.values
+        base = artifact["base"] if is_lr else artifact
+        if hasattr(base, "predict_proba"):
+            return base.predict_proba(Xi)[:, 1]
+        return base.predict(Xi).astype(float)
+
+    loaded = []
+    for m_key, m_path, f_path, s_path, is_lr in specs:
+        if not m_path.exists() or not f_path.exists():
+            log.warning("Skipping %s -- not found", m_key)
+            continue
+        artifact   = joblib.load(m_path)
+        feat_names = joblib.load(f_path)
+        scaler     = joblib.load(s_path) if s_path and s_path.exists() else None
+        loaded.append((m_key, artifact, feat_names, scaler, is_lr))
+
+    if len(loaded) < 2:
+        log.error("Need at least 2 trained base models.")
+        sys.exit(1)
+
+    log.info("Building stacked feature matrix from %d models", len(loaded))
+    X_meta_df = df_meta[feature_cols]
+    X_test_df = df_test[feature_cols]
+    y_meta    = df_meta[TARGET_COL].values
+    y_test    = df_test[TARGET_COL].values
+
+    # Collect raw base-model probabilities (no additional calibration — meta-LR learns the mapping)
+    meta_probs = []
+    test_probs = []
+    for m_key, artifact, feat_names, scaler, is_lr in loaded:
+        meta_probs.append(_raw_proba(artifact, feat_names, scaler, is_lr, X_meta_df))
+        test_probs.append(_raw_proba(artifact, feat_names, scaler, is_lr, X_test_df))
+
+    X_meta_stack = np.column_stack(meta_probs)
+    X_test_stack = np.column_stack(test_probs)
+
+    meta_sc = StandardScaler()
+    X_meta_s = meta_sc.fit_transform(X_meta_stack)
+    X_test_s = meta_sc.transform(X_test_stack)
+
+    meta_lr = LogisticRegression(C=0.1, max_iter=1000, random_state=RANDOM_STATE)
+    meta_lr.fit(X_meta_s, y_meta)
+
+    acc = accuracy_score(y_test, meta_lr.predict(X_test_s))
+    log.info("Stacking test accuracy: %.2f%%", acc * 100)
+    print(f"Stacking test accuracy: {acc:.2%}")
+    print("Meta-LR coefficients per model:")
+    for (m_key, *_), coef in zip(loaded, meta_lr.coef_[0]):
+        print(f"  {m_key:<8s}  {coef:+.4f}")
+
+    joblib.dump({
+        "meta":        meta_lr,
+        "meta_scaler": meta_sc,
+        "specs":       [(m_key, m_path, f_path, s_path, is_lr)
+                        for m_key, m_path, f_path, s_path, is_lr in
+                        [(s[0], s[1], s[2], s[3], s[4]) for s in specs
+                         if any(x[0] == s[0] for x in loaded)]],
+        "model_keys":  [x[0] for x in loaded],
+    }, MODEL_V1_STACKING_PATH)
+    log.info("Saved stacking.joblib")
 
 
 _OPTUNA_MIN_ROWS = 50   # fall back to equal weights if tuning window is thinner
@@ -413,10 +604,11 @@ def train_ensemble(df: pd.DataFrame, n_trials: int = 100) -> None:
     )
 
     specs = [
-        ("xgb",  MODEL_V1_XGB_PATH,  MODEL_V1_XGB_FEATURES,  None,              False),
+        ("xgb",  MODEL_V1_XGB_PATH,  MODEL_V1_XGB_FEATURES,  None,               False),
         ("lr",   MODEL_V1_LR_PATH,   MODEL_V1_LR_FEATURES,   MODEL_V1_LR_SCALER, True),
-        ("rf",   MODEL_V1_RF_PATH,   MODEL_V1_RF_FEATURES,   None,              False),
-        ("lgbm", MODEL_V1_LGBM_PATH, MODEL_V1_LGBM_FEATURES, None,              False),
+        ("rf",   MODEL_V1_RF_PATH,   MODEL_V1_RF_FEATURES,   None,               False),
+        ("lgbm", MODEL_V1_LGBM_PATH, MODEL_V1_LGBM_FEATURES, None,               False),
+        ("mlp",  MODEL_V1_MLP_PATH,  MODEL_V1_MLP_FEATURES,  MODEL_V1_MLP_SCALER, True),
     ]
 
     loaded = []
@@ -485,9 +677,17 @@ def train_ensemble(df: pd.DataFrame, n_trials: int = 100) -> None:
             ens    = np.average(tune_probas, axis=0, weights=w_norm)
             return ((ens[:, 1] >= 0.5).astype(int) == y_tune).mean()
 
-        study = optuna.create_study(direction="maximize")
-        study.optimize(objective, n_trials=n_trials)
-        best_raw     = [study.best_params[f"w_{k}"] for k in model_keys]
+        # Run multiple independent studies and keep the best to reduce variance.
+        _n_restarts = 5
+        _trials_each = max(n_trials, 100)  # at least 100 trials per restart
+        best_value  = -1.0
+        best_raw    = None
+        for _ in range(_n_restarts):
+            study = optuna.create_study(direction="maximize")
+            study.optimize(objective, n_trials=_trials_each)
+            if study.best_value > best_value:
+                best_value = study.best_value
+                best_raw   = [study.best_params[f"w_{k}"] for k in model_keys]
         best_total   = sum(best_raw)
         best_weights = {k: w / best_total for k, w in zip(model_keys, best_raw)}
     else:
@@ -569,8 +769,12 @@ def main() -> None:
             train_rf(df, tune=args.tune, n_trials=args.trials)
         elif target == "lgbm":
             train_lgbm(df, tune=args.tune, n_trials=args.trials)
+        elif target == "mlp":
+            train_mlp(df, tune=args.tune, n_trials=args.trials)
         elif target == "ensemble":
             train_ensemble(df, n_trials=args.trials if args.tune else 100)
+        elif target == "stacking":
+            train_stacking(df)
 
 
 if __name__ == "__main__":
