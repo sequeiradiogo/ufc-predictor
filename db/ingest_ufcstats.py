@@ -69,6 +69,8 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             fight_id      TEXT PRIMARY KEY,
             event_id      TEXT,
             date          TEXT,
+            location      TEXT,
+            country       TEXT,
             division      TEXT,
             r_fighter_id  TEXT,
             b_fighter_id  TEXT,
@@ -80,7 +82,8 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             finish_round  INTEGER,
             match_time_sec INTEGER,
             no_of_rounds  INTEGER,
-            gender        TEXT
+            gender        TEXT,
+            finish_details TEXT
         );
 
         CREATE TABLE IF NOT EXISTS fight_stats (
@@ -183,38 +186,46 @@ def ingest(data: dict, db_path: Path = DB_UFCSTATS_PATH) -> None:
         no_of_rounds = 5 if f.get("title_fight") else 3
         match_time_sec = _round_time_secs(f.get("finish_round_time", "0:00"))
         fights_rows.append({
-            "fight_id":      f["fight_id"],
-            "event_id":      f.get("event_id"),
-            "date":          f["date"],
-            "division":      div,
-            "r_fighter_id":  f["r_fighter_id"],
-            "b_fighter_id":  f["b_fighter_id"],
-            "winner_id":     f.get("winner_id"),
-            "method":        f.get("method"),
-            "title_fight":   int(f.get("title_fight", 0)),
-            "odds_red":      f.get("odds_red"),
-            "odds_blue":     f.get("odds_blue"),
-            "finish_round":  f.get("finish_round"),
+            "fight_id":       f["fight_id"],
+            "event_id":       f.get("event_id"),
+            "date":           f["date"],
+            "location":       f.get("location", ""),
+            "country":        f.get("country", ""),
+            "division":       div,
+            "r_fighter_id":   f["r_fighter_id"],
+            "b_fighter_id":   f["b_fighter_id"],
+            "winner_id":      f.get("winner_id"),
+            "method":         f.get("method"),
+            "title_fight":    int(f.get("title_fight", 0)),
+            "odds_red":       f.get("odds_red"),
+            "odds_blue":      f.get("odds_blue"),
+            "finish_round":   f.get("finish_round"),
             "match_time_sec": match_time_sec,
-            "no_of_rounds":  no_of_rounds,
-            "gender":        gender,
+            "no_of_rounds":   no_of_rounds,
+            "gender":         gender,
+            "finish_details": f.get("finish_details", ""),
         })
 
     cur.executemany(
         """
         INSERT INTO fights (
-            fight_id, event_id, date, division, r_fighter_id, b_fighter_id,
-            winner_id, method, title_fight, odds_red, odds_blue,
-            finish_round, match_time_sec, no_of_rounds, gender
+            fight_id, event_id, date, location, country, division,
+            r_fighter_id, b_fighter_id, winner_id, method, title_fight,
+            odds_red, odds_blue, finish_round, match_time_sec, no_of_rounds,
+            gender, finish_details
         ) VALUES (
-            :fight_id, :event_id, :date, :division, :r_fighter_id, :b_fighter_id,
-            :winner_id, :method, :title_fight, :odds_red, :odds_blue,
-            :finish_round, :match_time_sec, :no_of_rounds, :gender
+            :fight_id, :event_id, :date, :location, :country, :division,
+            :r_fighter_id, :b_fighter_id, :winner_id, :method, :title_fight,
+            :odds_red, :odds_blue, :finish_round, :match_time_sec, :no_of_rounds,
+            :gender, :finish_details
         )
         ON CONFLICT(fight_id) DO UPDATE SET
-            winner_id     = COALESCE(excluded.winner_id, fights.winner_id),
-            odds_red      = COALESCE(excluded.odds_red,  fights.odds_red),
-            odds_blue     = COALESCE(excluded.odds_blue, fights.odds_blue)
+            winner_id      = COALESCE(excluded.winner_id,      fights.winner_id),
+            odds_red       = COALESCE(excluded.odds_red,       fights.odds_red),
+            odds_blue      = COALESCE(excluded.odds_blue,      fights.odds_blue),
+            location       = COALESCE(NULLIF(excluded.location, ''),       fights.location),
+            country        = COALESCE(NULLIF(excluded.country, ''),        fights.country),
+            finish_details = COALESCE(NULLIF(excluded.finish_details, ''), fights.finish_details)
         """,
         fights_rows,
     )

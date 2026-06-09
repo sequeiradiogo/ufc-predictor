@@ -1,26 +1,53 @@
 # UFC Fight Night: Muhammad vs. Bonfim -- June 6, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-06-06
+Model: Ensemble (Soft Vote) | Generated: 2026-06-06 | Scored: 2026-06-09
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
+
+**Result: 7/11 correct (63.6%)**
 
 ---
 
 ## Predictions
 
-| Fight | Predicted Winner | Confidence | Likely Method |
-|---|---|---|---|
-| Belal Muhammad vs Gabriel Bonfim | Gabriel Bonfim | 84.7% | N/A |
-| Brendan Allen vs Edmen Shahbazyan | Brendan Allen | 52.6% | N/A |
-| Fares Ziam vs Tom Nolan | Fares Ziam | 83.5% | N/A |
-| Bryce Mitchell vs Santiago Luna | Santiago Luna | 74.8% | N/A |
-| Iwo Baraniewski vs Junior Tafa | Iwo Baraniewski | 79.4% | N/A |
-| Matt Schnell vs Alessandro Costa | Matt Schnell | 71.7% | N/A |
-| Marcus McGhee vs John Yannis | Marcus McGhee | 94.6% | N/A |
-| Bruno Silva vs Edgar Chairez | Bruno Silva | 71.2% | N/A |
-| Priscila Cachoeira vs Chelsea Chandler | Chelsea Chandler | 54.4% | N/A |
-| Jordan Leavitt vs Joanderson Brito | Joanderson Brito | 51.1% | N/A |
-| Ketlen Souza vs Ariane Carnelossi | Ketlen Souza | 87.8% | N/A |
+| Fight | Predicted Winner | Confidence | Likely Method | Actual Result | Correct? |
+|---|---|---|---|---|---|
+| Belal Muhammad vs Gabriel Bonfim | Gabriel Bonfim | 84.7% | N/A | Bonfim (Dec) | YES |
+| Brendan Allen vs Edmen Shahbazyan | Brendan Allen | 52.6% | N/A | Allen (Dec) | YES |
+| Fares Ziam vs Tom Nolan | Fares Ziam | 83.5% | N/A | Nolan (Dec) | NO |
+| Bryce Mitchell vs Santiago Luna | Santiago Luna | 74.8% | N/A | Mitchell (Sub) | NO |
+| Iwo Baraniewski vs Junior Tafa | Iwo Baraniewski | 79.4% | N/A | Baraniewski (KO) | YES |
+| Matt Schnell vs Alessandro Costa | Matt Schnell | 71.7% | N/A | Costa (KO) | NO |
+| Marcus McGhee vs John Yannis | Marcus McGhee | 94.6% | N/A | McGhee (Dec) | YES |
+| Bruno Silva vs Edgar Chairez | Bruno Silva | 71.2% | N/A | Chairez (Sub) | NO |
+| Priscila Cachoeira vs Chelsea Chandler | Chelsea Chandler | 54.4% | N/A | Chandler (Sub) | YES |
+| Jordan Leavitt vs Joanderson Brito | Joanderson Brito | 51.1% | N/A | Brito (Sub) | YES |
+| Ketlen Souza vs Ariane Carnelossi | Ketlen Souza | 87.8% | N/A | Souza (KO) | YES |
+
+---
+
+## Post-Event Summary
+
+- Fights predicted: 11
+- Correct: 7/11 (63.6%)
+
+### P/L (EUR 1 flat on each predicted winner)
+
+| Fight | Model Pick | Odds (dec) | Result | P/L |
+|---|---|---|---|---|
+| Muhammad vs Bonfim | Gabriel Bonfim | 1.98 | Win | +EUR 0.98 |
+| Allen vs Shahbazyan | Brendan Allen | 1.49 | Win | +EUR 0.49 |
+| Ziam vs Nolan | Fares Ziam | 1.31 | Loss | -EUR 1.00 |
+| Mitchell vs Luna | Santiago Luna | 2.12 | Loss | -EUR 1.00 |
+| Baraniewski vs Tafa | Iwo Baraniewski | 1.22 | Win | +EUR 0.22 |
+| Schnell vs Costa | Matt Schnell | 4.40 | Loss | -EUR 1.00 |
+| McGhee vs Yannis | Marcus McGhee | 1.17 | Win | +EUR 0.17 |
+| Silva vs Chairez | Bruno Silva | 1.89 | Loss | -EUR 1.00 |
+| Cachoeira vs Chandler | Chelsea Chandler | 1.74 | Win | +EUR 0.74 |
+| Leavitt vs Brito | Joanderson Brito | 1.60 | Win | +EUR 0.60 |
+| Souza vs Carnelossi | Ketlen Souza | 1.31 | Win | +EUR 0.31 |
+
+**Net P/L: -EUR 0.49 on EUR 11.00 staked (-4.5% ROI)**
 
 ---
 
