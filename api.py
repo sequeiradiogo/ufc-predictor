@@ -12,6 +12,7 @@ GET  /fighters?q=<name>         Search fighters by partial name
 POST /predict                   Predict a fight outcome
 POST /predict/finish            Predict finish method
 GET  /fighters/{id}/elo         Get current ELO for a fighter
+POST /card                      Predict a full event card
 
 Interactive docs: http://localhost:8000/docs
 """
@@ -383,3 +384,81 @@ def predict_batch(requests: list[PredictRequest]):
     if len(requests) > 10:
         raise HTTPException(status_code=400, detail="Maximum 10 fights per batch request.")
     return [_run_prediction(r) for r in requests]
+
+
+# ── /card models ──────────────────────────────────────────────────────────────
+
+class CardMatchup(BaseModel):
+    red_fighter:  str
+    blue_fighter: str
+    division:     Optional[str]   = None
+    title_fight:  Optional[int]   = Field(0, ge=0, le=1)
+    odds_red:     Optional[float] = None
+    odds_blue:    Optional[float] = None
+
+
+class CardRequest(BaseModel):
+    fights:     list[CardMatchup] = Field(..., min_length=1, max_length=15)
+    model:      str               = Field("ensemble", pattern="^(xgb|lr|rf|lgbm|mlp|ensemble|stacking)$")
+    event_name: Optional[str]     = None
+    event_date: Optional[str]     = None
+
+
+class CardFightResult(BaseModel):
+    red_fighter:  str
+    blue_fighter: str
+    prediction:   Optional[PredictResponse] = None
+    error:        Optional[str]             = None
+
+
+class CardResponse(BaseModel):
+    event_name:  Optional[str]
+    event_date:  Optional[str]
+    model:       str
+    fight_count: int
+    fights:      list[CardFightResult]
+
+
+@app.post("/card", response_model=CardResponse, summary="Predict a full event card")
+def predict_card(req: CardRequest):
+    """
+    Predict outcomes for every fight on an event card.
+
+    - Supply up to 15 matchups with optional division, title-fight flag, and odds.
+    - A single model is used across all fights (default: ensemble).
+    - Fights where a fighter cannot be resolved are returned with an error field
+      rather than failing the entire request.
+    - Optionally pass event_name and event_date for context in the response.
+    """
+    results: list[CardFightResult] = []
+    for matchup in req.fights:
+        pred_req = PredictRequest(
+            red_fighter=matchup.red_fighter,
+            blue_fighter=matchup.blue_fighter,
+            model=req.model,
+            division=matchup.division,
+            title_fight=matchup.title_fight or 0,
+            odds_red=matchup.odds_red,
+            odds_blue=matchup.odds_blue,
+        )
+        try:
+            prediction = _run_prediction(pred_req)
+            results.append(CardFightResult(
+                red_fighter=matchup.red_fighter,
+                blue_fighter=matchup.blue_fighter,
+                prediction=prediction,
+            ))
+        except HTTPException as exc:
+            results.append(CardFightResult(
+                red_fighter=matchup.red_fighter,
+                blue_fighter=matchup.blue_fighter,
+                error=exc.detail,
+            ))
+
+    return CardResponse(
+        event_name=req.event_name,
+        event_date=req.event_date,
+        model=req.model,
+        fight_count=len(results),
+        fights=results,
+    )
