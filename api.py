@@ -13,6 +13,9 @@ POST /predict                   Predict a fight outcome
 POST /predict/finish            Predict finish method
 GET  /fighters/{id}/elo         Get current ELO for a fighter
 POST /card                      Predict a full event card
+GET  /fighters/{id}             Fighter profile, stats, and current ELO
+GET  /fighters/{id}/elo-history Per-fight ELO snapshots (chronological)
+GET  /fighters/{id}/recent-form Last N fights with result and method
 
 Interactive docs: http://localhost:8000/docs
 """
@@ -46,7 +49,7 @@ from predict import (
     compute_recent_form,
     build_feature_vector,
 )
-from ml.ELO_calculator import get_current_ratings, get_current_ratings_by_division
+from ml.ELO_calculator import get_current_ratings, get_current_ratings_by_division, get_elo_history_for_fighter
 from utils.odds import american_to_prob, remove_vig, compute_edge, kelly_fraction
 
 app = FastAPI(
@@ -409,6 +412,160 @@ def get_fighter_elo(
         "elo":        round(elo, 1),
         "division":   division or "global",
     }
+
+
+@app.get("/fighters/{fighter_id}", summary="Get fighter profile")
+def get_fighter_profile(fighter_id: str):
+    """
+    Return a fighter's profile: basic info, career record, latest rolling stats,
+    and current ELO (division-specific for their most recent division).
+    """
+    conn = _get_conn()
+    try:
+        cur = conn.cursor()
+
+        # Basic info
+        cur.execute(
+            "SELECT name, height, reach, stance, dob FROM fighters WHERE fighter_id = ?",
+            (fighter_id,),
+        )
+        row = cur.fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"Fighter '{fighter_id}' not found.")
+        name, height, reach, stance, dob = row
+
+        # Career record from fights table
+        cur.execute(
+            """
+            SELECT
+                COUNT(CASE WHEN winner_id = ? THEN 1 END),
+                COUNT(CASE WHEN winner_id != ? AND winner_id IS NOT NULL AND winner_id != '' THEN 1 END),
+                COUNT(CASE WHEN winner_id IS NULL OR winner_id = '' THEN 1 END)
+            FROM fights
+            WHERE r_fighter_id = ? OR b_fighter_id = ?
+            """,
+            (fighter_id, fighter_id, fighter_id, fighter_id),
+        )
+        wins, losses, draws = cur.fetchone()
+
+        # Latest rolling stats from most recent fight_stats row
+        cur.execute(
+            """
+            SELECT fs.splm, fs.sapm, fs.str_def, fs.td_avg, fs.td_def,
+                   f.division, f.date
+            FROM fight_stats fs
+            JOIN fights f ON f.fight_id = fs.fight_id
+            WHERE fs.fighter_id = ?
+            ORDER BY f.date DESC
+            LIMIT 1
+            """,
+            (fighter_id,),
+        )
+        stats_row = cur.fetchone()
+    finally:
+        conn.close()
+
+    # ELO from cache using most recent division
+    latest_div = stats_row[5].lower().strip() if stats_row and stats_row[5] else ""
+    elo = _elo_div.get((fighter_id, latest_div),
+                        _elo_global.get(fighter_id, STARTING_ELO))
+
+    stats = {}
+    if stats_row:
+        for key, val in zip(["splm", "sapm", "str_def", "td_avg", "td_def"], stats_row[:5]):
+            stats[key] = round(float(val), 3) if val is not None else None
+
+    return {
+        "fighter_id": fighter_id,
+        "name":       name,
+        "height":     height,
+        "reach":      reach,
+        "stance":     stance,
+        "dob":        dob,
+        "record":     {"wins": wins, "losses": losses, "draws": draws},
+        "stats":      stats,
+        "elo": {
+            "current":  round(elo, 1),
+            "division": latest_div or "global",
+        },
+    }
+
+
+@app.get("/fighters/{fighter_id}/elo-history", summary="Get per-fight ELO history")
+def get_fighter_elo_history(fighter_id: str):
+    """
+    Return per-fight ELO snapshots for a fighter in chronological order.
+    Shows elo_before, elo_after, and elo_change for every UFC fight on record.
+    Uses the same per-division ELO replay as predict.py.
+    """
+    conn = _get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT name FROM fighters WHERE fighter_id = ?", (fighter_id,))
+        row = cur.fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"Fighter '{fighter_id}' not found.")
+        history = get_elo_history_for_fighter(fighter_id, conn)
+    finally:
+        conn.close()
+
+    return {"fighter_id": fighter_id, "name": row[0], "history": history}
+
+
+@app.get("/fighters/{fighter_id}/recent-form", summary="Get recent fight results")
+def get_fighter_recent_form(
+    fighter_id: str,
+    n: int = Query(5, ge=1, le=20, description="Number of recent fights to return"),
+):
+    """
+    Return the last N fights for a fighter with result, method, opponent, and division.
+    """
+    conn = _get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT name FROM fighters WHERE fighter_id = ?", (fighter_id,))
+        row = cur.fetchone()
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"Fighter '{fighter_id}' not found.")
+        name = row[0]
+
+        cur.execute(
+            """
+            SELECT f.date, f.division, f.method, f.title_fight,
+                   f.winner_id,
+                   fr.name AS r_name, fb.name AS b_name,
+                   f.r_fighter_id, f.b_fighter_id
+            FROM fights f
+            JOIN fighters fr ON fr.fighter_id = f.r_fighter_id
+            JOIN fighters fb ON fb.fighter_id = f.b_fighter_id
+            WHERE f.r_fighter_id = ? OR f.b_fighter_id = ?
+            ORDER BY f.date DESC
+            LIMIT ?
+            """,
+            (fighter_id, fighter_id, n),
+        )
+        rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    fights = []
+    for date, division, method, title_fight, winner_id, r_name, b_name, r_id, b_id in rows:
+        opponent = b_name if r_id == fighter_id else r_name
+        opp_id   = b_id   if r_id == fighter_id else r_id
+        result   = ("win"  if winner_id == fighter_id
+                    else "draw" if not winner_id
+                    else "loss")
+        fights.append({
+            "date":        date,
+            "opponent":    opponent,
+            "opponent_id": opp_id,
+            "result":      result,
+            "method":      method or "",
+            "division":    (division or "").lower(),
+            "title_fight": bool(title_fight),
+        })
+
+    return {"fighter_id": fighter_id, "name": name, "fights": fights}
 
 
 @app.post("/predict", response_model=PredictResponse, summary="Predict fight outcome")
