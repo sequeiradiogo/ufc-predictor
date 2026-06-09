@@ -12,7 +12,7 @@ Arguments
 ---------
     red_fighter   Name of the Red corner fighter (partial names OK)
     blue_fighter  Name of the Blue corner fighter (partial names OK)
-    --model       Model to use: 'xgb' (default), 'lr', 'rf', or 'lgbm'
+    --model       Model to use: 'xgb' (default), 'lr', 'rf', 'lgbm', or 'mlp'
     --division    Weight division (optional — for division feature encoding)
     --title       Flag if this is a title fight (default: False)
 
@@ -39,7 +39,9 @@ sys.path.insert(0, str(ROOT_DIR))
 
 from config import (
     DB_PATH,
+    DB_V1_PATH,
     MODELS_DIR,
+    MODELS_V1_DIR,
     STARTING_ELO, K_FACTOR_NORMAL, K_FACTOR_PROVISIONAL, PROVISIONAL_LIMIT,
     GLICKO_START_R, GLICKO_START_RD,
     MODEL_XGB_PATH, MODEL_XGB_FEATURES,
@@ -645,16 +647,18 @@ def compute_prediction(
     Pass r_fighter_id / b_fighter_id to bypass name resolution (useful when
     the caller already has the UFCStats fighter IDs).
     """
-    db_path    = db_path    or DB_PATH
-    models_dir = models_dir or MODELS_DIR
+    db_path    = db_path    or DB_V1_PATH
+    models_dir = models_dir or MODELS_V1_DIR
 
     # ── Resolve artifact paths from models_dir ────────────────────────────────
     _paths = {
-        "xgb":      (models_dir / "xgboost.joblib",          models_dir / "xgb_features.joblib",  None,                              False),
-        "lr":       (models_dir / "logistic_regression.joblib", models_dir / "lr_features.joblib", models_dir / "lr_scaler.joblib",   True),
-        "rf":       (models_dir / "random_forest.joblib",     models_dir / "rf_features.joblib",   None,                              False),
-        "lgbm":     (models_dir / "lightgbm.joblib",          models_dir / "lgbm_features.joblib", None,                              False),
-        "ensemble": (models_dir / "ensemble.joblib",          None,                                None,                              False),
+        "xgb":      (models_dir / "xgboost.joblib",            models_dir / "xgb_features.joblib",  None,                              False),
+        "lr":       (models_dir / "logistic_regression.joblib", models_dir / "lr_features.joblib",   models_dir / "lr_scaler.joblib",   True),
+        "rf":       (models_dir / "random_forest.joblib",       models_dir / "rf_features.joblib",   None,                              False),
+        "lgbm":     (models_dir / "lightgbm.joblib",            models_dir / "lgbm_features.joblib", None,                              False),
+        "mlp":      (models_dir / "mlp.joblib",                 models_dir / "mlp_features.joblib",  models_dir / "mlp_scaler.joblib",  True),
+        "ensemble": (models_dir / "ensemble.joblib",            None,                                None,                              False),
+        "stacking": (models_dir / "stacking.joblib",            None,                                None,                              False),
     }
     model_path, features_path, scaler_path, _is_lr = _paths[model_type]
 
@@ -663,7 +667,9 @@ def compute_prediction(
         "lr":       "ml/logistic_regression.py",
         "rf":       "ml/random_forest.py",
         "lgbm":     "ml/lightgbm_model.py",
-        "ensemble": "ml/soft_vote_ensemble.py",
+        "mlp":      "ml/train_v1_models.py --model mlp",
+        "ensemble": "ml/train_v1_models.py --model ensemble",
+        "stacking": "ml/train_v1_models.py --model stacking",
     }
     if not model_path.exists():
         script = script_map[model_type]
@@ -680,6 +686,9 @@ def compute_prediction(
         ensemble_weights     = artifact.get("weights", {})
         ensemble_calibrators = artifact.get("calibrators", {})
         model = base_model = platt = None
+    elif model_type == "stacking":
+        model = base_model = platt = None
+        ensemble_weights = None
     elif isinstance(artifact, dict):
         base_model  = artifact["base"]
         platt       = artifact["platt"]
@@ -788,8 +797,8 @@ def compute_prediction(
 
     conn.close()
 
-    # For v1 predictions (db_path != v2 DB): enrich with v2 defensive stats by name
-    if db_path != DB_PATH and DB_PATH.exists():
+    # For v1 predictions (using mdabbert DB): enrich with v2 defensive stats by name
+    if db_path == DB_V1_PATH and DB_PATH.exists():
         try:
             conn_v2 = sqlite3.connect(str(DB_PATH))
             v2_def_r = _get_v2_defensive_stats(conn_v2, r_name)
@@ -807,6 +816,7 @@ def compute_prediction(
             ("lr",   models_dir / "logistic_regression.joblib", models_dir / "lr_features.joblib",   models_dir / "lr_scaler.joblib",   True),
             ("rf",   models_dir / "random_forest.joblib",       models_dir / "rf_features.joblib",   None,                              False),
             ("lgbm", models_dir / "lightgbm.joblib",            models_dir / "lgbm_features.joblib", None,                              False),
+            ("mlp",  models_dir / "mlp.joblib",                 models_dir / "mlp_features.joblib",  models_dir / "mlp_scaler.joblib",  True),
         ]
         model_probas   = []
         active_weights = []
@@ -831,7 +841,11 @@ def compute_prediction(
                 if m_key in ensemble_calibrators:
                     cal_p = float(ensemble_calibrators[m_key].predict([raw_p])[0])
                 else:
-                    cal_p = float(m_artifact["platt"].predict_proba([[raw_p]])[0, 1])
+                    m_platt = m_artifact["platt"]
+                    if hasattr(m_platt, "predict_proba"):
+                        cal_p = float(m_platt.predict_proba([[raw_p]])[0, 1])
+                    else:
+                        cal_p = float(m_platt.predict([raw_p])[0])
                 m_proba = [1 - cal_p, cal_p]
             else:
                 raw_p = m_artifact.predict_proba(Xm_input)[0, 1]
@@ -848,6 +862,34 @@ def compute_prediction(
         total_w        = sum(active_weights)
         active_weights = [w / total_w for w in active_weights]
         proba = list(np.average(model_probas, axis=0, weights=active_weights))
+    elif model_type == "stacking":
+        # Run each base model, collect calibrated probs, feed to meta-LR
+        stk_specs  = artifact.get("specs", [])
+        meta_lr    = artifact["meta"]
+        meta_sc    = artifact["meta_scaler"]
+        base_probs = []
+        for m_key, m_path, f_path, s_path, m_is_lr in stk_specs:
+            m_path = Path(m_path)
+            f_path = Path(f_path)
+            if not m_path.exists() or not f_path.exists():
+                log.warning("Stacking: base model %s not found, using 0.5", m_key)
+                base_probs.append(0.5)
+                continue
+            m_art  = joblib.load(m_path)
+            m_feat = joblib.load(f_path)
+            m_sc   = joblib.load(s_path) if s_path and Path(s_path).exists() else None
+            Xm = build_feature_vector(
+                red_stats, blue_stats, elo_r, elo_b, form_r, form_b,
+                division, title_fight, m_feat, extra_r=extra_r, extra_b=extra_b,
+            ).fillna(0)
+            Xi = m_sc.transform(Xm) if m_sc is not None else Xm.values
+            m_base = m_art["base"] if m_is_lr else m_art
+            raw_p  = float(m_base.predict_proba(Xi)[0, 1])
+            base_probs.append(raw_p)
+        stacked  = np.array(base_probs).reshape(1, -1)
+        stacked_s = meta_sc.transform(stacked)
+        red_p    = float(meta_lr.predict_proba(stacked_s)[0, 1])
+        proba    = [1 - red_p, red_p]
     else:
         X = build_feature_vector(
             red_stats, blue_stats,
@@ -863,9 +905,12 @@ def compute_prediction(
         if model is not None:
             proba = model.predict_proba(X_input)[0]
         else:
-            raw_prob   = base_model.predict_proba(X_input)[0, 1]
-            calibrated = platt.predict_proba([[raw_prob]])[0, 1]
-            proba      = [1 - calibrated, calibrated]
+            raw_prob = base_model.predict_proba(X_input)[0, 1]
+            if hasattr(platt, "predict_proba"):
+                calibrated = platt.predict_proba([[raw_prob]])[0, 1]
+            else:
+                calibrated = float(platt.predict([raw_prob])[0])
+            proba = [1 - calibrated, calibrated]
 
     red_win_prob  = float(proba[1])
     blue_win_prob = float(proba[0])
@@ -914,7 +959,9 @@ def predict_fight(
         "lr":       "Logistic Regression",
         "rf":       "Random Forest",
         "lgbm":     "LightGBM",
+        "mlp":      "MLP Neural Network",
         "ensemble": "Ensemble (Soft Vote)",
+        "stacking": "Stacking Meta-Learner",
     }
     model_label = model_labels.get(model_type, model_type)
 
@@ -991,9 +1038,9 @@ Examples
     parser.add_argument("blue_fighter", help="Blue corner fighter name (partial OK)")
     parser.add_argument(
         "--model",
-        choices=["xgb", "lr", "rf", "lgbm", "ensemble"],
+        choices=["xgb", "lr", "rf", "lgbm", "mlp", "ensemble", "stacking"],
         default="xgb",
-        help="Model: 'xgb' = XGBoost (default), 'lr' = Logistic Regression, 'rf' = Random Forest, 'lgbm' = LightGBM, 'ensemble' = Soft-Vote Ensemble",
+        help="Model: 'xgb' = XGBoost (default), 'lr' = Logistic Regression, 'rf' = Random Forest, 'lgbm' = LightGBM, 'mlp' = MLP Neural Network, 'ensemble' = Soft-Vote Ensemble, 'stacking' = Stacking Meta-Learner",
     )
     parser.add_argument(
         "--division",
