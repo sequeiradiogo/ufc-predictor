@@ -481,10 +481,9 @@ def get_elo_history_for_fighter(
     conn: sqlite3.Connection | None = None,
 ) -> list[dict]:
     """
-    Replay all historical fights and return per-fight ELO snapshots for one fighter.
-
-    Each entry records the fighter's division ELO before and after the fight,
-    using the same per-division replay logic as get_current_ratings_by_division().
+    Replay all historical fights and return per-fight global ELO snapshots for
+    one fighter. Uses the same global (cross-division) replay as build_elo_features()
+    so values are consistent with what the v1 models were trained on.
 
     Returns
     -------
@@ -509,22 +508,19 @@ def get_elo_history_for_fighter(
     if own_conn:
         conn.close()
 
-    div_ratings: dict[tuple[str, str], float] = {}
-    div_counts:  dict[tuple[str, str], int]   = {}
+    # Global ratings: keyed by fighter_id only, no division split
+    ratings: dict[str, float] = {}
+    counts:  dict[str, int]   = {}
     snapshots: list[dict] = []
 
     for _, row in df.iterrows():
         r_id = row["r_fighter_id"]
         b_id = row["b_fighter_id"]
-        div  = str(row.get("division", "")).lower().strip()
 
-        r_key = (r_id, div)
-        b_key = (b_id, div)
-
-        r_curr  = div_ratings.get(r_key, STARTING_ELO)
-        b_curr  = div_ratings.get(b_key, STARTING_ELO)
-        r_count = div_counts.get(r_key, 0)
-        b_count = div_counts.get(b_key, 0)
+        r_curr  = ratings.get(r_id, STARTING_ELO)
+        b_curr  = ratings.get(b_id, STARTING_ELO)
+        r_count = counts.get(r_id, 0)
+        b_count = counts.get(b_id, 0)
 
         k_r = K_FACTOR_PROVISIONAL if r_count < PROVISIONAL_LIMIT else K_FACTOR_NORMAL
         k_b = K_FACTOR_PROVISIONAL if b_count < PROVISIONAL_LIMIT else K_FACTOR_NORMAL
@@ -533,17 +529,17 @@ def get_elo_history_for_fighter(
         score_r = 1.0 if winner == r_id else (0.0 if winner == b_id else 0.5)
         new_r, new_b = update_ratings(r_curr, b_curr, score_r, k_r, k_b)
 
-        div_ratings[r_key] = new_r
-        div_ratings[b_key] = new_b
-        div_counts[r_key]  = r_count + 1
-        div_counts[b_key]  = b_count + 1
+        ratings[r_id] = new_r
+        ratings[b_id] = new_b
+        counts[r_id]  = r_count + 1
+        counts[b_id]  = b_count + 1
 
         if r_id == fighter_id or b_id == fighter_id:
             is_red     = r_id == fighter_id
             elo_before = r_curr if is_red else b_curr
             elo_after  = new_r  if is_red else new_b
             result     = ("win"  if winner == fighter_id
-                          else "draw" if winner is None or winner == ""
+                          else "draw" if not winner
                           else "loss")
             snapshots.append({
                 "date":        row["date"],
@@ -551,7 +547,7 @@ def get_elo_history_for_fighter(
                 "opponent_id": b_id if is_red else r_id,
                 "result":      result,
                 "method":      row.get("method") or "",
-                "division":    div,
+                "division":    str(row.get("division", "")).lower().strip(),
                 "elo_before":  round(elo_before, 1),
                 "elo_after":   round(elo_after, 1),
                 "elo_change":  round(elo_after - elo_before, 1),

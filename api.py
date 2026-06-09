@@ -465,10 +465,9 @@ def get_fighter_profile(fighter_id: str):
     finally:
         conn.close()
 
-    # ELO from cache using most recent division
-    latest_div = stats_row[5].lower().strip() if stats_row and stats_row[5] else ""
-    elo = _elo_div.get((fighter_id, latest_div),
-                        _elo_global.get(fighter_id, STARTING_ELO))
+    # Global ELO from cache -- consistent with the training CSV (build_elo_features
+    # uses global ratings, not per-division)
+    elo = _elo_global.get(fighter_id, STARTING_ELO)
 
     stats = {}
     if stats_row:
@@ -485,8 +484,8 @@ def get_fighter_profile(fighter_id: str):
         "record":     {"wins": wins, "losses": losses, "draws": draws},
         "stats":      stats,
         "elo": {
-            "current":  round(elo, 1),
-            "division": latest_div or "global",
+            "current": round(elo, 1),
+            "scope":   "global",
         },
     }
 
