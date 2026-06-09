@@ -166,6 +166,11 @@ EXCLUDED_FEATURES: list[str] = [
     "outcome_diff",
     # Zero importance across all 4 models
     "age_diff",
+    # Glicko-2 features: near-zero target correlation (0.004 / -0.002); removing
+    # them improves 2026 accuracy by +1.5pp (67.0% total vs 66.7% with Glicko).
+    # ELO already captures the rating signal more cleanly.
+    "glicko_diff",
+    "glicko_rd_diff",
 ]
 
 # Prior weight for shrinkage toward division mean in ML_data_preparation.
@@ -177,9 +182,11 @@ SHRINKAGE_LAMBDA = 5
 # show significant distribution shift and hurt out-of-sample accuracy.
 MIN_FIGHT_DATE = "2018-01-01"
 
-# Exponential decay weight for temporal sample weighting.
-# weight = exp(alpha * (year - max_year)); 0.0 disables weighting entirely.
-SAMPLE_WEIGHT_ALPHA = 0.0
+# Temporal sample weighting: weight = exp(-alpha * delta^beta) where delta = max_year - year.
+# alpha=0.0 disables weighting entirely. beta=1.0 is flat exponential decay (original);
+# beta>1.0 accelerates decay for older fights while keeping recent fights near full weight.
+SAMPLE_WEIGHT_ALPHA = 0.01
+SAMPLE_WEIGHT_BETA  = 1.5
 
 # Recent form window (number of prior fights to average)
 RECENT_FORM_WINDOW = 3
