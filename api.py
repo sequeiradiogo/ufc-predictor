@@ -19,6 +19,7 @@ Interactive docs: http://localhost:8000/docs
 
 import sqlite3
 import sys
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -42,11 +43,10 @@ from config import (
 from predict import (
     resolve_fighter,
     get_latest_stats,
-    compute_current_elo,
     compute_recent_form,
     build_feature_vector,
 )
-from ml.ELO_calculator import get_current_ratings_by_division
+from ml.ELO_calculator import get_current_ratings, get_current_ratings_by_division
 from utils.odds import american_to_prob, remove_vig, compute_edge, kelly_fraction
 
 app = FastAPI(
@@ -56,13 +56,40 @@ app = FastAPI(
 )
 
 
-# ── Startup: load models once ─────────────────────────────────────────────────
+# ── Startup: load models + ELO cache ─────────────────────────────────────────
 
 _models: dict = {}
 
+# ELO caches — populated at startup, refreshed via POST /admin/refresh-elo.
+# Read-only after startup so no locking needed.
+_elo_global: dict[str, float]                  = {}  # fighter_id -> elo
+_elo_div:    dict[tuple[str, str], float]       = {}  # (fighter_id, division) -> elo
+
+
+def _build_elo_caches() -> None:
+    """Replay all historical fights and populate both ELO caches."""
+    if not DB_PATH.exists():
+        return
+    conn = sqlite3.connect(str(DB_PATH))
+    try:
+        t0 = time.monotonic()
+        _elo_global.clear()
+        _elo_global.update(get_current_ratings(conn))
+        _elo_div.clear()
+        _elo_div.update(get_current_ratings_by_division(conn))
+        elapsed = time.monotonic() - t0
+        import logging
+        logging.getLogger(__name__).info(
+            "ELO cache built: %d global ratings, %d division ratings in %.2fs",
+            len(_elo_global), len(_elo_div), elapsed,
+        )
+    finally:
+        conn.close()
+
+
 @app.on_event("startup")
 def load_models() -> None:
-    """Pre-load model artifacts at startup so predictions are fast."""
+    """Pre-load model artifacts and ELO cache at startup."""
     if MODEL_XGB_PATH.exists():
         _models["xgb"]          = joblib.load(MODEL_XGB_PATH)
         _models["xgb_features"] = joblib.load(MODEL_XGB_FEATURES)
@@ -77,6 +104,8 @@ def load_models() -> None:
     if MODEL_FINISH_PATH.exists():
         _models["finish"]          = joblib.load(MODEL_FINISH_PATH)
         _models["finish_features"] = joblib.load(MODEL_FINISH_FEATURES)
+
+    _build_elo_caches()
 
 
 # ── Request / Response models ─────────────────────────────────────────────────
@@ -193,16 +222,14 @@ def _run_prediction(req: PredictRequest) -> PredictResponse:
         red_stats  = get_latest_stats(conn, r["fighter_id"])
         blue_stats = get_latest_stats(conn, b["fighter_id"])
 
-        # ELO
+        # ELO — read from startup cache (O(1) lookup, no replay)
         div_lower = (req.division or "").lower().strip()
         if div_lower:
-            div_elo = get_current_ratings_by_division(conn)
-            elo_r   = div_elo.get((r["fighter_id"], div_lower), STARTING_ELO)
-            elo_b   = div_elo.get((b["fighter_id"], div_lower), STARTING_ELO)
+            elo_r = _elo_div.get((r["fighter_id"], div_lower), STARTING_ELO)
+            elo_b = _elo_div.get((b["fighter_id"], div_lower), STARTING_ELO)
         else:
-            elos  = compute_current_elo(conn)
-            elo_r = elos.get(r["fighter_id"], STARTING_ELO)
-            elo_b = elos.get(b["fighter_id"], STARTING_ELO)
+            elo_r = _elo_global.get(r["fighter_id"], STARTING_ELO)
+            elo_b = _elo_global.get(b["fighter_id"], STARTING_ELO)
 
         # Recent form
         form_r = compute_recent_form(conn, r["fighter_id"])
@@ -316,8 +343,26 @@ def root():
             "logistic_regression": "lr_base" in _models,
             "finish_type": "finish" in _models,
         },
+        "elo_cache": {
+            "global_fighters": len(_elo_global),
+            "division_pairs":  len(_elo_div),
+        },
         "database": DB_PATH.exists(),
         "docs": "/docs",
+    }
+
+
+@app.post("/admin/refresh-elo", summary="Rebuild ELO cache without restarting")
+def refresh_elo():
+    """
+    Replay all historical fights and repopulate the ELO cache.
+    Call this after ingesting new fight data so predictions use up-to-date ratings.
+    """
+    _build_elo_caches()
+    return {
+        "status": "ok",
+        "global_fighters": len(_elo_global),
+        "division_pairs":  len(_elo_div),
     }
 
 
