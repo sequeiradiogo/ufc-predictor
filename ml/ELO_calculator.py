@@ -476,6 +476,86 @@ def _replay_fights_glicko_by_division(
     return ratings, red_r_pre, blue_r_pre, red_rd_pre, blue_rd_pre
 
 
+def get_elo_history_for_fighter(
+    fighter_id: str,
+    conn: sqlite3.Connection | None = None,
+) -> list[dict]:
+    """
+    Replay all historical fights and return per-fight global ELO snapshots for
+    one fighter. Uses the same global (cross-division) replay as build_elo_features()
+    so values are consistent with what the v1 models were trained on.
+
+    Returns
+    -------
+    List of dicts (chronological): date, opponent, opponent_id, result, method,
+    division, elo_before, elo_after, elo_change
+    """
+    own_conn = conn is None
+    if own_conn:
+        conn = sqlite3.connect(str(DB_PATH))
+
+    query = """
+        SELECT f.fight_id, f.date, f.division,
+               f.r_fighter_id, f.b_fighter_id, f.winner_id, f.method,
+               fr.name AS r_name, fb.name AS b_name
+        FROM fights f
+        JOIN fighters fr ON fr.fighter_id = f.r_fighter_id
+        JOIN fighters fb ON fb.fighter_id = f.b_fighter_id
+        ORDER BY f.date ASC
+    """
+    df = pd.read_sql_query(query, conn)
+
+    if own_conn:
+        conn.close()
+
+    # Global ratings: keyed by fighter_id only, no division split
+    ratings: dict[str, float] = {}
+    counts:  dict[str, int]   = {}
+    snapshots: list[dict] = []
+
+    for _, row in df.iterrows():
+        r_id = row["r_fighter_id"]
+        b_id = row["b_fighter_id"]
+
+        r_curr  = ratings.get(r_id, STARTING_ELO)
+        b_curr  = ratings.get(b_id, STARTING_ELO)
+        r_count = counts.get(r_id, 0)
+        b_count = counts.get(b_id, 0)
+
+        k_r = K_FACTOR_PROVISIONAL if r_count < PROVISIONAL_LIMIT else K_FACTOR_NORMAL
+        k_b = K_FACTOR_PROVISIONAL if b_count < PROVISIONAL_LIMIT else K_FACTOR_NORMAL
+
+        winner  = row["winner_id"]
+        score_r = 1.0 if winner == r_id else (0.0 if winner == b_id else 0.5)
+        new_r, new_b = update_ratings(r_curr, b_curr, score_r, k_r, k_b)
+
+        ratings[r_id] = new_r
+        ratings[b_id] = new_b
+        counts[r_id]  = r_count + 1
+        counts[b_id]  = b_count + 1
+
+        if r_id == fighter_id or b_id == fighter_id:
+            is_red     = r_id == fighter_id
+            elo_before = r_curr if is_red else b_curr
+            elo_after  = new_r  if is_red else new_b
+            result     = ("win"  if winner == fighter_id
+                          else "draw" if not winner
+                          else "loss")
+            snapshots.append({
+                "date":        row["date"],
+                "opponent":    row["b_name"] if is_red else row["r_name"],
+                "opponent_id": b_id if is_red else r_id,
+                "result":      result,
+                "method":      row.get("method") or "",
+                "division":    str(row.get("division", "")).lower().strip(),
+                "elo_before":  round(elo_before, 1),
+                "elo_after":   round(elo_after, 1),
+                "elo_change":  round(elo_after - elo_before, 1),
+            })
+
+    return snapshots
+
+
 # ── Glicko-2 public API ───────────────────────────────────────────────────────
 
 def build_glicko_features(conn: sqlite3.Connection | None = None) -> pd.DataFrame:
