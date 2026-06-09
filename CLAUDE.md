@@ -211,7 +211,7 @@ Pre-computed features (stored in CSV/DB, diffed at build time):
 - **Stance** (fight-level, from `add_computed_features_to_csv.py`): `southpaw_adv_diff`, `both_southpaw`
 - **Division** (fight-level, from `add_computed_features_to_csv.py`): 12 `div_*` one-hot columns
 - Training cutoff: `MIN_FIGHT_DATE = "2018-01-01"` (adversarial validation confirmed pre-2018 distribution shift)
-- Sample weighting: `SAMPLE_WEIGHT_ALPHA = 0.0` (disabled -- tested, consistently hurt accuracy vs hard cutoff)
+- Sample weighting: `SAMPLE_WEIGHT_ALPHA = 0.01`, `SAMPLE_WEIGHT_BETA = 1.5` -- power-law decay `exp(-alpha * delta^beta)`; beta=1.5 steepens decay for older fights while keeping recent fights near full weight (issue #54)
 
 ### v1 Models
 
@@ -219,13 +219,13 @@ All v1 models are saved to `models_v1/` as `.joblib` files and tracked in git. T
 
 | Model | Artifacts | 2025+ Acc | Notes |
 |-------|-----------|-----------|-------|
-| XGBoost | `xgboost.joblib`, `xgb_features.joblib` | 64.5% | Default params in `config.XGB_PARAMS` |
-| Logistic Regression | `logistic_regression.joblib`, `lr_scaler.joblib`, `lr_features.joblib` | 65.7% | Platt-calibrated; best individual model on 2025+ data |
-| Random Forest | `random_forest.joblib`, `rf_features.joblib` | 64.9% | Default params in `config.RF_PARAMS` |
-| LightGBM | `lightgbm.joblib`, `lgbm_features.joblib` | 64.2% | Default params in `config.LGBM_PARAMS` |
-| Ensemble | `ensemble.joblib` | **66.4%** | Calibrated soft-vote; LR-weighted (~63% LR, ~26% LGBM) |
+| XGBoost | `xgboost.joblib`, `xgb_features.joblib` | 65.2% | Default params in `config.XGB_PARAMS` |
+| Logistic Regression | `logistic_regression.joblib`, `lr_scaler.joblib`, `lr_features.joblib` | 64.5% | Platt-calibrated |
+| Random Forest | `random_forest.joblib`, `rf_features.joblib` | 64.4% | Default params in `config.RF_PARAMS` |
+| LightGBM | `lightgbm.joblib`, `lgbm_features.joblib` | 64.0% | Default params in `config.LGBM_PARAMS` |
+| Ensemble | `ensemble.joblib` | **67.0%** | Calibrated soft-vote; LGBM-weighted (~66% LGBM, ~27% LR) |
 
-Honest out-of-sample backtest (2025-2026, 667 fights): **66.4%** accuracy (ensemble). Naive Red baseline ~55%.
+Honest out-of-sample backtest (2025-2026, 678 fights): **67.0%** accuracy (ensemble). Naive Red baseline ~55%.
 
 Note: `--from-year 2022` backtest numbers (82-90%) are inflated because 2022-2024 fights fall inside the training window with the 80/20 split. Always use `--from-year 2025` for honest evaluation.
 
@@ -287,9 +287,9 @@ Single source of truth for all paths, constants, and hyperparameters. Always imp
 - `CSV_V1_WITH_ELO` -- v1 feature CSV (`ml/ufc_ml_data_v1.csv`)
 - `XGB_PARAMS`, `LR_PARAMS`, `RF_PARAMS`, `LGBM_PARAMS` -- hyperparameters (shared between v1 and v2 training; do not re-tune without a solid reason)
 - `MIN_FIGHT_DATE` -- training data cutoff (currently `"2018-01-01"`; see issue #47)
-- `SAMPLE_WEIGHT_ALPHA` -- exponential time-decay weight for training rows; `0.0` = disabled (tested, hurt accuracy)
+- `SAMPLE_WEIGHT_ALPHA` / `SAMPLE_WEIGHT_BETA` -- power-law decay weight: `exp(-alpha * delta^beta)`; `alpha=0.01, beta=1.5` in production (issue #54)
 - `EXCLUDE_STAT_KEYWORDS` -- columns excluded from the diff feature loop
-- `EXCLUDED_FEATURES` -- features dropped at training and inference time after permutation-importance analysis (issue #43); currently removes 3 dead columns (`date_diff`, `outcome_diff`, `age_diff`) that carry zero signal
+- `EXCLUDED_FEATURES` -- features dropped at training and inference time; currently removes 3 dead columns (`date_diff`, `outcome_diff`, `age_diff`) plus `glicko_diff` and `glicko_rd_diff` (near-zero target correlation; removing them improved ensemble accuracy by +0.3pp)
 - `SHRINKAGE_LAMBDA` -- prior weight for division-mean shrinkage (v2 training only, default 5)
 - `STARTING_ELO`, `GLICKO_START_R`, `GLICKO_START_RD`, `GLICKO_START_SIGMA`, `GLICKO_TAU` -- rating system constants
 - `DIVISIONS`, `FINISH_METHOD_MAP`, `TRAIN_TEST_SPLIT`
@@ -334,8 +334,8 @@ If any excluded files were previously committed, untrack them with `git rm --cac
 - **Do not use --tune for routine retraining**: `--tune` re-optimises base model hyperparameters via Optuna. This has consistently produced worse 2025+ accuracy than the default params in `config.py` (overfits to CV folds). Only use `--tune` if deliberately re-tuning after a major feature change, and always backtest before committing.
 - **Backtest year for v1**: Use `--from-year 2025` for honest evaluation. The 80/20 split puts 2022-2024 fights inside the training window; `--from-year 2022` numbers are inflated.
 - **v1 DB does not auto-update**: After each event, run the scraper, then the three CSV enrichment scripts, then `db/ingest_mdabbert.py`, then `ml/ML_data_preparation_v1.py`. Always backtest before committing retrained models.
-- **Sync script accuracy caveat**: `sync_v1_from_v2.py` produces correct per-minute `splm` from UFCStats rolling stats, while the Kaggle-sourced `ufc-master.csv` has a different `splm` scale for early-career fighters that happens to be more discriminative. After running sync, always backtest with `--from-year 2025` before committing. The current `ufc_v2.db` and `models_v1/` artifacts use the Kaggle-sourced pipeline (66.4% accuracy).
-- **Model performance ceiling**: v1 career-average models achieve ~66% on the 2025+ backtest (667 fights). The naive "always pick Red" baseline is ~55% on recent data. Update `MODEL_RESULTS.md` after any significant retrain.
+- **Sync script accuracy caveat**: `sync_v1_from_v2.py` produces correct per-minute `splm` from UFCStats rolling stats, while the Kaggle-sourced `ufc-master.csv` has a different `splm` scale for early-career fighters that happens to be more discriminative. After running sync, always backtest with `--from-year 2025` before committing. The current `ufc_v2.db` and `models_v1/` artifacts use the Kaggle-sourced pipeline (67.0% accuracy).
+- **Model performance ceiling**: v1 career-average models achieve 67.0% on the 2025+ backtest (678 fights). The naive "always pick Red" baseline is ~55% on recent data. Update `MODEL_RESULTS.md` after any significant retrain.
 - **Shrinkage is v2 training-only**: `apply_shrinkage()` in `ML_data_preparation.py` modifies the training CSV. It is NOT applied in `predict.py` at inference time. v1 uses raw career averages with no shrinkage.
 - **Global ELO for training**: `build_elo_features()` uses a single universal ELO per fighter (not per division) to avoid cold-start when fighters change weight class. Prediction inference (`predict.py`) still calls `get_current_ratings_by_division()` for per-division ratings, which is a minor inconsistency to be aware of.
 - **CSV is the source of truth**: `raw_data/ufc-master.csv` is enriched with all features before ingestion. Never compute ELO, Glicko, SOS, slopes, style matchup, or division one-hots inside `ML_data_preparation_v1.py` -- those must come from the CSV/DB. `ML_data_preparation_v1.py` is a pure diff-builder.
