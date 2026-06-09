@@ -152,7 +152,6 @@ class H2HFight(BaseModel):
     date:   str
     winner: str
     method: str
-    round:  Optional[int]
 
 
 class PredictResponse(BaseModel):
@@ -189,7 +188,7 @@ def _get_h2h(conn: sqlite3.Connection, id_a: str, id_b: str) -> list[H2HFight]:
     cur = conn.cursor()
     cur.execute(
         """
-        SELECT f.date, f.winner_id, f.method, f.rounds,
+        SELECT f.date, f.winner_id, f.method,
                fr.name AS r_name, fb.name AS b_name
         FROM fights f
         JOIN fighters fr ON fr.fighter_id = f.r_fighter_id
@@ -201,19 +200,17 @@ def _get_h2h(conn: sqlite3.Connection, id_a: str, id_b: str) -> list[H2HFight]:
         (id_a, id_b, id_b, id_a),
     )
     results = []
-    for date, winner_id, method, rounds, r_name, b_name in cur.fetchall():
-        winner_name = r_name if winner_id == id_a or winner_id not in (id_b,) else b_name
+    for date, winner_id, method, r_name, b_name in cur.fetchall():
         if winner_id == id_a:
-            winner_name = r_name if r_name else b_name
+            winner_name = r_name
         elif winner_id == id_b:
-            winner_name = b_name if b_name else r_name
+            winner_name = b_name
         else:
             winner_name = "Draw"
         results.append(H2HFight(
             date=date,
             winner=winner_name,
             method=method or "",
-            round=rounds,
         ))
     return results
 
