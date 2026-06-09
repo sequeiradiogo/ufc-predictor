@@ -193,11 +193,19 @@ def _fetch_completed_events(since: date, get) -> list[dict]:
             continue
         if event_date > since:
             event_url = a["href"].strip()
+            # Location is in the second td of each event row
+            tds = row.find_all("td")
+            raw_location = tds[1].get_text(strip=True) if len(tds) > 1 else ""
+            parts = [p.strip() for p in raw_location.split(",") if p.strip()]
+            country = parts[-1] if parts else ""
+            location = ", ".join(parts[:-1]) if len(parts) > 1 else raw_location
             events.append({
                 "event_id": _id_from_url(event_url),
                 "name":     a.get_text(strip=True),
                 "date":     iso,
                 "url":      event_url,
+                "location": location,
+                "country":  country,
             })
     log.info("Found %d new events since %s", len(events), since)
     return events
@@ -251,6 +259,8 @@ def _scrape_event(event: dict, seen_fids: set[str], get) -> dict:
             division=division, method=method,
             round_num=round_num, time_str=time_str,
             title_fight=title_fight,
+            location=event.get("location", ""),
+            country=event.get("country", ""),
             get=get,
         )
         if fight_data is None:
@@ -291,7 +301,9 @@ def _scrape_fight(
     division: str, method: str,
     round_num: int, time_str: str,
     title_fight: int,
-    get,
+    location: str = "",
+    country: str = "",
+    get=None,
 ) -> dict | None:
     """Scrape fight detail page. Returns {fight: dict, stats: list[dict]}."""
     try:
@@ -323,10 +335,24 @@ def _scrape_fight(
 
     total_secs = _fight_seconds(round_num, time_str)
 
+    # ---- finish_details from fight info content block ----
+    # Details: is in the second p.b-fight-details__text; text is a direct node in p
+    finish_details = ""
+    for p in soup.select("p.b-fight-details__text"):
+        label = p.find("i", class_="b-fight-details__label")
+        if label and "detail" in label.get_text(strip=True).lower():
+            finish_details = " ".join(p.get_text(separator=" ").split())
+            label_text = label.get_text(strip=True)
+            if finish_details.lower().startswith(label_text.lower()):
+                finish_details = finish_details[len(label_text):].strip()
+            break
+
     fight = {
         "fight_id":              fight_id,
         "event_id":              event_id,
         "date":                  event_date,
+        "location":              location,
+        "country":               country,
         "division":              division,
         "r_fighter_id":          r_fid,
         "b_fighter_id":          b_fid,
@@ -338,6 +364,7 @@ def _scrape_fight(
         "total_fight_time_secs": total_secs,
         "finish_round":          round_num,
         "finish_round_time":     time_str,
+        "finish_details":        finish_details,
     }
 
     # ---- Stat sections ----
