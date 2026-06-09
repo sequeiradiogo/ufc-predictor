@@ -55,6 +55,22 @@ WOMENS_DIVISIONS = {
     "women's bantamweight", "women's featherweight",
 }
 
+# Division -> weight limit in lbs
+DIVISION_WEIGHT_LBS: dict[str, float] = {
+    "women's strawweight":   115.0,
+    "women's flyweight":     125.0,
+    "women's bantamweight":  135.0,
+    "women's featherweight": 145.0,
+    "flyweight":             125.0,
+    "bantamweight":          135.0,
+    "featherweight":         145.0,
+    "lightweight":           155.0,
+    "welterweight":          170.0,
+    "middleweight":          185.0,
+    "light heavyweight":     205.0,
+    "heavyweight":           265.0,
+}
+
 # UFCStats method -> Kaggle finish code
 METHOD_TO_FINISH: dict[str, str] = {
     "KO/TKO":                "KO/TKO",
@@ -346,6 +362,7 @@ def build_rows(
 
         division = (fight.get("division") or "").lower().strip()
         weight_class = DIVISION_MAP.get(division, division.title())
+        weight_lbs = DIVISION_WEIGHT_LBS.get(division, np.nan)
         gender = "FEMALE" if division in WOMENS_DIVISIONS else "MALE"
         title_bout = int(fight.get("title_fight") or 0)
         method = fight.get("method") or ""
@@ -354,6 +371,9 @@ def build_rows(
         total_secs = fight.get("match_time_sec") or None
         no_of_rounds = fight.get("no_of_rounds") or 3
         winner_str = _winner_str(fight.get("winner_id"), r_id, b_id)
+        location = fight.get("location") or ""
+        country = fight.get("country") or ""
+        finish_details = fight.get("finish_details") or ""
 
         r_age = _age(r_roll.get("dob"), date)
         b_age = _age(b_roll.get("dob"), date)
@@ -366,8 +386,8 @@ def build_rows(
             "R_ev":       np.nan,
             "B_ev":       np.nan,
             "date":       date,
-            "location":   "",
-            "country":    "",
+            "location":   location,
+            "country":    country,
             "Winner":     winner_str,
             "title_bout": title_bout,
             "weight_class": weight_class,
@@ -396,7 +416,7 @@ def build_rows(
             "B_Stance":                     b_roll.get("stance"),
             "B_Height_cms":                 b_roll.get("height"),
             "B_Reach_cms":                  b_roll.get("reach"),
-            "B_Weight_lbs":                 np.nan,
+            "B_Weight_lbs":                 weight_lbs,
             # Red fighter career stats
             "R_current_lose_streak":        r_hist["current_lose_streak"],
             "R_current_win_streak":         r_hist["current_win_streak"],
@@ -420,7 +440,7 @@ def build_rows(
             "R_Stance":                     r_roll.get("stance"),
             "R_Height_cms":                 r_roll.get("height"),
             "R_Reach_cms":                  r_roll.get("reach"),
-            "R_Weight_lbs":                 np.nan,
+            "R_Weight_lbs":                 weight_lbs,
             "R_age":                        r_age,
             "B_age":                        b_age,
             # Difference columns (convenience, not used by model directly)
@@ -472,7 +492,7 @@ def build_rows(
             "better_rank":  np.nan,
             # Fight outcome columns
             "finish":             finish,
-            "finish_details":     "",
+            "finish_details":     finish_details,
             "finish_round":       finish_round,
             "finish_round_time":  _finish_round_time(total_secs, finish_round),
             "total_fight_time_secs": total_secs,
@@ -540,6 +560,9 @@ def main(dry_run: bool = False, from_date: str | None = None) -> None:
                f.winner_id, f.odds_red, f.odds_blue, f.finish_round,
                f.match_time_sec, f.no_of_rounds, f.gender,
                f.r_fighter_id, f.b_fighter_id,
+               COALESCE(f.location, '') AS location,
+               COALESCE(f.country, '')  AS country,
+               COALESCE(f.finish_details, '') AS finish_details,
                r.name AS r_name, b.name AS b_name
         FROM fights f
         JOIN fighters r ON f.r_fighter_id = r.fighter_id

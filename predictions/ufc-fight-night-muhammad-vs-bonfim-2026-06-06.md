@@ -1,26 +1,28 @@
 # UFC Fight Night: Muhammad vs. Bonfim -- June 6, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-06-06
+Model: Ensemble (Soft Vote) | Generated: 2026-06-06 | Scored: 2026-06-09
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
+
+**Result: 7/11 correct (63.6%)**
 
 ---
 
 ## Predictions
 
-| Fight | Predicted Winner | Confidence | Likely Method |
-|---|---|---|---|
-| Belal Muhammad vs Gabriel Bonfim | Gabriel Bonfim | 84.7% | N/A |
-| Brendan Allen vs Edmen Shahbazyan | Brendan Allen | 52.6% | N/A |
-| Fares Ziam vs Tom Nolan | Fares Ziam | 83.5% | N/A |
-| Bryce Mitchell vs Santiago Luna | Santiago Luna | 74.8% | N/A |
-| Iwo Baraniewski vs Junior Tafa | Iwo Baraniewski | 79.4% | N/A |
-| Matt Schnell vs Alessandro Costa | Matt Schnell | 71.7% | N/A |
-| Marcus McGhee vs John Yannis | Marcus McGhee | 94.6% | N/A |
-| Bruno Silva vs Edgar Chairez | Bruno Silva | 71.2% | N/A |
-| Priscila Cachoeira vs Chelsea Chandler | Chelsea Chandler | 54.4% | N/A |
-| Jordan Leavitt vs Joanderson Brito | Joanderson Brito | 51.1% | N/A |
-| Ketlen Souza vs Ariane Carnelossi | Ketlen Souza | 87.8% | N/A |
+| Fight | Predicted Winner | Confidence | Likely Method | Actual Result | Correct? |
+|---|---|---|---|---|---|
+| Belal Muhammad vs Gabriel Bonfim | Gabriel Bonfim | 84.7% | N/A | Bonfim (Dec) | YES |
+| Brendan Allen vs Edmen Shahbazyan | Brendan Allen | 52.6% | N/A | Allen (Dec) | YES |
+| Fares Ziam vs Tom Nolan | Fares Ziam | 83.5% | N/A | Nolan (Dec) | NO |
+| Bryce Mitchell vs Santiago Luna | Santiago Luna | 74.8% | N/A | Mitchell (Sub) | NO |
+| Iwo Baraniewski vs Junior Tafa | Iwo Baraniewski | 79.4% | N/A | Baraniewski (KO) | YES |
+| Matt Schnell vs Alessandro Costa | Matt Schnell | 71.7% | N/A | Costa (KO) | NO |
+| Marcus McGhee vs John Yannis | Marcus McGhee | 94.6% | N/A | McGhee (Dec) | YES |
+| Bruno Silva vs Edgar Chairez | Bruno Silva | 71.2% | N/A | Chairez (Sub) | NO |
+| Priscila Cachoeira vs Chelsea Chandler | Chelsea Chandler | 54.4% | N/A | Chandler (Sub) | YES |
+| Jordan Leavitt vs Joanderson Brito | Joanderson Brito | 51.1% | N/A | Brito (Sub) | YES |
+| Ketlen Souza vs Ariane Carnelossi | Ketlen Souza | 87.8% | N/A | Souza (KO) | YES |
 
 ---
 
