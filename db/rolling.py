@@ -126,8 +126,11 @@ def _compute_win_loss(df: pd.DataFrame) -> pd.DataFrame:
     wins_losses_absent = bool(df["_wins_losses_absent"].iloc[0]) if "_wins_losses_absent" in df.columns else False
     rolling = df[["fighter_id", "date", "winner_id", "corner"] + _ROLLING_STATS].copy()
     rolling["is_win"]  = (rolling["fighter_id"] == rolling["winner_id"]).astype(int)
+    # Exclude No Contests (winner_id IS NULL / NaN) and DQ/Overturned oddities
+    # where winner_id may be the string "None". Neither counts as a loss.
     rolling["is_loss"] = (
         (rolling["fighter_id"] != rolling["winner_id"]) &
+        rolling["winner_id"].notna() &
         (rolling["winner_id"] != "None")
     ).astype(int)
 
