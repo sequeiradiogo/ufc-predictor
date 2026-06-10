@@ -42,6 +42,7 @@ from config import (
     DB_V1_PATH,
     MODELS_DIR,
     MODELS_V1_DIR,
+    MODELS_V1_PROD_DIR,
     STARTING_ELO, K_FACTOR_NORMAL, K_FACTOR_PROVISIONAL, PROVISIONAL_LIMIT,
     GLICKO_START_R, GLICKO_START_RD,
     MODEL_XGB_PATH, MODEL_XGB_FEATURES,
@@ -58,6 +59,7 @@ from config import (
     SOS_WINDOW,
     KO_VULN_WINDOW,
     EWMA_SPAN,
+    TRAJECTORY_WINDOW,
     NAME_ALIASES,
 )
 from ml.ELO_calculator import get_current_ratings_by_division, get_current_glicko_by_division
@@ -101,6 +103,231 @@ def _get_v2_defensive_stats(conn_v2: sqlite3.Connection, fighter_name: str) -> d
         "str_def": float(stats[1] or 0),
         "td_def":  float(stats[2] or 0),
     }
+
+
+# ── Live career stat refresh from UFCStats DB ─────────────────────────────────
+
+def _resolve_ufcstats_id(conn_v2: sqlite3.Connection, name: str) -> str | None:
+    """Return the UFCStats hex fighter_id for an exact name match, or None."""
+    row = conn_v2.execute(
+        "SELECT fighter_id FROM fighters WHERE name = ? LIMIT 1", (name,)
+    ).fetchone()
+    return row[0] if row else None
+
+
+def compute_live_career_stats(
+    conn_v2: sqlite3.Connection,
+    fighter_name: str,
+    trajectory_window: int = TRAJECTORY_WINDOW,
+) -> dict | None:
+    """
+    Recompute career aggregate stats and trajectory slopes from raw per-fight
+    data in the UFCStats DB, including the fighter's most recent fight result.
+
+    The mdabbert DB stores pre-fight snapshots, so its most recent row always
+    lags one fight behind.  This function eliminates that gap by computing all
+    career averages from scratch using cumulative sums over every fight on
+    record.
+
+    Slope computation matches the training pipeline: polyfit is applied to the
+    series of *running career averages* (avg_sig_str_pct, splm, avg_td_pct)
+    over the last trajectory_window fights -- NOT per-fight accuracy.
+
+    Returns None if the fighter cannot be found in the UFCStats DB.
+    """
+    fid = _resolve_ufcstats_id(conn_v2, fighter_name)
+    if fid is None:
+        return None
+
+    df = pd.read_sql_query(
+        """
+        SELECT f.date, f.method, f.winner_id,
+               CAST(f.title_fight    AS INTEGER) AS title_fight,
+               CAST(f.finish_round   AS INTEGER) AS finish_round,
+               CAST(p.sig_str_landed  AS REAL)   AS p_sig_landed,
+               CAST(p.sig_str_atmpted AS REAL)   AS p_sig_atmpted,
+               CAST(p.td_landed       AS REAL)   AS p_td_landed,
+               CAST(p.td_atmpted      AS REAL)   AS p_td_atmpted,
+               CAST(p.sub_att         AS REAL)   AS p_sub_att,
+               CAST(p.total_fight_time AS REAL)  AS fight_time,
+               CAST(o.sig_str_landed  AS REAL)   AS o_sig_landed,
+               CAST(o.sig_str_atmpted AS REAL)   AS o_sig_atmpted,
+               CAST(o.td_landed       AS REAL)   AS o_td_landed,
+               CAST(o.td_atmpted      AS REAL)   AS o_td_atmpted
+        FROM fights f
+        JOIN fight_stats p ON p.fight_id = f.fight_id AND p.fighter_id = ?
+        JOIN fight_stats o ON o.fight_id = f.fight_id AND o.fighter_id != ?
+        ORDER BY f.date ASC, f.fight_id ASC
+        """,
+        conn_v2,
+        params=(fid, fid),
+    )
+    if df.empty:
+        return None
+
+    df["won"] = (df["winner_id"] == fid).astype(int)
+    df["fight_time_min"] = df["fight_time"] / 60.0
+
+    # Running cumulative sums for career average computation
+    df["cum_sig_landed"]  = df["p_sig_landed"].cumsum()
+    df["cum_sig_atmpted"] = df["p_sig_atmpted"].cumsum()
+    df["cum_td_landed"]   = df["p_td_landed"].cumsum()
+    df["cum_td_atmpted"]  = df["p_td_atmpted"].cumsum()
+    df["cum_fight_time"]  = df["fight_time_min"].cumsum()
+
+    # Career average after each fight (matches mdabbert snapshot format)
+    df["career_str_acc"] = np.where(
+        df["cum_sig_atmpted"] > 0,
+        df["cum_sig_landed"] / df["cum_sig_atmpted"],
+        0.0,
+    )
+    df["career_td_acc"] = np.where(
+        df["cum_td_atmpted"] > 0,
+        df["cum_td_landed"] / df["cum_td_atmpted"],
+        0.0,
+    )
+    df["career_splm"] = np.where(
+        df["cum_fight_time"] > 0,
+        df["cum_sig_landed"] / df["cum_fight_time"],
+        0.0,
+    )
+
+    # Slope of career averages over last trajectory_window fights
+    window_df = df.tail(trajectory_window)
+
+    def _slope(series: pd.Series) -> float:
+        vals = series.values.astype(float)
+        valid = vals[~np.isnan(vals)]
+        if len(valid) < 2:
+            return 0.0
+        return float(np.polyfit(np.arange(len(valid), dtype=float), valid, 1)[0])
+
+    str_acc_slope = _slope(window_df["career_str_acc"])
+    splm_slope    = _slope(window_df["career_splm"])
+    td_acc_slope  = _slope(window_df["career_td_acc"])
+
+    # Final career averages (after all fights)
+    total_time = df["fight_time_min"].sum()
+    avg_sig_str_pct = float(df["career_str_acc"].iloc[-1])
+    avg_td_pct      = float(df["career_td_acc"].iloc[-1])
+    splm            = float(df["career_splm"].iloc[-1])
+    sapm            = df["o_sig_landed"].sum() / total_time if total_time > 0 else 0.0
+    td_avg          = df["p_td_landed"].sum() / (total_time / 15.0) if total_time > 0 else 0.0
+    avg_sub_att     = float(df["p_sub_att"].mean()) if not df.empty else 0.0
+
+    valid_o_str = df[df["o_sig_atmpted"] > 0]
+    str_def = (
+        (1.0 - valid_o_str["o_sig_landed"].sum() / valid_o_str["o_sig_atmpted"].sum()) * 100.0
+        if not valid_o_str.empty else 0.0
+    )
+    valid_o_td = df[df["o_td_atmpted"] > 0]
+    td_def = (
+        (1.0 - valid_o_td["o_td_landed"].sum() / valid_o_td["o_td_atmpted"].sum()) * 100.0
+        if not valid_o_td.empty else 0.0
+    )
+
+    # Win/loss counts and methods — exclude No Contest fights (winner_id IS NULL)
+    df_decided = df[df["winner_id"].notna()].copy()
+    wins   = int((df_decided["won"] == 1).sum())
+    losses = int((df_decided["won"] == 0).sum())
+
+    def _fc(m):
+        return FINISH_METHOD_MAP.get(m, -1)
+
+    win_by_ko  = int(((df_decided["won"] == 1) & (df_decided["method"].map(_fc) == 1)).sum())
+    win_by_sub = int(((df_decided["won"] == 1) & (df_decided["method"].map(_fc) == 2)).sum())
+    win_by_dec_split     = int(((df_decided["won"] == 1) & (df_decided["method"] == "Decision - Split")).sum())
+    win_by_dec_unanimous = int(((df_decided["won"] == 1) & (df_decided["method"] == "Decision - Unanimous")).sum())
+
+    # Trailing streak and longest win streak — skip NC fights
+    streak = 0
+    max_win_streak = 0
+    cur_win_streak = 0
+    for won in df_decided["won"].tolist():
+        if won:
+            cur_win_streak += 1
+            max_win_streak = max(max_win_streak, cur_win_streak)
+        else:
+            cur_win_streak = 0
+    # Trailing streak
+    streak = 0
+    for won in reversed(df_decided["won"].tolist()):
+        if streak == 0:
+            streak = 1 if won else -1
+        elif (streak > 0 and won) or (streak < 0 and not won):
+            streak += 1 if won else -1
+        else:
+            break
+    career_win_streak  = max(0,  streak)
+    career_lose_streak = max(0, -streak)
+    longest_win_streak = max_win_streak
+
+    total_rounds_fought = int(df["finish_round"].fillna(0).sum())
+    total_title_bouts   = int(df["title_fight"].fillna(0).astype(int).sum())
+
+    return {
+        "wins":                 wins,
+        "losses":               losses,
+        "win_by_ko":            win_by_ko,
+        "win_by_sub":           win_by_sub,
+        "win_by_dec_unanimous": win_by_dec_unanimous,
+        "win_by_dec_split":     win_by_dec_split,
+        "career_win_streak":    career_win_streak,
+        "career_lose_streak":   career_lose_streak,
+        "longest_win_streak":   longest_win_streak,
+        "total_rounds_fought":  total_rounds_fought,
+        "avg_sig_str_pct":      avg_sig_str_pct,
+        "avg_td_pct":           avg_td_pct,
+        "splm":                 splm,
+        "td_avg":               td_avg,
+        "avg_sub_att":          avg_sub_att,
+        "total_title_bouts":    total_title_bouts,
+        "str_acc_slope":        str_acc_slope,
+        "splm_slope":           splm_slope,
+        "td_acc_slope":         td_acc_slope,
+        "sapm":                 sapm,
+        "str_def":              str_def,
+        "td_def":               td_def,
+    }
+
+
+# ── Live rankings lookup ──────────────────────────────────────────────────────
+
+_RANKINGS_CSV = ROOT_DIR / "raw_data" / "rankings_history.csv"
+_rankings_cache: pd.DataFrame | None = None
+
+def _get_current_rank(fighter_name: str, division: str | None) -> float:
+    """
+    Return the most recent UFC ranking for a fighter in the given division.
+    Returns 16.0 (unranked encoding) if not found.
+    """
+    global _rankings_cache
+    _UNRANKED = 16.0
+    if not _RANKINGS_CSV.exists():
+        return _UNRANKED
+    if _rankings_cache is None:
+        _rankings_cache = pd.read_csv(_RANKINGS_CSV)
+    rh = _rankings_cache
+    name_lower = fighter_name.lower()
+    rh_lower = rh["fighter"].str.lower()
+    mask = rh_lower == name_lower
+    if not mask.any():
+        return _UNRANKED
+    matches = rh[mask].copy()
+    # Filter by division weightclass if provided
+    if division:
+        div_norm = division.lower().replace("-", " ")
+        div_mask = matches["weightclass"].str.lower().str.replace("-", " ").str.contains(div_norm)
+        if div_mask.any():
+            matches = matches[div_mask]
+    # Most recent row
+    matches = matches.sort_values("date", ascending=False)
+    rank = matches.iloc[0]["rank"]
+    try:
+        r = float(rank)
+        return r  # 0 = champion, 1-15 = ranked, keep as-is
+    except (ValueError, TypeError):
+        return _UNRANKED
 
 
 # ── Fighter Resolution ────────────────────────────────────────────────────────
@@ -243,6 +470,11 @@ def compute_recent_form(
     if df.empty:
         return {"recent_win_rate": 0.0, "recent_finish_rate": 0.0, "win_streak": 0}
 
+    # Exclude No Contest fights (winner_id IS NULL) from win/loss/streak stats
+    df = df[df["winner_id"].notna()].copy()
+    if df.empty:
+        return {"recent_win_rate": 0.0, "recent_finish_rate": 0.0, "win_streak": 0}
+
     df["won"]      = (df["winner_id"] == fighter_id).astype(int)
     df["finished"] = df["method"].apply(_is_finish_method)
 
@@ -300,6 +532,10 @@ def compute_finish_rates_single(
         conn,
         params=(fighter_id, fighter_id),
     )
+    if df.empty:
+        return {"ko_rate": 0.0, "sub_rate": 0.0, "dec_rate": 0.0}
+
+    df = df[df["winner_id"].notna()]
     if df.empty:
         return {"ko_rate": 0.0, "sub_rate": 0.0, "dec_rate": 0.0}
 
@@ -393,6 +629,7 @@ def compute_ko_vulnerability_single(
     if df.empty:
         return {"ko_vuln": 0.0}
 
+    df = df[df["winner_id"].notna()]
     ko_stopped = 0
     for _, row in df.iterrows():
         if row["winner_id"] != fighter_id:
@@ -607,9 +844,17 @@ def build_feature_vector(
         # ── UFC ranking differential (v1 only; unranked encoded as 16) ───────
         elif feat == "weightclass_rank_diff":
             _UNRANKED = 16.0
-            r_rank = float(pd.to_numeric(red_stats.get("weightclass_rank",  0), errors="coerce") or 0)
-            b_rank = float(pd.to_numeric(blue_stats.get("weightclass_rank", 0), errors="coerce") or 0)
-            row[feat] = (_UNRANKED if r_rank <= 0 else r_rank) - (_UNRANKED if b_rank <= 0 else b_rank)
+            if "weightclass_rank" in _er:
+                r_rank = float(_er["weightclass_rank"])
+            else:
+                r_val = float(pd.to_numeric(red_stats.get("weightclass_rank", _UNRANKED), errors="coerce") or _UNRANKED)
+                r_rank = _UNRANKED if pd.isna(r_val) else r_val
+            if "weightclass_rank" in _eb:
+                b_rank = float(_eb["weightclass_rank"])
+            else:
+                b_val = float(pd.to_numeric(blue_stats.get("weightclass_rank", _UNRANKED), errors="coerce") or _UNRANKED)
+                b_rank = _UNRANKED if pd.isna(b_val) else b_val
+            row[feat] = r_rank - b_rank
 
         # ── Standard _diff features ───────────────────────────────────────────
         elif feat.endswith("_diff"):
@@ -648,7 +893,9 @@ def compute_prediction(
     the caller already has the UFCStats fighter IDs).
     """
     db_path    = db_path    or DB_V1_PATH
-    models_dir = models_dir or MODELS_V1_DIR
+    # Prefer production models (trained on 100% of data) when available
+    if models_dir is None:
+        models_dir = MODELS_V1_PROD_DIR if MODELS_V1_PROD_DIR.exists() and any(MODELS_V1_PROD_DIR.iterdir()) else MODELS_V1_DIR
 
     # ── Resolve artifact paths from models_dir ────────────────────────────────
     _paths = {
@@ -730,8 +977,8 @@ def compute_prediction(
         sys.exit(1)
 
     # ── Get rolling stats ─────────────────────────────────────────────────────
-    red_stats  = get_latest_stats(conn, r_id)
-    blue_stats = get_latest_stats(conn, b_id)
+    red_stats  = get_latest_stats(conn, r_id).copy()
+    blue_stats = get_latest_stats(conn, b_id).copy()
 
     if red_stats.empty:
         print(f"[WARN]  No fight history for {r_name} -- all stats set to 0.")
@@ -740,19 +987,11 @@ def compute_prediction(
 
     # ── ELO ───────────────────────────────────────────────────────────────────
     log.info("Computing current ELO ratings...")
-    div_lower = (division or "").lower().strip()
-    div_elo   = get_current_ratings_by_division(conn)   # always needed for SOS
-    if div_lower and (r_id, div_lower) in div_elo and (b_id, div_lower) in div_elo:
-        elo_r = div_elo[(r_id, div_lower)]
-        elo_b = div_elo[(b_id, div_lower)]
-    else:
-        # Fall back to global ELO when division is unknown or either fighter
-        # hasn't fought at that division (e.g. catch weight bouts).
-        if div_lower and ((r_id, div_lower) not in div_elo or (b_id, div_lower) not in div_elo):
-            log.info("Division '%s' not found for one or both fighters -- using global ELO.", div_lower)
-        elo_ratings = compute_current_elo(conn)
-        elo_r       = elo_ratings.get(r_id, STARTING_ELO)
-        elo_b       = elo_ratings.get(b_id, STARTING_ELO)
+    div_lower   = (division or "").lower().strip()
+    div_elo     = get_current_ratings_by_division(conn)   # used for SOS only
+    elo_ratings = compute_current_elo(conn)               # global, matches training
+    elo_r       = elo_ratings.get(r_id, STARTING_ELO)
+    elo_b       = elo_ratings.get(b_id, STARTING_ELO)
 
     # ── Glicko-2 ──────────────────────────────────────────────────────────────
     log.info("Computing current Glicko-2 ratings...")
@@ -797,17 +1036,103 @@ def compute_prediction(
 
     conn.close()
 
-    # For v1 predictions (using mdabbert DB): enrich with v2 defensive stats by name
-    if db_path == DB_V1_PATH and DB_PATH.exists():
+    # Refresh all stale stats from the UFCStats DB, which is updated by the
+    # scraper after every event.  The mdabbert DB only updates when
+    # ingest_mdabbert.py is run, so all features computed above from conn
+    # (form, finish rates, inactivity, SOS, ko_vuln, ewma, career averages)
+    # may lag by one event.  Recomputing from conn_v2 eliminates that gap.
+    if DB_PATH.exists():
         try:
             conn_v2 = sqlite3.connect(str(DB_PATH))
-            v2_def_r = _get_v2_defensive_stats(conn_v2, r_name)
-            v2_def_b = _get_v2_defensive_stats(conn_v2, b_name)
+            log.info("Refreshing live stats from UFCStats DB...")
+
+            r_fid_v2 = _resolve_ufcstats_id(conn_v2, r_name)
+            b_fid_v2 = _resolve_ufcstats_id(conn_v2, b_name)
+
+            # Career averages + slopes (cumulative recomputation)
+            live_r = compute_live_career_stats(conn_v2, r_name)
+            live_b = compute_live_career_stats(conn_v2, b_name)
+
+            if live_r:
+                for k, v in live_r.items():
+                    red_stats[k] = v
+                extra_r["sapm"]    = live_r["sapm"]
+                extra_r["str_def"] = live_r["str_def"]
+                extra_r["td_def"]  = live_r["td_def"]
+            else:
+                log.warning("Live stat refresh failed for %s -- using stale mdabbert snapshot.", r_name)
+                v2_def_r = _get_v2_defensive_stats(conn_v2, r_name)
+                extra_r.update(v2_def_r)
+
+            if live_b:
+                for k, v in live_b.items():
+                    blue_stats[k] = v
+                extra_b["sapm"]    = live_b["sapm"]
+                extra_b["str_def"] = live_b["str_def"]
+                extra_b["td_def"]  = live_b["td_def"]
+            else:
+                log.warning("Live stat refresh failed for %s -- using stale mdabbert snapshot.", b_name)
+                v2_def_b = _get_v2_defensive_stats(conn_v2, b_name)
+                extra_b.update(v2_def_b)
+
+            # ELO and Glicko from UFCStats (always current -- scraper updates this DB)
+            elo_ratings_v2 = compute_current_elo(conn_v2)
+            div_glicko_v2  = get_current_glicko_by_division(conn_v2)
+
+            if r_fid_v2:
+                elo_r = elo_ratings_v2.get(r_fid_v2, STARTING_ELO)
+            if b_fid_v2:
+                elo_b = elo_ratings_v2.get(b_fid_v2, STARTING_ELO)
+
+            r_gid      = r_fid_v2 or r_id
+            b_gid      = b_fid_v2 or b_id
+            r_gid_divs = [(k, v) for k, v in div_glicko_v2.items() if k[0] == r_gid]
+            b_gid_divs = [(k, v) for k, v in div_glicko_v2.items() if k[0] == b_gid]
+            _def_glicko = (GLICKO_START_R, GLICKO_START_RD, 0.06)
+            if div_lower:
+                glicko_r_tuple = div_glicko_v2.get((r_gid, div_lower)) or (r_gid_divs[0][1] if r_gid_divs else _def_glicko)
+                glicko_b_tuple = div_glicko_v2.get((b_gid, div_lower)) or (b_gid_divs[0][1] if b_gid_divs else _def_glicko)
+            else:
+                glicko_r_tuple = r_gid_divs[0][1] if r_gid_divs else _def_glicko
+                glicko_b_tuple = b_gid_divs[0][1] if b_gid_divs else _def_glicko
+            extra_r["glicko"]    = glicko_r_tuple[0]
+            extra_r["glicko_rd"] = glicko_r_tuple[1]
+            extra_b["glicko"]    = glicko_b_tuple[0]
+            extra_b["glicko_rd"] = glicko_b_tuple[1]
+
+            # Per-fight-history features: form, finish rates, inactivity, SOS,
+            # ko_vuln, ewma -- all query fights/fight_stats so must use UFCStats IDs
+            div_elo_v2 = get_current_ratings_by_division(conn_v2)
+
+            if r_fid_v2:
+                form_r   = compute_recent_form(conn_v2, r_fid_v2)
+                finish_r = compute_finish_rates_single(conn_v2, r_fid_v2)
+                inact_r  = compute_inactivity_single(conn_v2, r_fid_v2)
+                sos_r    = compute_sos_single(conn_v2, r_fid_v2, div_elo_v2)
+                kovuln_r = compute_ko_vulnerability_single(conn_v2, r_fid_v2)
+                ewma_r   = compute_ewma_stats_single(conn_v2, r_fid_v2)
+                extra_r.update({**finish_r, **inact_r, **sos_r, **kovuln_r, **ewma_r})
+            else:
+                log.warning("UFCStats ID not found for %s -- live feature refresh skipped.", r_name)
+
+            if b_fid_v2:
+                form_b   = compute_recent_form(conn_v2, b_fid_v2)
+                finish_b = compute_finish_rates_single(conn_v2, b_fid_v2)
+                inact_b  = compute_inactivity_single(conn_v2, b_fid_v2)
+                sos_b    = compute_sos_single(conn_v2, b_fid_v2, div_elo_v2)
+                kovuln_b = compute_ko_vulnerability_single(conn_v2, b_fid_v2)
+                ewma_b   = compute_ewma_stats_single(conn_v2, b_fid_v2)
+                extra_b.update({**finish_b, **inact_b, **sos_b, **kovuln_b, **ewma_b})
+            else:
+                log.warning("UFCStats ID not found for %s -- live feature refresh skipped.", b_name)
+
             conn_v2.close()
-            extra_r.update(v2_def_r)
-            extra_b.update(v2_def_b)
         except Exception as exc:
-            log.warning("v2 defensive stats lookup failed: %s", exc)
+            log.warning("Live stat refresh failed: %s", exc)
+
+    # ── Live rankings (always from rankings_history.csv) ─────────────────────
+    extra_r["weightclass_rank"] = _get_current_rank(r_name, division)
+    extra_b["weightclass_rank"] = _get_current_rank(b_name, division)
 
     # ── Build & predict ───────────────────────────────────────────────────────
     if model_type == "ensemble":
