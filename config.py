@@ -65,6 +65,22 @@ MODEL_V1_MLP_PATH      = MODELS_V1_DIR / "mlp.joblib"
 MODEL_V1_MLP_FEATURES  = MODELS_V1_DIR / "mlp_features.joblib"
 MODEL_V1_MLP_SCALER    = MODELS_V1_DIR / "mlp_scaler.joblib"
 MODEL_V1_STACKING_PATH = MODELS_V1_DIR / "stacking.joblib"
+
+# Production models -- trained on 100% of data, used exclusively for inference
+MODELS_V1_PROD_DIR          = ROOT_DIR / "models_v1_prod"
+MODEL_V1_PROD_XGB_PATH      = MODELS_V1_PROD_DIR / "xgboost.joblib"
+MODEL_V1_PROD_XGB_FEATURES  = MODELS_V1_PROD_DIR / "xgb_features.joblib"
+MODEL_V1_PROD_LR_PATH       = MODELS_V1_PROD_DIR / "logistic_regression.joblib"
+MODEL_V1_PROD_LR_SCALER     = MODELS_V1_PROD_DIR / "lr_scaler.joblib"
+MODEL_V1_PROD_LR_FEATURES   = MODELS_V1_PROD_DIR / "lr_features.joblib"
+MODEL_V1_PROD_RF_PATH       = MODELS_V1_PROD_DIR / "random_forest.joblib"
+MODEL_V1_PROD_RF_FEATURES   = MODELS_V1_PROD_DIR / "rf_features.joblib"
+MODEL_V1_PROD_LGBM_PATH     = MODELS_V1_PROD_DIR / "lightgbm.joblib"
+MODEL_V1_PROD_LGBM_FEATURES = MODELS_V1_PROD_DIR / "lgbm_features.joblib"
+MODEL_V1_PROD_ENSEMBLE_PATH = MODELS_V1_PROD_DIR / "ensemble.joblib"
+MODEL_V1_PROD_MLP_PATH      = MODELS_V1_PROD_DIR / "mlp.joblib"
+MODEL_V1_PROD_MLP_FEATURES  = MODELS_V1_PROD_DIR / "mlp_features.joblib"
+MODEL_V1_PROD_MLP_SCALER    = MODELS_V1_PROD_DIR / "mlp_scaler.joblib"
 DB_V1_PATH             = _DB_MDABBERT    # public alias for v1 DB
 
 # ── ELO ───────────────────────────────────────────────────────────────────────
