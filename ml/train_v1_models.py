@@ -53,6 +53,20 @@ from config import (
     MODEL_V1_XGB_FEATURES,
     MODEL_V1_XGB_PATH,
     MODELS_V1_DIR,
+    MODEL_V1_PROD_ENSEMBLE_PATH,
+    MODEL_V1_PROD_LGBM_FEATURES,
+    MODEL_V1_PROD_LGBM_PATH,
+    MODEL_V1_PROD_LR_FEATURES,
+    MODEL_V1_PROD_LR_PATH,
+    MODEL_V1_PROD_LR_SCALER,
+    MODEL_V1_PROD_MLP_FEATURES,
+    MODEL_V1_PROD_MLP_PATH,
+    MODEL_V1_PROD_MLP_SCALER,
+    MODEL_V1_PROD_RF_FEATURES,
+    MODEL_V1_PROD_RF_PATH,
+    MODEL_V1_PROD_XGB_FEATURES,
+    MODEL_V1_PROD_XGB_PATH,
+    MODELS_V1_PROD_DIR,
     RANDOM_STATE,
     RF_PARAMS,
     TARGET_COL,
@@ -68,6 +82,7 @@ from utils.logger import get_logger
 log = get_logger(__name__)
 
 MODELS_V1_DIR.mkdir(exist_ok=True)
+MODELS_V1_PROD_DIR.mkdir(exist_ok=True)
 
 # Calibration holdout fraction of training data
 CAL_FRAC = 0.20
@@ -114,28 +129,37 @@ def time_split(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 # ── XGBoost ───────────────────────────────────────────────────────────────────
 
-def train_xgb(df: pd.DataFrame, tune: bool = False, n_trials: int = 50) -> None:
-    log.info("=== XGBoost ===")
+def train_xgb(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: bool = False) -> None:
+    log.info("=== XGBoost%s ===", " (prod)" if prod else "")
     params = _tune_xgb(df, n_trials) if tune else {**XGB_PARAMS, "random_state": RANDOM_STATE}
+    fit_p  = {k: v for k, v in params.items() if k != "eval_metric"}
 
-    train_df, test_df = time_split(df)
-    train_sym = make_symmetric(train_df)
-    X_tr, y_tr = preprocess(train_sym)
-    X_te, y_te = preprocess(test_df)
-    w = compute_sample_weights(train_sym["date"])
-    feature_names = list(X_tr.columns)
-
-    fit_p = {k: v for k, v in params.items() if k != "eval_metric"}
-    model = XGBClassifier(**fit_p, eval_metric="logloss", early_stopping_rounds=50)
-    model.fit(X_tr, y_tr, eval_set=[(X_te, y_te)], sample_weight=w, verbose=False)
-
-    acc = accuracy_score(y_te, model.predict(X_te))
-    log.info("XGBoost test accuracy: %.2f%%", acc * 100)
-    print(f"XGBoost test accuracy: {acc:.2%}")
-
-    joblib.dump(model,         MODEL_V1_XGB_PATH)
-    joblib.dump(feature_names, MODEL_V1_XGB_FEATURES)
-    log.info("Saved xgboost.joblib + xgb_features.joblib")
+    if prod:
+        train_sym     = make_symmetric(df)
+        X_tr, y_tr    = preprocess(train_sym)
+        w             = compute_sample_weights(train_sym["date"])
+        feature_names = list(X_tr.columns)
+        model = XGBClassifier(**fit_p, eval_metric="logloss")
+        model.fit(X_tr, y_tr, sample_weight=w, verbose=False)
+        print("XGBoost prod: trained on 100% of data")
+        joblib.dump(model,         MODEL_V1_PROD_XGB_PATH)
+        joblib.dump(feature_names, MODEL_V1_PROD_XGB_FEATURES)
+        log.info("Saved prod xgboost.joblib + xgb_features.joblib")
+    else:
+        train_df, test_df = time_split(df)
+        train_sym     = make_symmetric(train_df)
+        X_tr, y_tr    = preprocess(train_sym)
+        X_te, y_te    = preprocess(test_df)
+        w             = compute_sample_weights(train_sym["date"])
+        feature_names = list(X_tr.columns)
+        model = XGBClassifier(**fit_p, eval_metric="logloss", early_stopping_rounds=50)
+        model.fit(X_tr, y_tr, eval_set=[(X_te, y_te)], sample_weight=w, verbose=False)
+        acc = accuracy_score(y_te, model.predict(X_te))
+        log.info("XGBoost test accuracy: %.2f%%", acc * 100)
+        print(f"XGBoost test accuracy: {acc:.2%}")
+        joblib.dump(model,         MODEL_V1_XGB_PATH)
+        joblib.dump(feature_names, MODEL_V1_XGB_FEATURES)
+        log.info("Saved xgboost.joblib + xgb_features.joblib")
 
 
 def _tune_xgb(df: pd.DataFrame, n_trials: int) -> dict:
@@ -177,29 +201,30 @@ def _tune_xgb(df: pd.DataFrame, n_trials: int) -> dict:
 
 # ── Logistic Regression ───────────────────────────────────────────────────────
 
-def train_lr(df: pd.DataFrame, tune: bool = False, n_trials: int = 50) -> None:
-    log.info("=== Logistic Regression ===")
+def train_lr(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: bool = False) -> None:
+    log.info("=== Logistic Regression%s ===", " (prod)" if prod else "")
     params = _tune_lr(df, n_trials) if tune else LR_PARAMS
 
-    # 70 / 10 / 20 split for train / Platt calibration / test
-    n       = len(df)
-    tr_end  = int(n * 0.70)
-    cal_end = int(n * 0.80)
+    n = len(df)
+    if prod:
+        # 85% train, 15% Platt calibration -- no held-out test
+        tr_end  = int(n * 0.85)
+        cal_end = n
+    else:
+        # 70% train, 10% calibration, 20% test
+        tr_end  = int(n * 0.70)
+        cal_end = int(n * 0.80)
 
     train_sym  = make_symmetric(df.iloc[:tr_end].copy())
     df_cal     = df.iloc[tr_end:cal_end]
-    df_test    = df.iloc[cal_end:]
-
     X_tr, y_tr   = preprocess(train_sym)
     X_cal, y_cal = preprocess(df_cal)
-    X_te, y_te   = preprocess(df_test)
     feature_names = list(X_tr.columns)
     w = compute_sample_weights(train_sym["date"])
 
-    scaler = StandardScaler()
+    scaler  = StandardScaler()
     X_tr_s  = scaler.fit_transform(X_tr)
     X_cal_s = scaler.transform(X_cal)
-    X_te_s  = scaler.transform(X_te)
 
     base = LogisticRegression(**params)
     base.fit(X_tr_s, y_tr, sample_weight=w)
@@ -208,15 +233,24 @@ def train_lr(df: pd.DataFrame, tune: bool = False, n_trials: int = 50) -> None:
     platt = LogisticRegression(max_iter=1000)
     platt.fit(probs_cal_raw.reshape(-1, 1), y_cal)
 
-    probs_te  = platt.predict_proba(base.predict_proba(X_te_s)[:, 1].reshape(-1, 1))[:, 1]
-    acc = accuracy_score(y_te, (probs_te >= 0.5).astype(int))
-    log.info("LR test accuracy: %.2f%%", acc * 100)
-    print(f"LR test accuracy: {acc:.2%}")
-
-    joblib.dump({"base": base, "platt": platt}, MODEL_V1_LR_PATH)
-    joblib.dump(scaler,        MODEL_V1_LR_SCALER)
-    joblib.dump(feature_names, MODEL_V1_LR_FEATURES)
-    log.info("Saved logistic_regression.joblib + lr_scaler.joblib + lr_features.joblib")
+    if prod:
+        print("LR prod: trained on 85% + calibrated on 15%")
+        joblib.dump({"base": base, "platt": platt}, MODEL_V1_PROD_LR_PATH)
+        joblib.dump(scaler,        MODEL_V1_PROD_LR_SCALER)
+        joblib.dump(feature_names, MODEL_V1_PROD_LR_FEATURES)
+        log.info("Saved prod logistic_regression.joblib")
+    else:
+        df_test   = df.iloc[cal_end:]
+        X_te, y_te = preprocess(df_test)
+        X_te_s     = scaler.transform(X_te)
+        probs_te   = platt.predict_proba(base.predict_proba(X_te_s)[:, 1].reshape(-1, 1))[:, 1]
+        acc = accuracy_score(y_te, (probs_te >= 0.5).astype(int))
+        log.info("LR test accuracy: %.2f%%", acc * 100)
+        print(f"LR test accuracy: {acc:.2%}")
+        joblib.dump({"base": base, "platt": platt}, MODEL_V1_LR_PATH)
+        joblib.dump(scaler,        MODEL_V1_LR_SCALER)
+        joblib.dump(feature_names, MODEL_V1_LR_FEATURES)
+        log.info("Saved logistic_regression.joblib + lr_scaler.joblib + lr_features.joblib")
 
 
 def _tune_lr(df: pd.DataFrame, n_trials: int) -> dict:
@@ -253,27 +287,36 @@ def _tune_lr(df: pd.DataFrame, n_trials: int) -> dict:
 
 # ── Random Forest ─────────────────────────────────────────────────────────────
 
-def train_rf(df: pd.DataFrame, tune: bool = False, n_trials: int = 50) -> None:
-    log.info("=== Random Forest ===")
+def train_rf(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: bool = False) -> None:
+    log.info("=== Random Forest%s ===", " (prod)" if prod else "")
     params = _tune_rf(df, n_trials) if tune else {**RF_PARAMS, "random_state": RANDOM_STATE}
 
-    train_df, test_df = time_split(df)
-    train_sym = make_symmetric(train_df)
-    X_tr, y_tr = preprocess(train_sym)
-    X_te, y_te = preprocess(test_df)
-    feature_names = list(X_tr.columns)
-    w = compute_sample_weights(train_sym["date"])
-
-    model = RandomForestClassifier(**params)
-    model.fit(X_tr, y_tr, sample_weight=w)
-
-    acc = accuracy_score(y_te, model.predict(X_te))
-    log.info("RF test accuracy: %.2f%%", acc * 100)
-    print(f"RF test accuracy: {acc:.2%}")
-
-    joblib.dump(model,         MODEL_V1_RF_PATH)
-    joblib.dump(feature_names, MODEL_V1_RF_FEATURES)
-    log.info("Saved random_forest.joblib + rf_features.joblib")
+    if prod:
+        train_sym     = make_symmetric(df)
+        X_tr, y_tr    = preprocess(train_sym)
+        feature_names = list(X_tr.columns)
+        w             = compute_sample_weights(train_sym["date"])
+        model = RandomForestClassifier(**params)
+        model.fit(X_tr, y_tr, sample_weight=w)
+        print("RF prod: trained on 100% of data")
+        joblib.dump(model,         MODEL_V1_PROD_RF_PATH)
+        joblib.dump(feature_names, MODEL_V1_PROD_RF_FEATURES)
+        log.info("Saved prod random_forest.joblib + rf_features.joblib")
+    else:
+        train_df, test_df = time_split(df)
+        train_sym     = make_symmetric(train_df)
+        X_tr, y_tr    = preprocess(train_sym)
+        X_te, y_te    = preprocess(test_df)
+        feature_names = list(X_tr.columns)
+        w             = compute_sample_weights(train_sym["date"])
+        model = RandomForestClassifier(**params)
+        model.fit(X_tr, y_tr, sample_weight=w)
+        acc = accuracy_score(y_te, model.predict(X_te))
+        log.info("RF test accuracy: %.2f%%", acc * 100)
+        print(f"RF test accuracy: {acc:.2%}")
+        joblib.dump(model,         MODEL_V1_RF_PATH)
+        joblib.dump(feature_names, MODEL_V1_RF_FEATURES)
+        log.info("Saved random_forest.joblib + rf_features.joblib")
 
 
 def _tune_rf(df: pd.DataFrame, n_trials: int) -> dict:
@@ -311,27 +354,36 @@ def _tune_rf(df: pd.DataFrame, n_trials: int) -> dict:
 
 # ── LightGBM ──────────────────────────────────────────────────────────────────
 
-def train_lgbm(df: pd.DataFrame, tune: bool = False, n_trials: int = 50) -> None:
-    log.info("=== LightGBM ===")
+def train_lgbm(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: bool = False) -> None:
+    log.info("=== LightGBM%s ===", " (prod)" if prod else "")
     params = _tune_lgbm(df, n_trials) if tune else {**LGBM_PARAMS, "random_state": RANDOM_STATE}
 
-    train_df, test_df = time_split(df)
-    train_sym = make_symmetric(train_df)
-    X_tr, y_tr = preprocess(train_sym)
-    X_te, y_te = preprocess(test_df)
-    feature_names = list(X_tr.columns)
-    w = compute_sample_weights(train_sym["date"])
-
-    model = LGBMClassifier(**params, verbosity=-1)
-    model.fit(X_tr.values, y_tr, sample_weight=w)
-
-    acc = accuracy_score(y_te, model.predict(X_te.values))
-    log.info("LightGBM test accuracy: %.2f%%", acc * 100)
-    print(f"LightGBM test accuracy: {acc:.2%}")
-
-    joblib.dump(model,         MODEL_V1_LGBM_PATH)
-    joblib.dump(feature_names, MODEL_V1_LGBM_FEATURES)
-    log.info("Saved lightgbm.joblib + lgbm_features.joblib")
+    if prod:
+        train_sym     = make_symmetric(df)
+        X_tr, y_tr    = preprocess(train_sym)
+        feature_names = list(X_tr.columns)
+        w             = compute_sample_weights(train_sym["date"])
+        model = LGBMClassifier(**params, verbosity=-1)
+        model.fit(X_tr.values, y_tr, sample_weight=w)
+        print("LightGBM prod: trained on 100% of data")
+        joblib.dump(model,         MODEL_V1_PROD_LGBM_PATH)
+        joblib.dump(feature_names, MODEL_V1_PROD_LGBM_FEATURES)
+        log.info("Saved prod lightgbm.joblib + lgbm_features.joblib")
+    else:
+        train_df, test_df = time_split(df)
+        train_sym     = make_symmetric(train_df)
+        X_tr, y_tr    = preprocess(train_sym)
+        X_te, y_te    = preprocess(test_df)
+        feature_names = list(X_tr.columns)
+        w             = compute_sample_weights(train_sym["date"])
+        model = LGBMClassifier(**params, verbosity=-1)
+        model.fit(X_tr.values, y_tr, sample_weight=w)
+        acc = accuracy_score(y_te, model.predict(X_te.values))
+        log.info("LightGBM test accuracy: %.2f%%", acc * 100)
+        print(f"LightGBM test accuracy: {acc:.2%}")
+        joblib.dump(model,         MODEL_V1_LGBM_PATH)
+        joblib.dump(feature_names, MODEL_V1_LGBM_FEATURES)
+        log.info("Saved lightgbm.joblib + lgbm_features.joblib")
 
 
 def _tune_lgbm(df: pd.DataFrame, n_trials: int) -> dict:
@@ -371,47 +423,53 @@ def _tune_lgbm(df: pd.DataFrame, n_trials: int) -> dict:
 
 # ── MLP Neural Network ────────────────────────────────────────────────────────
 
-def train_mlp(df: pd.DataFrame, tune: bool = False, n_trials: int = 50) -> None:
-    log.info("=== MLP Neural Network (PyTorch) ===")
+def train_mlp(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: bool = False) -> None:
+    log.info("=== MLP Neural Network (PyTorch)%s ===", " (prod)" if prod else "")
     params = _tune_mlp(df, n_trials) if tune else {**MLP_PARAMS, "random_state": RANDOM_STATE}
 
-    # 70 / 10 / 20 chronological split: train / calibration / test
-    n       = len(df)
-    tr_end  = int(n * 0.70)
-    cal_end = int(n * 0.80)
+    n = len(df)
+    if prod:
+        tr_end  = int(n * 0.85)
+        cal_end = n
+    else:
+        tr_end  = int(n * 0.70)
+        cal_end = int(n * 0.80)
 
     train_sym  = make_symmetric(df.iloc[:tr_end].copy())
     df_cal     = df.iloc[tr_end:cal_end]
-    df_test    = df.iloc[cal_end:]
-
     X_tr, y_tr   = preprocess(train_sym)
     X_cal, y_cal = preprocess(df_cal)
-    X_te, y_te   = preprocess(df_test)
     feature_names = list(X_tr.columns)
 
-    scaler = StandardScaler()
+    scaler  = StandardScaler()
     X_tr_s  = scaler.fit_transform(X_tr)
     X_cal_s = scaler.transform(X_cal)
-    X_te_s  = scaler.transform(X_te)
 
     base = PyTorchMLP(**params)
     base.fit(X_tr_s, y_tr.values)
 
-    # Isotonic calibration fitted on holdout slice inside the training window
     raw_cal    = base.predict_proba(X_cal_s)[:, 1]
     calibrator = IsotonicRegression(out_of_bounds="clip")
     calibrator.fit(raw_cal, y_cal.values)
 
-    raw_te   = base.predict_proba(X_te_s)[:, 1]
-    probs_te = calibrator.predict(raw_te)
-    acc = accuracy_score(y_te, (probs_te >= 0.5).astype(int))
-    log.info("MLP test accuracy: %.2f%%", acc * 100)
-    print(f"MLP test accuracy: {acc:.2%}")
-
-    joblib.dump({"base": base, "platt": calibrator}, MODEL_V1_MLP_PATH)
-    joblib.dump(scaler,        MODEL_V1_MLP_SCALER)
-    joblib.dump(feature_names, MODEL_V1_MLP_FEATURES)
-    log.info("Saved mlp.joblib + mlp_scaler.joblib + mlp_features.joblib")
+    if prod:
+        print("MLP prod: trained on 85% + calibrated on 15%")
+        joblib.dump({"base": base, "platt": calibrator}, MODEL_V1_PROD_MLP_PATH)
+        joblib.dump(scaler,        MODEL_V1_PROD_MLP_SCALER)
+        joblib.dump(feature_names, MODEL_V1_PROD_MLP_FEATURES)
+        log.info("Saved prod mlp.joblib + mlp_scaler.joblib + mlp_features.joblib")
+    else:
+        df_test   = df.iloc[cal_end:]
+        X_te, y_te = preprocess(df_test)
+        X_te_s     = scaler.transform(X_te)
+        probs_te   = calibrator.predict(base.predict_proba(X_te_s)[:, 1])
+        acc = accuracy_score(y_te, (probs_te >= 0.5).astype(int))
+        log.info("MLP test accuracy: %.2f%%", acc * 100)
+        print(f"MLP test accuracy: {acc:.2%}")
+        joblib.dump({"base": base, "platt": calibrator}, MODEL_V1_MLP_PATH)
+        joblib.dump(scaler,        MODEL_V1_MLP_SCALER)
+        joblib.dump(feature_names, MODEL_V1_MLP_FEATURES)
+        log.info("Saved mlp.joblib + mlp_scaler.joblib + mlp_features.joblib")
 
 
 def _tune_mlp(df: pd.DataFrame, n_trials: int) -> dict:
@@ -559,38 +617,47 @@ _OPTUNA_MIN_ROWS = 50   # fall back to equal weights if tuning window is thinner
 
 # ── Calibrated soft-vote ensemble ─────────────────────────────────────────────
 
-def train_ensemble(df: pd.DataFrame, n_trials: int = 100) -> None:
-    log.info("=== Calibrated Ensemble ===")
+def train_ensemble(df: pd.DataFrame, n_trials: int = 100, prod: bool = False) -> None:
+    log.info("=== Calibrated Ensemble%s ===", " (prod)" if prod else "")
 
     feature_cols = [c for c in df.columns if c not in META_COLS]
     X_all = df[feature_cols]
     y_all = df[TARGET_COL].values
 
-    split_idx = int(len(df) * TRAIN_TEST_SPLIT)
-    cal_idx   = int(split_idx * (1 - CAL_FRAC))
-
-    X_cal  = X_all.iloc[cal_idx:split_idx]
-    y_cal  = y_all[cal_idx:split_idx]
-    X_test = X_all.iloc[split_idx:]
-    y_test = y_all[split_idx:]
-
-    # Split test set at its midpoint: first half for Optuna weight tuning,
-    # second half for honest hold-out evaluation. Dynamic -- no hardcoded year.
-    tune_end = len(X_test) // 2
-    X_tune = X_test.iloc[:tune_end]
-    y_tune = y_test[:tune_end]
-    X_hold = X_test.iloc[tune_end:]
-    y_hold = y_test[tune_end:]
-
-    tune_dates = df.iloc[split_idx:split_idx + tune_end]["date"]
-    hold_dates = df.iloc[split_idx + tune_end:]["date"]
-
-    if len(X_tune) < _OPTUNA_MIN_ROWS:
-        log.warning(
-            "Tune window too thin (%d rows) -- ensemble will use equal weights.",
-            len(X_tune),
-        )
-        X_tune, y_tune = None, None
+    if prod:
+        # Calibrators are fitted on the last 20% using EVAL base model predictions
+        # (eval models trained on 80%, so their predictions on the last 20% are unbiased).
+        # Weights are borrowed from the eval ensemble (tuned on honest held-out data).
+        # This avoids in-sample leakage from using prod base models (trained on 100%) for calibration.
+        cal_idx  = int(len(df) * TRAIN_TEST_SPLIT)
+        X_cal  = X_all.iloc[cal_idx:]
+        y_cal  = y_all[cal_idx:]
+        X_tune, y_tune = None, None   # weights come from eval ensemble, no Optuna needed
+        X_hold, y_hold = None, None
+        tune_dates     = df.iloc[cal_idx:]["date"]
+        hold_dates     = tune_dates
+        ensemble_save_path = MODEL_V1_PROD_ENSEMBLE_PATH
+    else:
+        split_idx = int(len(df) * TRAIN_TEST_SPLIT)
+        cal_idx   = int(split_idx * (1 - CAL_FRAC))
+        X_cal  = X_all.iloc[cal_idx:split_idx]
+        y_cal  = y_all[cal_idx:split_idx]
+        X_test = X_all.iloc[split_idx:]
+        y_test = y_all[split_idx:]
+        tune_end = len(X_test) // 2
+        X_tune = X_test.iloc[:tune_end]
+        y_tune = y_test[:tune_end]
+        X_hold = X_test.iloc[tune_end:]
+        y_hold = y_test[tune_end:]
+        tune_dates = df.iloc[split_idx:split_idx + tune_end]["date"]
+        hold_dates = df.iloc[split_idx + tune_end:]["date"]
+        if len(X_tune) < _OPTUNA_MIN_ROWS:
+            log.warning(
+                "Tune window too thin (%d rows) -- ensemble will use equal weights.",
+                len(X_tune),
+            )
+            X_tune, y_tune = None, None
+        ensemble_save_path = MODEL_V1_ENSEMBLE_PATH
 
     log.info(
         "Ensemble split: %d cal | %d tune (%s to %s) | %d hold-out (%s to %s)",
@@ -598,18 +665,27 @@ def train_ensemble(df: pd.DataFrame, n_trials: int = 100) -> None:
         len(X_tune) if X_tune is not None else 0,
         tune_dates.min().date() if X_tune is not None else "n/a",
         tune_dates.max().date() if X_tune is not None else "n/a",
-        len(y_hold),
-        hold_dates.min().date(),
-        hold_dates.max().date(),
+        len(y_hold) if y_hold is not None else 0,
+        hold_dates.min().date() if y_hold is not None else "n/a",
+        hold_dates.max().date() if y_hold is not None else "n/a",
     )
 
-    specs = [
-        ("xgb",  MODEL_V1_XGB_PATH,  MODEL_V1_XGB_FEATURES,  None,               False),
-        ("lr",   MODEL_V1_LR_PATH,   MODEL_V1_LR_FEATURES,   MODEL_V1_LR_SCALER, True),
-        ("rf",   MODEL_V1_RF_PATH,   MODEL_V1_RF_FEATURES,   None,               False),
-        ("lgbm", MODEL_V1_LGBM_PATH, MODEL_V1_LGBM_FEATURES, None,               False),
-        ("mlp",  MODEL_V1_MLP_PATH,  MODEL_V1_MLP_FEATURES,  MODEL_V1_MLP_SCALER, True),
-    ]
+    if prod:
+        specs = [
+            ("xgb",  MODEL_V1_PROD_XGB_PATH,  MODEL_V1_PROD_XGB_FEATURES,  None,                    False),
+            ("lr",   MODEL_V1_PROD_LR_PATH,   MODEL_V1_PROD_LR_FEATURES,   MODEL_V1_PROD_LR_SCALER, True),
+            ("rf",   MODEL_V1_PROD_RF_PATH,   MODEL_V1_PROD_RF_FEATURES,   None,                    False),
+            ("lgbm", MODEL_V1_PROD_LGBM_PATH, MODEL_V1_PROD_LGBM_FEATURES, None,                    False),
+            ("mlp",  MODEL_V1_PROD_MLP_PATH,  MODEL_V1_PROD_MLP_FEATURES,  MODEL_V1_PROD_MLP_SCALER, True),
+        ]
+    else:
+        specs = [
+            ("xgb",  MODEL_V1_XGB_PATH,  MODEL_V1_XGB_FEATURES,  None,               False),
+            ("lr",   MODEL_V1_LR_PATH,   MODEL_V1_LR_FEATURES,   MODEL_V1_LR_SCALER, True),
+            ("rf",   MODEL_V1_RF_PATH,   MODEL_V1_RF_FEATURES,   None,               False),
+            ("lgbm", MODEL_V1_LGBM_PATH, MODEL_V1_LGBM_FEATURES, None,               False),
+            ("mlp",  MODEL_V1_MLP_PATH,  MODEL_V1_MLP_FEATURES,  MODEL_V1_MLP_SCALER, True),
+        ]
 
     loaded = []
     for m_key, m_path, f_path, s_path, is_lr in specs:
@@ -632,73 +708,115 @@ def train_ensemble(df: pd.DataFrame, n_trials: int = 100) -> None:
         base = artifact["base"] if is_lr else artifact
         return base.predict_proba(Xi)[:, 1]
 
-    # Fit isotonic calibrators on calibration holdout (inside training window)
-    log.info("Fitting isotonic calibrators (%d samples)...", len(y_cal))
-    calibrators = {}
-    print("\nBase model calibration accuracy:")
-    for m_key, artifact, feat_names, scaler, is_lr in loaded:
-        raw = _raw_proba(artifact, feat_names, scaler, is_lr, X_cal)
-        ir  = IsotonicRegression(out_of_bounds="clip")
-        ir.fit(raw, y_cal)
-        calibrators[m_key] = ir
-        acc = ((raw >= 0.5).astype(int) == y_cal).mean()
-        print(f"  {m_key:<8s}  {acc:.2%}")
+    if prod:
+        # For prod: calibrators are fitted on eval base model predictions (unbiased --
+        # eval models trained on 80%, so their last-20% predictions are held-out).
+        # Weights are borrowed from the eval ensemble (tuned on honest held-out data).
+        eval_specs = [
+            ("xgb",  MODEL_V1_XGB_PATH,  MODEL_V1_XGB_FEATURES,  None,               False),
+            ("lr",   MODEL_V1_LR_PATH,   MODEL_V1_LR_FEATURES,   MODEL_V1_LR_SCALER, True),
+            ("rf",   MODEL_V1_RF_PATH,   MODEL_V1_RF_FEATURES,   None,               False),
+            ("lgbm", MODEL_V1_LGBM_PATH, MODEL_V1_LGBM_FEATURES, None,               False),
+            ("mlp",  MODEL_V1_MLP_PATH,  MODEL_V1_MLP_FEATURES,  MODEL_V1_MLP_SCALER, True),
+        ]
+        eval_ensemble = joblib.load(MODEL_V1_ENSEMBLE_PATH)
+        best_weights  = eval_ensemble["weights"]
+        model_keys    = [m_key for m_key, *_ in loaded]
 
-    # Score base models (calibrated) on the hold-out set
-    model_keys  = []
-    tune_probas = []   # used by Optuna (pre-holdout only); empty when X_tune is None
-    hold_probas = []   # used for honest accuracy reporting
-    print(f"\nBase model hold-out accuracy ({hold_dates.min().date()} to {hold_dates.max().date()}, calibrated):")
-    for m_key, artifact, feat_names, scaler, is_lr in loaded:
-        if X_tune is not None:
-            raw_tune = _raw_proba(artifact, feat_names, scaler, is_lr, X_tune)
-            cal_tune = calibrators[m_key].predict(raw_tune)
-            tune_probas.append(np.column_stack([1 - cal_tune, cal_tune]))
+        log.info("Fitting calibrators on eval base model predictions (last 20%% = unbiased holdout)...")
+        calibrators = {}
+        print("\nCalibration (eval models, unbiased last-20%% predictions):")
+        for m_key, m_path, f_path, s_path, is_lr in eval_specs:
+            if not m_path.exists() or not f_path.exists():
+                log.warning("Eval model not found for %s -- skipping calibration", m_key)
+                calibrators[m_key] = IsotonicRegression(out_of_bounds="clip")
+                continue
+            eval_artifact   = joblib.load(m_path)
+            eval_feat_names = joblib.load(f_path)
+            eval_scaler     = joblib.load(s_path) if s_path and s_path.exists() else None
+            raw = _raw_proba(eval_artifact, eval_feat_names, eval_scaler, is_lr, X_cal)
+            ir  = IsotonicRegression(out_of_bounds="clip")
+            ir.fit(raw, y_cal)
+            calibrators[m_key] = ir
+            acc = ((raw >= 0.5).astype(int) == y_cal).mean()
+            print(f"  {m_key:<8s}  {acc:.2%}")
 
-        raw_hold = _raw_proba(artifact, feat_names, scaler, is_lr, X_hold)
-        cal_hold = calibrators[m_key].predict(raw_hold)
-        p_hold   = np.column_stack([1 - cal_hold, cal_hold])
+        print(f"\nProd ensemble weights (from eval ensemble):")
+        for k, w in best_weights.items():
+            print(f"  {k:<8s}  {w:.4f}")
+        hold_acc = eval_ensemble["test_accuracy"]
+        print(f"Reference eval accuracy: {hold_acc:.2%}")
 
-        acc = ((p_hold[:, 1] >= 0.5).astype(int) == y_hold).mean()
-        print(f"  {m_key:<8s}  {acc:.2%}")
-        model_keys.append(m_key)
-        hold_probas.append(p_hold)
-
-    # Optuna weight search -- only sees pre-holdout data.
-    # Falls back to equal weights when the pre-holdout window is too thin.
-    import optuna
-    optuna.logging.set_verbosity(optuna.logging.WARNING)
-
-    if X_tune is not None:
-        def objective(trial) -> float:
-            raw_w  = [trial.suggest_float(f"w_{k}", 0.0, 1.0) for k in model_keys]
-            total  = sum(raw_w) + 1e-9
-            w_norm = [w / total for w in raw_w]
-            ens    = np.average(tune_probas, axis=0, weights=w_norm)
-            return ((ens[:, 1] >= 0.5).astype(int) == y_tune).mean()
-
-        # Run multiple independent studies and keep the best to reduce variance.
-        _n_restarts = 5
-        _trials_each = max(n_trials, 100)  # at least 100 trials per restart
-        best_value  = -1.0
-        best_raw    = None
-        for _ in range(_n_restarts):
-            study = optuna.create_study(direction="maximize")
-            study.optimize(objective, n_trials=_trials_each)
-            if study.best_value > best_value:
-                best_value = study.best_value
-                best_raw   = [study.best_params[f"w_{k}"] for k in model_keys]
-        best_total   = sum(best_raw)
-        best_weights = {k: w / best_total for k, w in zip(model_keys, best_raw)}
     else:
-        equal = 1.0 / len(model_keys)
-        best_weights = {k: equal for k in model_keys}
-        log.info("Using equal weights: %s", best_weights)
+        # Fit isotonic calibrators on calibration holdout (inside training window)
+        log.info("Fitting isotonic calibrators (%d samples)...", len(y_cal))
+        calibrators = {}
+        print("\nBase model calibration accuracy:")
+        for m_key, artifact, feat_names, scaler, is_lr in loaded:
+            raw = _raw_proba(artifact, feat_names, scaler, is_lr, X_cal)
+            ir  = IsotonicRegression(out_of_bounds="clip")
+            ir.fit(raw, y_cal)
+            calibrators[m_key] = ir
+            acc = ((raw >= 0.5).astype(int) == y_cal).mean()
+            print(f"  {m_key:<8s}  {acc:.2%}")
 
-    # Report honest hold-out accuracy with the chosen weights
-    ens_hold = np.average(hold_probas, axis=0,
-                          weights=[best_weights[k] for k in model_keys])
-    hold_acc = ((ens_hold[:, 1] >= 0.5).astype(int) == y_hold).mean()
+        model_keys  = []
+        tune_probas = []
+        hold_probas = []
+        print(f"\nBase model hold-out accuracy ({hold_dates.min().date()} to {hold_dates.max().date()}, calibrated):")
+        for m_key, artifact, feat_names, scaler, is_lr in loaded:
+            if X_tune is not None:
+                raw_tune = _raw_proba(artifact, feat_names, scaler, is_lr, X_tune)
+                cal_tune = calibrators[m_key].predict(raw_tune)
+                tune_probas.append(np.column_stack([1 - cal_tune, cal_tune]))
+
+            raw_hold = _raw_proba(artifact, feat_names, scaler, is_lr, X_hold)
+            cal_hold = calibrators[m_key].predict(raw_hold)
+            p_hold   = np.column_stack([1 - cal_hold, cal_hold])
+
+            acc = ((p_hold[:, 1] >= 0.5).astype(int) == y_hold).mean()
+            print(f"  {m_key:<8s}  {acc:.2%}")
+            model_keys.append(m_key)
+            hold_probas.append(p_hold)
+
+        import optuna
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+        if X_tune is not None:
+            def objective(trial) -> float:
+                raw_w  = [trial.suggest_float(f"w_{k}", 0.0, 1.0) for k in model_keys]
+                total  = sum(raw_w) + 1e-9
+                w_norm = [w / total for w in raw_w]
+                ens    = np.average(tune_probas, axis=0, weights=w_norm)
+                return ((ens[:, 1] >= 0.5).astype(int) == y_tune).mean()
+
+            _n_restarts  = 5
+            _trials_each = max(n_trials, 100)
+            best_value   = -1.0
+            best_raw     = None
+            for _ in range(_n_restarts):
+                study = optuna.create_study(direction="maximize")
+                study.optimize(objective, n_trials=_trials_each)
+                if study.best_value > best_value:
+                    best_value = study.best_value
+                    best_raw   = [study.best_params[f"w_{k}"] for k in model_keys]
+            best_total   = sum(best_raw)
+            best_weights = {k: w / best_total for k, w in zip(model_keys, best_raw)}
+        else:
+            equal = 1.0 / len(model_keys)
+            best_weights = {k: equal for k in model_keys}
+            log.info("Using equal weights: %s", best_weights)
+
+        ens_hold = np.average(hold_probas, axis=0,
+                              weights=[best_weights[k] for k in model_keys])
+        hold_acc = ((ens_hold[:, 1] >= 0.5).astype(int) == y_hold).mean()
+
+    hold_label = f"{hold_dates.min().date()} to {hold_dates.max().date()}" if y_hold is not None else "n/a"
+    print(f"\nEnsemble hold-out accuracy ({hold_label}): {hold_acc:.2%}")
+    if not prod:
+        print("Weights:")
+        for k, w in best_weights.items():
+            print(f"  {k:<8s}  {w:.4f}")
 
     joblib.dump({
         "mode":          "calibrated_soft_vote",
@@ -706,12 +824,7 @@ def train_ensemble(df: pd.DataFrame, n_trials: int = 100) -> None:
         "calibrators":   calibrators,
         "model_keys":    model_keys,
         "test_accuracy": hold_acc,
-    }, MODEL_V1_ENSEMBLE_PATH)
-
-    print(f"\nEnsemble hold-out accuracy ({hold_dates.min().date()} to {hold_dates.max().date()}): {hold_acc:.2%}")
-    print("Weights:")
-    for k, w in best_weights.items():
-        print(f"  {k:<8s}  {w:.4f}")
+    }, ensemble_save_path)
     log.info("Saved ensemble.joblib")
 
 
@@ -750,6 +863,12 @@ def main() -> None:
         help="Sample weight decay: weight=exp(alpha*(year-max_year)). "
              "Overrides config.SAMPLE_WEIGHT_ALPHA. 0.0=uniform, 0.3=moderate, 0.5=strong.",
     )
+    parser.add_argument(
+        "--prod",
+        action="store_true",
+        help="Train production models on 100%% of data, saved to models_v1_prod/. "
+             "Use the evaluation models (models_v1/) for backtesting and hyperparameter tuning.",
+    )
     args = parser.parse_args()
 
     if args.alpha is not None:
@@ -758,21 +877,21 @@ def main() -> None:
         log.info("Sample weight alpha set to %.3f", args.alpha)
 
     df = load_data(min_date=args.min_date)
-    targets = [args.model] if args.model else _ALL_MODELS
+    targets = [args.model] if args.model else [m for m in _ALL_MODELS if m != "stacking"]
 
     for target in targets:
         if target == "xgb":
-            train_xgb(df, tune=args.tune, n_trials=args.trials)
+            train_xgb(df, tune=args.tune, n_trials=args.trials, prod=args.prod)
         elif target == "lr":
-            train_lr(df, tune=args.tune, n_trials=args.trials)
+            train_lr(df, tune=args.tune, n_trials=args.trials, prod=args.prod)
         elif target == "rf":
-            train_rf(df, tune=args.tune, n_trials=args.trials)
+            train_rf(df, tune=args.tune, n_trials=args.trials, prod=args.prod)
         elif target == "lgbm":
-            train_lgbm(df, tune=args.tune, n_trials=args.trials)
+            train_lgbm(df, tune=args.tune, n_trials=args.trials, prod=args.prod)
         elif target == "mlp":
-            train_mlp(df, tune=args.tune, n_trials=args.trials)
+            train_mlp(df, tune=args.tune, n_trials=args.trials, prod=args.prod)
         elif target == "ensemble":
-            train_ensemble(df, n_trials=args.trials if args.tune else 100)
+            train_ensemble(df, n_trials=args.trials if args.tune else 100, prod=args.prod)
         elif target == "stacking":
             train_stacking(df)
 
