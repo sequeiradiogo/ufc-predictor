@@ -58,6 +58,7 @@ from config import (
     FINISH_CLASS_NAMES,
     DIVISIONS,
     EXCLUDE_STAT_KEYWORDS,
+    EXCLUDED_FEATURES,
     RECENT_FORM_WINDOW,
     FINISH_METHOD_MAP,
     SOS_WINDOW,
@@ -1049,32 +1050,46 @@ def compute_prediction(
     if blue_stats.empty:
         print(f"[WARN]  No fight history for {b_name} -- all stats set to 0.")
 
+    div_lower = (division or "").lower().strip()
+
+    # Gate expensive history-replay computations on whether the features are active.
+    _excluded  = set(EXCLUDED_FEATURES)
+    _need_elo  = "elo_diff"       not in _excluded
+    _need_sos  = "sos_diff"       not in _excluded
+    _need_glicko = ("glicko_diff" not in _excluded or "glicko_rd_diff" not in _excluded)
+
     # ── ELO ───────────────────────────────────────────────────────────────────
+    # Always computed for display even when elo_diff is excluded from training.
+    _def_glicko_t = (GLICKO_START_R, GLICKO_START_RD, 0.06)
     log.info("Computing current ELO ratings...")
-    div_lower   = (division or "").lower().strip()
-    div_elo     = get_current_ratings_by_division(conn)   # used for SOS only
-    elo_ratings = compute_current_elo(conn)               # global, matches training
-    elo_r       = elo_ratings.get(r_id, STARTING_ELO)
-    elo_b       = elo_ratings.get(b_id, STARTING_ELO)
+    elo_ratings = compute_current_elo(conn)
+    elo_r = elo_ratings.get(r_id, STARTING_ELO)
+    elo_b = elo_ratings.get(b_id, STARTING_ELO)
+
+    # SOS requires per-division ELO ratings for opponent lookup
+    div_elo = {}
+    if _need_sos:
+        log.info("Computing per-division ELO for SOS...")
+        div_elo = get_current_ratings_by_division(conn)
 
     # ── Glicko-2 ──────────────────────────────────────────────────────────────
-    log.info("Computing current Glicko-2 ratings...")
-    div_glicko = get_current_glicko_by_division(conn)
-    if div_lower and (r_id, div_lower) in div_glicko and (b_id, div_lower) in div_glicko:
-        glicko_r_tuple = div_glicko[(r_id, div_lower)]
-        glicko_b_tuple = div_glicko[(b_id, div_lower)]
-    elif div_lower:
-        # Partial miss -- use per-fighter fallback to any available division rating
-        r_divs = [(k, v) for k, v in div_glicko.items() if k[0] == r_id]
-        b_divs = [(k, v) for k, v in div_glicko.items() if k[0] == b_id]
-        glicko_r_tuple = r_divs[0][1] if r_divs else (GLICKO_START_R, GLICKO_START_RD, 0.06)
-        glicko_b_tuple = b_divs[0][1] if b_divs else (GLICKO_START_R, GLICKO_START_RD, 0.06)
-    else:
-        # Fall back to the most recent division the fighter appeared in
-        r_divs = [(k, v) for k, v in div_glicko.items() if k[0] == r_id]
-        b_divs = [(k, v) for k, v in div_glicko.items() if k[0] == b_id]
-        glicko_r_tuple = r_divs[0][1] if r_divs else (GLICKO_START_R, GLICKO_START_RD, 0.06)
-        glicko_b_tuple = b_divs[0][1] if b_divs else (GLICKO_START_R, GLICKO_START_RD, 0.06)
+    glicko_r_tuple = glicko_b_tuple = _def_glicko_t
+    if _need_glicko:
+        log.info("Computing current Glicko-2 ratings...")
+        div_glicko = get_current_glicko_by_division(conn)
+        if div_lower and (r_id, div_lower) in div_glicko and (b_id, div_lower) in div_glicko:
+            glicko_r_tuple = div_glicko[(r_id, div_lower)]
+            glicko_b_tuple = div_glicko[(b_id, div_lower)]
+        elif div_lower:
+            r_divs = [(k, v) for k, v in div_glicko.items() if k[0] == r_id]
+            b_divs = [(k, v) for k, v in div_glicko.items() if k[0] == b_id]
+            glicko_r_tuple = r_divs[0][1] if r_divs else _def_glicko_t
+            glicko_b_tuple = b_divs[0][1] if b_divs else _def_glicko_t
+        else:
+            r_divs = [(k, v) for k, v in div_glicko.items() if k[0] == r_id]
+            b_divs = [(k, v) for k, v in div_glicko.items() if k[0] == b_id]
+            glicko_r_tuple = r_divs[0][1] if r_divs else _def_glicko_t
+            glicko_b_tuple = b_divs[0][1] if b_divs else _def_glicko_t
 
     # ── Recent form ───────────────────────────────────────────────────────────
     log.info("Computing recent form...")
@@ -1087,8 +1102,8 @@ def compute_prediction(
     finish_b = compute_finish_rates_single(conn, b_id)
     inact_r  = compute_inactivity_single(conn, r_id)
     inact_b  = compute_inactivity_single(conn, b_id)
-    sos_r    = compute_sos_single(conn, r_id, div_elo)
-    sos_b    = compute_sos_single(conn, b_id, div_elo)
+    sos_r    = compute_sos_single(conn, r_id, div_elo) if _need_sos else {"sos": float(STARTING_ELO)}
+    sos_b    = compute_sos_single(conn, b_id, div_elo) if _need_sos else {"sos": float(STARTING_ELO)}
     kovuln_r = compute_ko_vulnerability_single(conn, r_id)
     kovuln_b = compute_ko_vulnerability_single(conn, b_id)
     ewma_r   = compute_ewma_stats_single(conn, r_id)
@@ -1139,40 +1154,41 @@ def compute_prediction(
                 v2_def_b = _get_v2_defensive_stats(conn_v2, b_name)
                 extra_b.update(v2_def_b)
 
-            # ELO and Glicko from UFCStats (always current -- scraper updates this DB)
+            # ELO from UFCStats (always computed for display)
             elo_ratings_v2 = compute_current_elo(conn_v2)
-            div_glicko_v2  = get_current_glicko_by_division(conn_v2)
-
             if r_fid_v2:
                 elo_r = elo_ratings_v2.get(r_fid_v2, STARTING_ELO)
             if b_fid_v2:
                 elo_b = elo_ratings_v2.get(b_fid_v2, STARTING_ELO)
 
-            r_gid      = r_fid_v2 or r_id
-            b_gid      = b_fid_v2 or b_id
-            r_gid_divs = [(k, v) for k, v in div_glicko_v2.items() if k[0] == r_gid]
-            b_gid_divs = [(k, v) for k, v in div_glicko_v2.items() if k[0] == b_gid]
-            _def_glicko = (GLICKO_START_R, GLICKO_START_RD, 0.06)
-            if div_lower:
-                glicko_r_tuple = div_glicko_v2.get((r_gid, div_lower)) or (r_gid_divs[0][1] if r_gid_divs else _def_glicko)
-                glicko_b_tuple = div_glicko_v2.get((b_gid, div_lower)) or (b_gid_divs[0][1] if b_gid_divs else _def_glicko)
-            else:
-                glicko_r_tuple = r_gid_divs[0][1] if r_gid_divs else _def_glicko
-                glicko_b_tuple = b_gid_divs[0][1] if b_gid_divs else _def_glicko
-            extra_r["glicko"]    = glicko_r_tuple[0]
-            extra_r["glicko_rd"] = glicko_r_tuple[1]
-            extra_b["glicko"]    = glicko_b_tuple[0]
-            extra_b["glicko_rd"] = glicko_b_tuple[1]
+            # Glicko from UFCStats (skip if both Glicko features excluded)
+            if _need_glicko:
+                div_glicko_v2 = get_current_glicko_by_division(conn_v2)
+                r_gid      = r_fid_v2 or r_id
+                b_gid      = b_fid_v2 or b_id
+                r_gid_divs = [(k, v) for k, v in div_glicko_v2.items() if k[0] == r_gid]
+                b_gid_divs = [(k, v) for k, v in div_glicko_v2.items() if k[0] == b_gid]
+                if div_lower:
+                    glicko_r_tuple = div_glicko_v2.get((r_gid, div_lower)) or (r_gid_divs[0][1] if r_gid_divs else _def_glicko_t)
+                    glicko_b_tuple = div_glicko_v2.get((b_gid, div_lower)) or (b_gid_divs[0][1] if b_gid_divs else _def_glicko_t)
+                else:
+                    glicko_r_tuple = r_gid_divs[0][1] if r_gid_divs else _def_glicko_t
+                    glicko_b_tuple = b_gid_divs[0][1] if b_gid_divs else _def_glicko_t
+                extra_r["glicko"]    = glicko_r_tuple[0]
+                extra_r["glicko_rd"] = glicko_r_tuple[1]
+                extra_b["glicko"]    = glicko_b_tuple[0]
+                extra_b["glicko_rd"] = glicko_b_tuple[1]
 
             # Per-fight-history features: form, finish rates, inactivity, SOS,
-            # ko_vuln, ewma -- all query fights/fight_stats so must use UFCStats IDs
-            div_elo_v2 = get_current_ratings_by_division(conn_v2)
+            # ko_vuln, ewma -- all query fights/fight_stats so must use UFCStats IDs.
+            # SOS also needs per-division ELO (skip if sos_diff excluded).
+            div_elo_v2 = get_current_ratings_by_division(conn_v2) if _need_sos else {}
 
             if r_fid_v2:
                 form_r   = compute_recent_form(conn_v2, r_fid_v2)
                 finish_r = compute_finish_rates_single(conn_v2, r_fid_v2)
                 inact_r  = compute_inactivity_single(conn_v2, r_fid_v2)
-                sos_r    = compute_sos_single(conn_v2, r_fid_v2, div_elo_v2)
+                sos_r    = compute_sos_single(conn_v2, r_fid_v2, div_elo_v2) if _need_sos else {"sos": float(STARTING_ELO)}
                 kovuln_r = compute_ko_vulnerability_single(conn_v2, r_fid_v2)
                 ewma_r   = compute_ewma_stats_single(conn_v2, r_fid_v2)
                 extra_r.update({**finish_r, **inact_r, **sos_r, **kovuln_r, **ewma_r})
@@ -1183,7 +1199,7 @@ def compute_prediction(
                 form_b   = compute_recent_form(conn_v2, b_fid_v2)
                 finish_b = compute_finish_rates_single(conn_v2, b_fid_v2)
                 inact_b  = compute_inactivity_single(conn_v2, b_fid_v2)
-                sos_b    = compute_sos_single(conn_v2, b_fid_v2, div_elo_v2)
+                sos_b    = compute_sos_single(conn_v2, b_fid_v2, div_elo_v2) if _need_sos else {"sos": float(STARTING_ELO)}
                 kovuln_b = compute_ko_vulnerability_single(conn_v2, b_fid_v2)
                 ewma_b   = compute_ewma_stats_single(conn_v2, b_fid_v2)
                 extra_b.update({**finish_b, **inact_b, **sos_b, **kovuln_b, **ewma_b})

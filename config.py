@@ -187,6 +187,14 @@ EXCLUDED_FEATURES: list[str] = [
     # ELO already captures the rating signal more cleanly.
     "glicko_diff",
     "glicko_rd_diff",
+    # SHAP ablation (2026-06-11): negative permutation importance across 3-4 models.
+    # str_def_diff: target corr=-0.033 (wrong direction) + r=0.49 with sapm_diff (collinear).
+    # sos_diff: target corr=-0.049 (wrong direction) + redundant with career record features.
+    # elo_diff: ALL 4 models negative PI; redundant with win/loss/streak features.
+    # Ablation with equal-weight ensemble: dropping these 3 gives +0.44pp on 2025+ set.
+    "str_def_diff",
+    "sos_diff",
+    "elo_diff",
 ]
 
 # Prior weight for shrinkage toward division mean in ML_data_preparation.

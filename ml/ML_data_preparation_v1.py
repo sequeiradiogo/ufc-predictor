@@ -306,6 +306,7 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
         "str_acc_slope", "splm_slope", "td_acc_slope",
         "sapm", "str_def", "td_def",
         "ewma_str_acc", "ewma_td_acc", "str_acc_var",
+        "opp_adj_splm", "opp_adj_td_avg",
     )
     for col in _PRECOMPUTED:
         wide[f"{col}_red"]  = pd.to_numeric(wide.get(f"r_{col}"), errors="coerce")
@@ -356,6 +357,7 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
         "str_acc_slope", "splm_slope", "td_acc_slope",
         "sapm", "str_def", "td_def",
         "ewma_str_acc", "ewma_td_acc", "str_acc_var",
+        "opp_adj_splm", "opp_adj_td_avg",
     )
     _FILLNA = {
         "days_since_last": 365,
