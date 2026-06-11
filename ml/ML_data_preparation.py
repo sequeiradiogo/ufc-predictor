@@ -432,9 +432,15 @@ def compute_ewma_stats(
                CAST(fs.sig_str_landed  AS REAL) AS str_land,
                CAST(fs.sig_str_atmpted AS REAL) AS str_att,
                CAST(fs.td_landed       AS REAL) AS td_land,
-               CAST(fs.td_atmpted      AS REAL) AS td_att
+               CAST(fs.td_atmpted      AS REAL) AS td_att,
+               CAST(f.match_time_sec   AS REAL) AS match_sec,
+               CAST(f.finish_round     AS REAL) AS finish_round,
+               CAST(opp.sig_str_landed AS REAL) AS opp_str_land
         FROM fight_stats fs
         JOIN fights f ON fs.fight_id = f.fight_id
+        JOIN fight_stats opp
+            ON f.fight_id = opp.fight_id
+            AND opp.fighter_id != fs.fighter_id
         ORDER BY f.date ASC, f.fight_id ASC
         """,
         conn,
@@ -451,6 +457,13 @@ def compute_ewma_stats(
     fs["pf_td_acc"]  = fs["td_land"]  / (fs["td_att"]  + _eps)
     fs.loc[fs["td_att"]  == 0, "pf_td_acc"]  = 0.0
 
+    fight_secs = fs["match_sec"].fillna(0) + (fs["finish_round"].fillna(1) - 1) * 300
+    fight_min  = (fight_secs / 60.0).clip(lower=_eps)
+    has_time   = fight_secs > 0
+    fs["pf_splm"]   = (fs["str_land"]             / fight_min).where(has_time, 0.0)
+    fs["pf_td_avg"] = (fs["td_land"] * 900.0 / fight_secs.clip(lower=_eps)).where(has_time, 0.0)
+    fs["pf_sapm"]   = (fs["opp_str_land"].fillna(0) / fight_min).where(has_time, 0.0)
+
     fs = fs.sort_values(["fighter_id", "date", "fight_id"]).reset_index(drop=True)
     grp = fs.groupby("fighter_id", sort=False)
 
@@ -463,8 +476,19 @@ def compute_ewma_stats(
     fs["str_acc_var"] = grp["pf_str_acc"].transform(
         lambda s: s.shift(1).rolling(span, min_periods=2).std()
     ).fillna(0)
+    fs["ewma_splm"] = grp["pf_splm"].transform(
+        lambda s: s.shift(1).ewm(span=span, min_periods=1).mean()
+    ).fillna(0)
+    fs["ewma_td_avg"] = grp["pf_td_avg"].transform(
+        lambda s: s.shift(1).ewm(span=span, min_periods=1).mean()
+    ).fillna(0)
+    fs["ewma_sapm"] = grp["pf_sapm"].transform(
+        lambda s: s.shift(1).ewm(span=span, min_periods=1).mean()
+    ).fillna(0)
 
-    return fs[["fight_id", "fighter_id", "ewma_str_acc", "ewma_td_acc", "str_acc_var"]]
+    return fs[["fight_id", "fighter_id",
+               "ewma_str_acc", "ewma_td_acc", "str_acc_var",
+               "ewma_splm", "ewma_td_avg", "ewma_sapm"]]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -935,24 +959,17 @@ def build_ml_dataset() -> pd.DataFrame:
 
     # ── EWMA accuracy and variance ────────────────────────────────────────────
     ewma_df = compute_ewma_stats(conn)
-    ewma_red  = ewma_df.rename(columns={
-        "ewma_str_acc": "ewma_str_acc_red",
-        "ewma_td_acc":  "ewma_td_acc_red",
-        "str_acc_var":  "str_acc_var_red",
-    })
-    ewma_blue = ewma_df.rename(columns={
-        "ewma_str_acc": "ewma_str_acc_blue",
-        "ewma_td_acc":  "ewma_td_acc_blue",
-        "str_acc_var":  "str_acc_var_blue",
-    })
+    _ewma_cols = ["ewma_str_acc", "ewma_td_acc", "str_acc_var", "ewma_splm", "ewma_td_avg", "ewma_sapm"]
+    ewma_red  = ewma_df.rename(columns={c: f"{c}_red"  for c in _ewma_cols})
+    ewma_blue = ewma_df.rename(columns={c: f"{c}_blue" for c in _ewma_cols})
     df = df.merge(
-        ewma_red[["fight_id", "fighter_id", "ewma_str_acc_red", "ewma_td_acc_red", "str_acc_var_red"]],
+        ewma_red[["fight_id", "fighter_id"] + [f"{c}_red" for c in _ewma_cols]],
         left_on=["fight_id", "r_fighter_id"],
         right_on=["fight_id", "fighter_id"],
         how="left",
     ).drop(columns=["fighter_id"])
     df = df.merge(
-        ewma_blue[["fight_id", "fighter_id", "ewma_str_acc_blue", "ewma_td_acc_blue", "str_acc_var_blue"]],
+        ewma_blue[["fight_id", "fighter_id"] + [f"{c}_blue" for c in _ewma_cols]],
         left_on=["fight_id", "b_fighter_id"],
         right_on=["fight_id", "fighter_id"],
         how="left",
@@ -1057,6 +1074,17 @@ def build_ml_dataset() -> pd.DataFrame:
     # Mirror-stance signal (both southpaw; symmetric so no _diff needed)
     ml_data["both_southpaw"] = (red_sp & blue_sp).astype(int).values
 
+    # ── Reach ratio (relative advantage; more meaningful than raw gap) ────────
+    reach_r = pd.to_numeric(df["reach_red"],  errors="coerce").fillna(0)
+    reach_b = pd.to_numeric(df["reach_blue"], errors="coerce").fillna(0)
+    _both_reach_known = (reach_r > 0) & (reach_b > 0)
+    ml_data["reach_ratio_diff"] = (
+        ((reach_r / reach_b.clip(lower=1.0)) - 1.0)
+        .where(_both_reach_known, 0.0)
+        .fillna(0.0)
+        .values
+    )
+
     # ── Finish-method rate differences ────────────────────────────────────────
     for stat in ("ko_rate", "sub_rate", "dec_rate"):
         r_col = pd.to_numeric(df[f"{stat}_red"],  errors="coerce").fillna(0)
@@ -1078,8 +1106,9 @@ def build_ml_dataset() -> pd.DataFrame:
     ko_vuln_b = pd.to_numeric(df["ko_vuln_blue"], errors="coerce").fillna(0)
     ml_data["ko_vuln_diff"] = (ko_vuln_r - ko_vuln_b).values
 
-    # ── EWMA accuracy differences ─────────────────────────────────────────────
-    for stat in ("ewma_str_acc", "ewma_td_acc", "str_acc_var"):
+    # ── EWMA differences ─────────────────────────────────────────────────────
+    for stat in ("ewma_str_acc", "ewma_td_acc", "str_acc_var",
+                 "ewma_splm", "ewma_td_avg", "ewma_sapm"):
         r_col = pd.to_numeric(df[f"{stat}_red"],  errors="coerce").fillna(0)
         b_col = pd.to_numeric(df[f"{stat}_blue"], errors="coerce").fillna(0)
         ml_data[f"{stat}_diff"] = (r_col - b_col).values

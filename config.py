@@ -101,60 +101,60 @@ RANDOM_STATE     = 42
 TARGET_COL       = "target"   # 1 = Red wins, 0 = Blue wins
 META_COLS        = ["fight_id", "date", "division", "target"]
 
-# ── XGBoost Hyperparameters (tuned via Optuna, 100 trials, 2026-06-05) ───────
-# MIN_FIGHT_DATE=2018-01-01 + Glicko-2 features  |  run: python ml/XGBoost.py --tune --trials 100
+# ── XGBoost Hyperparameters (tuned via Optuna, 100 trials, 2026-06-11) ───────
+# 71 features (added head/body/leg acc, reach ratio, ewma rates)  |  68.1% ensemble 2025+
 XGB_PARAMS: dict = {
-    "n_estimators":     490,
-    "learning_rate":    0.015480,
-    "max_depth":        4,
-    "subsample":        0.7117,
-    "colsample_bytree": 0.4264,
-    "min_child_weight": 10,
-    "gamma":            0.7618,
-    "reg_alpha":        0.9211,
-    "reg_lambda":       2.7825,
+    "n_estimators":     674,
+    "learning_rate":    0.011268,
+    "max_depth":        2,
+    "subsample":        0.7935,
+    "colsample_bytree": 0.4755,
+    "min_child_weight": 8,
+    "gamma":            1.6109,
+    "reg_alpha":        0.3191,
+    "reg_lambda":       2.6403,
 }
 
-# ── Logistic Regression Hyperparameters (tuned via Optuna, 100 trials, 2026-06-05) ──
-# MIN_FIGHT_DATE=2018-01-01 + Glicko-2 features  |  run: python ml/logistic_regression.py --tune --trials 100
+# ── Logistic Regression Hyperparameters (tuned via Optuna, 100 trials, 2026-06-11) ──
+# 71 features (added head/body/leg acc, reach ratio, ewma rates)  |  68.1% ensemble 2025+
 LR_PARAMS: dict = {
-    "C":            0.28894,
+    "C":            0.002849,
     "solver":       "lbfgs",
-    "max_iter":     1765,
-    "class_weight": None,
+    "max_iter":     888,
+    "class_weight": "balanced",
 }
 
-# ── Random Forest Hyperparameters (tuned via Optuna, 100 trials, 2026-06-05) ──
-# MIN_FIGHT_DATE=2018-01-01 + Glicko-2 features  |  run: python ml/random_forest.py --tune --trials 100
+# ── Random Forest Hyperparameters (tuned via Optuna, 100 trials, 2026-06-11) ──
+# 71 features (added head/body/leg acc, reach ratio, ewma rates)  |  68.1% ensemble 2025+
 RF_PARAMS: dict = {
-    "n_estimators":      541,
-    "max_depth":         12,
-    "min_samples_split": 10,
-    "min_samples_leaf":  2,
-    "max_features":      "log2",
-    "class_weight":      "balanced",
+    "n_estimators":      323,
+    "max_depth":         10,
+    "min_samples_split": 7,
+    "min_samples_leaf":  10,
+    "max_features":      "sqrt",
+    "class_weight":      None,
 }
 
-# ── LightGBM Hyperparameters (tuned via Optuna, 100 trials, 2026-06-05) ─────
-# MIN_FIGHT_DATE=2018-01-01 + Glicko-2 features  |  run: python ml/lightgbm_model.py --tune --trials 100
+# ── LightGBM Hyperparameters (tuned via Optuna, 100 trials, 2026-06-11) ─────
+# 71 features (added head/body/leg acc, reach ratio, ewma rates)  |  68.1% ensemble 2025+
 LGBM_PARAMS: dict = {
-    "n_estimators":     713,
-    "learning_rate":    0.025562,
-    "max_depth":        3,
-    "num_leaves":       64,
-    "subsample":        0.7438,
-    "colsample_bytree": 0.4916,
-    "reg_alpha":        0.7324,
-    "reg_lambda":       1.2711,
+    "n_estimators":     563,
+    "learning_rate":    0.010007,
+    "max_depth":        4,
+    "num_leaves":       122,
+    "subsample":        0.7463,
+    "colsample_bytree": 0.9553,
+    "reg_alpha":        0.9506,
+    "reg_lambda":       1.6967,
 }
 
-# ── MLP Hyperparameters (PyTorch; tuned via PurgedWalkForwardCV, 50 trials, 2026-06-09) ──
-# run: python ml/train_v1_models.py --model mlp --tune --trials 50
+# ── MLP Hyperparameters (PyTorch; tuned via Optuna, 100 trials, 2026-06-11) ──
+# 71 features (added head/body/leg acc, reach ratio, ewma rates)  |  68.1% ensemble 2025+
 MLP_PARAMS: dict = {
-    "hidden_sizes": (256, 128, 64, 32),
-    "dropout":      0.4214,
-    "lr":           8.570e-4,
-    "weight_decay": 2.137e-3,
+    "hidden_sizes": (64, 64),
+    "dropout":      0.4775,
+    "lr":           4.388e-3,
+    "weight_decay": 4.476e-3,
     "batch_size":   64,
     "max_epochs":   300,
     "patience":     20,
