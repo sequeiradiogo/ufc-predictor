@@ -251,6 +251,42 @@ FINISH_CLASS_NAMES = ["Decision", "KO/TKO", "Submission"]
 MODEL_FINISH_PATH     = MODELS_DIR / "finish_type.joblib"
 MODEL_FINISH_FEATURES = MODELS_DIR / "finish_type_features.joblib"
 
+# ── Division normalization constants ─────────────────────────────────────────
+# Per-division reach std (cm) for reach_div_norm_diff feature.
+# Computed from ufc_v2.db 2026-06 snapshot.
+DIV_REACH_STD: dict[str, float] = {
+    "bantamweight":           6.01,
+    "featherweight":          5.64,
+    "flyweight":              5.86,
+    "heavyweight":            7.15,
+    "light heavyweight":      6.48,
+    "lightweight":            5.64,
+    "middleweight":           5.99,
+    "welterweight":           6.18,
+    "women's bantamweight":   5.15,
+    "women's featherweight":  5.11,
+    "women's flyweight":      5.70,
+    "women's strawweight":    5.66,
+}
+DIV_REACH_STD_FALLBACK = 6.5     # average within-division reach std
+
+# Per-division sig-strike-per-minute std for splm_div_norm_diff feature.
+DIV_SPLM_STD: dict[str, float] = {
+    "bantamweight":           1.85,
+    "featherweight":          2.98,
+    "flyweight":              1.69,
+    "heavyweight":            2.11,
+    "light heavyweight":      2.20,
+    "lightweight":            1.84,
+    "middleweight":           2.17,
+    "welterweight":           2.47,
+    "women's bantamweight":   1.61,
+    "women's featherweight":  2.95,
+    "women's flyweight":      1.95,
+    "women's strawweight":    3.00,  # capped; raw 5.7 is outlier-inflated
+}
+DIV_SPLM_STD_FALLBACK = 2.0      # conservative cross-division default
+
 # ── Fighter name aliases ──────────────────────────────────────────────────────
 # Maps alternate/historical names (lowercased) -> canonical UFCStats name.
 # Covers Kaggle CSV typos, married name changes, nickname vs legal name, and

@@ -40,6 +40,10 @@ sys.path.insert(0, str(ROOT_DIR))
 from config import (
     DB_PATH,
     DB_V1_PATH,
+    DIV_REACH_STD,
+    DIV_REACH_STD_FALLBACK,
+    DIV_SPLM_STD,
+    DIV_SPLM_STD_FALLBACK,
     MODELS_DIR,
     MODELS_V1_DIR,
     MODELS_V1_PROD_DIR,
@@ -885,6 +889,37 @@ def build_feature_vector(
                 b_rank = _UNRANKED if pd.isna(b_val) else b_val
             row[feat] = r_rank - b_rank
 
+        # ── TD offense vs defense matchup ────────────────────────────────────
+        elif feat == "td_offense_matchup":
+            r_td_avg = float(pd.to_numeric(red_stats.get("td_avg",  0), errors="coerce") or 0)
+            b_td_avg = float(pd.to_numeric(blue_stats.get("td_avg", 0), errors="coerce") or 0)
+            r_td_def = _er.get("td_def", float(pd.to_numeric(red_stats.get("td_def",  0), errors="coerce") or 0))
+            b_td_def = _eb.get("td_def", float(pd.to_numeric(blue_stats.get("td_def", 0), errors="coerce") or 0))
+            row[feat] = (r_td_avg * (1.0 - min(b_td_def, 100.0) / 100.0) -
+                         b_td_avg * (1.0 - min(r_td_def, 100.0) / 100.0))
+
+        # ── Age x inactivity interaction ──────────────────────────────────────
+        elif feat == "age_x_layoff_diff":
+            r_age  = float(pd.to_numeric(red_stats.get("age",  30.0), errors="coerce") or 30.0)
+            b_age  = float(pd.to_numeric(blue_stats.get("age", 30.0), errors="coerce") or 30.0)
+            r_days = _er.get("days_since_last", 365.0)
+            b_days = _eb.get("days_since_last", 365.0)
+            row[feat] = r_age * r_days - b_age * b_days
+
+        # ── Division-normalized reach diff ────────────────────────────────────
+        elif feat == "reach_div_norm_diff":
+            r_reach = float(pd.to_numeric(red_stats.get("reach",  0), errors="coerce") or 0)
+            b_reach = float(pd.to_numeric(blue_stats.get("reach", 0), errors="coerce") or 0)
+            div_std = DIV_REACH_STD.get(div_lower, DIV_REACH_STD_FALLBACK) if div_lower else DIV_REACH_STD_FALLBACK
+            row[feat] = (r_reach - b_reach) / max(div_std, 1.0)
+
+        # ── Division-normalized SPLM diff ─────────────────────────────────────
+        elif feat == "splm_div_norm_diff":
+            r_splm = float(pd.to_numeric(red_stats.get("splm",  0), errors="coerce") or 0)
+            b_splm = float(pd.to_numeric(blue_stats.get("splm", 0), errors="coerce") or 0)
+            div_std = DIV_SPLM_STD.get(div_lower, DIV_SPLM_STD_FALLBACK) if div_lower else DIV_SPLM_STD_FALLBACK
+            row[feat] = (r_splm - b_splm) / max(div_std, 0.1)
+
         # ── Standard _diff features ───────────────────────────────────────────
         elif feat.endswith("_diff"):
             base  = feat[: -len("_diff")]
@@ -1306,6 +1341,7 @@ def predict_fight(
     title_fight:     int = 0,
     odds_red:        float | None = None,
     odds_blue:       float | None = None,
+    market_blend:    float = 0.0,
 ) -> None:
 
     model_labels = {
@@ -1333,6 +1369,20 @@ def predict_fight(
     form_b        = result["form_blue"]
     finish_proba  = result["finish_proba"]
 
+    # ── Item 1b: Blend model probability with closing market line ─────────────
+    if market_blend > 0.0 and odds_red is not None and odds_blue is not None:
+        from utils.odds import american_to_prob, remove_vig
+        raw_r = american_to_prob(odds_red)
+        raw_b = american_to_prob(odds_blue)
+        fair_r, fair_b = remove_vig(raw_r, raw_b)
+        red_win_prob  = (1.0 - market_blend) * red_win_prob  + market_blend * fair_r
+        blue_win_prob = (1.0 - market_blend) * blue_win_prob + market_blend * fair_b
+        _total = red_win_prob + blue_win_prob
+        red_win_prob  /= _total
+        blue_win_prob /= _total
+        winner_name = r_name if red_win_prob >= 0.5 else b_name
+        confidence  = max(red_win_prob, blue_win_prob)
+
     # ── Display results ───────────────────────────────────────────────────────
     print(f"\n[FIGHT]  {r_name}  (Red)  vs  {b_name}  (Blue)")
     if division:
@@ -1357,7 +1407,8 @@ def predict_fight(
     print()
     print(f"  {b_name} (Blue)")
     print(f"  {_bar(blue_win_prob)} {blue_win_prob:.1%}")
-    print(f"\n  Model: {model_label}")
+    blend_label = f"  (market blend: {market_blend:.0%})" if market_blend > 0.0 and odds_red and odds_blue else ""
+    print(f"\n  Model: {model_label}{blend_label}")
 
     if finish_proba is not None:
         print(f"\n  Predicted Finish Method:")
@@ -1371,6 +1422,7 @@ def predict_fight(
         odds_red_american=odds_red,
         odds_blue_american=odds_blue,
     )
+
 
 
 # ── CLI Entry Point ───────────────────────────────────────────────────────────
@@ -1419,6 +1471,14 @@ Examples
         default=None,
         help="American moneyline odds for Blue corner (e.g. -150 or +200).",
     )
+    parser.add_argument(
+        "--market-blend",
+        type=float,
+        default=0.0,
+        metavar="W",
+        help="Blend model probability with closing market line: 0=pure model, 1=pure market. "
+             "Requires --odds-red and --odds-blue. Recommended: 0.3-0.5.",
+    )
 
     args = parser.parse_args()
     predict_fight(
@@ -1429,6 +1489,7 @@ Examples
         title_fight=int(args.title),
         odds_red=args.odds_red,
         odds_blue=args.odds_blue,
+        market_blend=args.market_blend,
     )
 
 

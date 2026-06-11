@@ -29,7 +29,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from config import DB_V1_PATH, DB_PATH
+from config import DB_V1_PATH, DB_PATH, EWMA_SPAN
 from ml.ELO_calculator import build_elo_features, build_glicko_features
 from ml.ML_data_preparation import (
     compute_finish_rates,
@@ -153,6 +153,22 @@ def main(dry_run: bool = False) -> None:
         "JOIN fighters b ON f.b_fighter_id = b.fighter_id",
         ufc_conn,
     )
+
+    # Item 8: EWMA striking/TD accuracy -- requires per-fight raw counts from UFCStats
+    print("  EWMA accuracy ...")
+    _ewma_raw = pd.read_sql_query(
+        """
+        SELECT fs.fighter_id, f.fight_id, f.date,
+               CAST(fs.sig_str_landed  AS REAL) AS str_land,
+               CAST(fs.sig_str_atmpted AS REAL) AS str_att,
+               CAST(fs.td_landed       AS REAL) AS td_land,
+               CAST(fs.td_atmpted      AS REAL) AS td_att
+        FROM fight_stats fs
+        JOIN fights f ON fs.fight_id = f.fight_id
+        ORDER BY f.date ASC, f.fight_id ASC
+        """,
+        ufc_conn,
+    )
     ufc_conn.close()
 
     import hashlib as _hl
@@ -172,6 +188,39 @@ def main(dry_run: bool = False) -> None:
     )
     kovuln_df = kovuln_df.dropna(subset=["fight_id", "fighter_id"])[
         ["fight_id", "fighter_id", "ko_vuln", "kd_received"]
+    ]
+
+    # Compute EWMA of per-fight striking/TD accuracy (shift(1) for leakage prevention)
+    _eps = 1e-6
+    _ewma_raw["date"] = pd.to_datetime(_ewma_raw["date"])
+    _ewma_raw = _ewma_raw.sort_values(["fighter_id", "date", "fight_id"]).copy()
+
+    _ewma_raw["pf_str_acc"] = (_ewma_raw["str_land"] / (_ewma_raw["str_att"] + _eps)).where(_ewma_raw["str_att"] > 0, 0.0)
+    _ewma_raw["pf_td_acc"]  = (_ewma_raw["td_land"]  / (_ewma_raw["td_att"]  + _eps)).where(_ewma_raw["td_att"]  > 0, 0.0)
+
+    _grp = _ewma_raw.groupby("fighter_id")
+    _ewma_raw["str_shifted"] = _grp["pf_str_acc"].shift(1)
+    _ewma_raw["td_shifted"]  = _grp["pf_td_acc"].shift(1)
+    _ewma_raw["ewma_str_acc"] = (
+        _grp["str_shifted"].transform(lambda s: s.ewm(span=EWMA_SPAN, min_periods=1).mean())
+        .fillna(0)
+    )
+    _ewma_raw["ewma_td_acc"] = (
+        _grp["td_shifted"].transform(lambda s: s.ewm(span=EWMA_SPAN, min_periods=1).mean())
+        .fillna(0)
+    )
+    _ewma_raw["str_acc_var"] = (
+        _grp["str_shifted"].transform(lambda s: s.rolling(EWMA_SPAN, min_periods=2).std())
+        .fillna(0)
+    )
+    ewma_computed = _ewma_raw[["fight_id", "fighter_id", "ewma_str_acc", "ewma_td_acc", "str_acc_var"]].copy()
+    ewma_df = ewma_computed.copy()
+    ewma_df["fight_id"]   = ewma_df["fight_id"].map(ufc_fight_map)
+    ewma_df["fighter_id"] = ewma_df["fighter_id"].map(
+        lambda fid: _md5id(ufc_fid_to_name[fid]) if fid in ufc_fid_to_name else None
+    )
+    ewma_df = ewma_df.dropna(subset=["fight_id", "fighter_id"])[
+        ["fight_id", "fighter_id", "ewma_str_acc", "ewma_td_acc", "str_acc_var"]
     ]
 
     # ── Slope features ────────────────────────────────────────────────────────
@@ -199,6 +248,9 @@ def main(dry_run: bool = False) -> None:
         (inact_df,     "days_since_last",    "R_days_since_last",    "B_days_since_last"),
         (kovuln_df,    "ko_vuln",            "R_ko_vuln",            "B_ko_vuln"),
         (kovuln_df,    "kd_received",        "R_kd_received",        "B_kd_received"),
+        (ewma_df,      "ewma_str_acc",       "R_ewma_str_acc",       "B_ewma_str_acc"),
+        (ewma_df,      "ewma_td_acc",        "R_ewma_td_acc",        "B_ewma_td_acc"),
+        (ewma_df,      "str_acc_var",        "R_str_acc_var",        "B_str_acc_var"),
     ]
 
     for feat_df, db_col, red_col, blue_col in per_fighter_data:

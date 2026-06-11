@@ -38,6 +38,8 @@ from config import (
     CSV_V1_WITH_ELO,
     DB_PATH,
     DB_V1_PATH,
+    DIV_REACH_STD_FALLBACK,
+    DIV_SPLM_STD_FALLBACK,
     DIVISIONS,
     FINISH_METHOD_MAP,
     META_COLS,
@@ -303,6 +305,7 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
         "days_since_last", "ko_vuln", "kd_received",
         "str_acc_slope", "splm_slope", "td_acc_slope",
         "sapm", "str_def", "td_def",
+        "ewma_str_acc", "ewma_td_acc", "str_acc_var",
     )
     for col in _PRECOMPUTED:
         wide[f"{col}_red"]  = pd.to_numeric(wide.get(f"r_{col}"), errors="coerce")
@@ -352,6 +355,7 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
         "days_since_last", "sos", "ko_vuln", "kd_received",
         "str_acc_slope", "splm_slope", "td_acc_slope",
         "sapm", "str_def", "td_def",
+        "ewma_str_acc", "ewma_td_acc", "str_acc_var",
     )
     _FILLNA = {
         "days_since_last": 365,
@@ -364,6 +368,55 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
         ml[f"{stat}_diff"] = (r_col - b_col).values
 
     ml["title_fight"] = pd.to_numeric(wide["title_fight"], errors="coerce").fillna(0).astype(int).values
+
+    # ── Items 4+5: Division-normalized reach and SPLM diffs ───────────────────
+    # A reach/output advantage matters more in lower weight classes where the
+    # distribution is compressed.  Per-division std normalisation makes a single
+    # coefficient work across all divisions.
+    r_reach_num = pd.to_numeric(wide.get("r_reach"), errors="coerce").fillna(0)
+    b_reach_num = pd.to_numeric(wide.get("b_reach"), errors="coerce").fillna(0)
+    _both_reach = pd.concat([
+        wide[["division"]].assign(v=r_reach_num.where(r_reach_num > 0)),
+        wide[["division"]].assign(v=b_reach_num.where(b_reach_num > 0)),
+    ])
+    div_reach_std_map = _both_reach.groupby("division")["v"].std().fillna(DIV_REACH_STD_FALLBACK)
+    per_row_reach_std = wide["division"].map(div_reach_std_map).fillna(DIV_REACH_STD_FALLBACK).clip(lower=1.0)
+    ml["reach_div_norm_diff"] = (ml["reach_diff"] / per_row_reach_std.values).fillna(0)
+
+    r_splm_num = pd.to_numeric(wide.get("r_splm"), errors="coerce").fillna(0)
+    b_splm_num = pd.to_numeric(wide.get("b_splm"), errors="coerce").fillna(0)
+    _both_splm = pd.concat([
+        wide[["division"]].assign(v=r_splm_num.where(r_splm_num > 0)),
+        wide[["division"]].assign(v=b_splm_num.where(b_splm_num > 0)),
+    ])
+    div_splm_std_map = _both_splm.groupby("division")["v"].std().fillna(DIV_SPLM_STD_FALLBACK)
+    per_row_splm_std = wide["division"].map(div_splm_std_map).fillna(DIV_SPLM_STD_FALLBACK).clip(lower=0.1)
+    ml["splm_div_norm_diff"] = ((r_splm_num - b_splm_num) / per_row_splm_std.values).fillna(0)
+
+    # ── Item 6: TD offense vs TD defense matchup ──────────────────────────────
+    # Expected net grappling edge: how many TDs will Red land given Blue's defense
+    # minus how many Blue will land given Red's defense.
+    # td_def is stored as a percentage (0-100); convert to fraction.
+    r_td_avg_vals = pd.to_numeric(wide.get("r_td_avg"), errors="coerce").fillna(0)
+    b_td_avg_vals = pd.to_numeric(wide.get("b_td_avg"), errors="coerce").fillna(0)
+    r_td_def_frac = wide["td_def_red"].fillna(0).clip(0, 100) / 100.0
+    b_td_def_frac = wide["td_def_blue"].fillna(0).clip(0, 100) / 100.0
+    ml["td_offense_matchup"] = (
+        r_td_avg_vals.values * (1.0 - b_td_def_frac.values) -
+        b_td_avg_vals.values * (1.0 - r_td_def_frac.values)
+    )
+
+    # ── Item 7: Age x inactivity interaction ──────────────────────────────────
+    # An older fighter returning from a long layoff degrades more than a young one.
+    # The interaction captures this joint effect (neither alone predicts it as well).
+    r_age_vals  = pd.to_numeric(wide.get("r_age"), errors="coerce").fillna(30.0)
+    b_age_vals  = pd.to_numeric(wide.get("b_age"), errors="coerce").fillna(30.0)
+    r_days_vals = wide["days_since_last_red"].fillna(365)
+    b_days_vals = wide["days_since_last_blue"].fillna(365)
+    ml["age_x_layoff_diff"] = (
+        r_age_vals.values * r_days_vals.values -
+        b_age_vals.values * b_days_vals.values
+    )
 
     # ── Exclusion filters ─────────────────────────────────────────────────────
     n_before = len(ml)
