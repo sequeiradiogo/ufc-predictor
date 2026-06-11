@@ -2,6 +2,71 @@
 
 ---
 
+## 2026-06-11 -- SHAP ablation: dropped str_def, sos, elo (61 features total)
+
+**Trigger:** SHAP + permutation importance analysis across all 4 models identified str_def_diff, sos_diff, elo_diff as consistently hurting (negative PI in 3-4 models, wrong-direction target correlations, multicollinearity). Added to EXCLUDED_FEATURES in config.py.
+
+**Root causes:**
+- `str_def_diff`: target corr=-0.033 (wrong direction); r=0.49 with sapm_diff (captures same signal more cleanly)
+- `sos_diff`: target corr=-0.049 (wrong direction); redundant with career record features
+- `elo_diff`: ALL 4 models showed negative PI; r=0.27 with win/loss streak features
+
+**Honest out-of-sample backtest (2025+, 678 fights):**
+
+| Model | Before | After | Delta |
+|-------|--------|-------|-------|
+| XGBoost | 64.2% | 64.9% | +0.7pp |
+| LR | 65.5% | 65.3% | -0.2pp |
+| RF | 65.0% | 65.6% | +0.6pp |
+| LightGBM | 64.2% | 64.6% | +0.4pp |
+| **Ensemble** | **67.1%** | **67.4%** | **+0.3pp** |
+
+**Year breakdown:** 2025: 67.4% | 2026: 67.5%
+
+---
+
+## 2026-06-11 -- Feature Engineering v3b (opp-adjusted stats, 64 features total)
+
+**Trigger:** Added opp_adj_splm_diff and opp_adj_td_avg_diff -- offensive stats normalized by average defensive quality of prior opponents. Retrained all v1 models + ensemble.
+
+**Dataset:** 3,619 rows x 64 features (post-2018 cutoff, debut-excluded).
+
+**Honest out-of-sample backtest (2025+, 678 fights):**
+
+| Year | Fights | Accuracy |
+|------|--------|----------|
+| 2025 | 475 | 68.2% |
+| 2026 | 203 | 64.5% |
+| **Total** | **678** | **67.1%** |
+
+Opp-adj features are neutral overall (2025 +1pp, 2026 -2.5pp). Kept for theoretical soundness.
+
+---
+
+## 2026-06-11 -- Feature Engineering v3 (6 new features, 62 total)
+
+**Trigger:** Added EWMA striking/TD accuracy + variance, division-normalized reach and SPLM diffs, TD offense/defense matchup interaction, age x layoff interaction. Retrained all v1 models + ensemble.
+
+**Dataset:** 3,619 rows x 62 features (post-2018 cutoff, debut-excluded). MLP added to ensemble.
+
+**Honest out-of-sample backtest (2025+, 678 fights):**
+
+| Model | Accuracy | vs. Baseline (66.7%) |
+|-------|----------|----------------------|
+| XGBoost | 64.2% | -2.5pp |
+| Logistic Regression | 65.5% | -1.2pp |
+| Random Forest | 65.0% | -1.7pp |
+| LightGBM | 64.2% | -2.5pp |
+| **Ensemble** | **67.1%** | **+0.4pp** |
+
+Ensemble weights: LR 50.9%, MLP 22.1%, LGBM 17.6%, RF 9.3%, XGB 0.05%
+
+**2025-2026 year breakdown:**
+- 2025: 475 fights, 67.2%
+- 2026: 203 fights, 67.0%
+
+---
+
 ## 2026-05-30 — auto-refresh pipeline (ufc-master.csv, data to 2026-05-30)
 
 **Trigger:** First live run of `python refresh_data.py --auto`. Scraped 8 events (Apr 4 – May 16 2026) from ufcstats.com via `scrapers/csv_builder.py`, converting per-fight stats to pre-fight career snapshots and appending 100 new rows to ufc-master.csv. DB rebuilt from updated CSV; ELO recomputed from scratch over all 7,277 fights.

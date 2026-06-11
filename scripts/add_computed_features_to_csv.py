@@ -169,6 +169,30 @@ def main(dry_run: bool = False) -> None:
         """,
         ufc_conn,
     )
+
+    # Opponent-adjusted SPLM and TD avg: normalize offensive stats by the
+    # defensive quality of prior opponents.
+    # opp.str_def/td_def are pre-fight rolling values (rolling.py shift(1) applied).
+    print("  Opponent-adjusted stats ...")
+    _oadj_raw = pd.read_sql_query(
+        """
+        SELECT
+            fs.fighter_id,
+            f.fight_id,
+            f.date,
+            CAST(opp.str_def AS REAL) AS opp_str_def,
+            CAST(opp.td_def  AS REAL) AS opp_td_def,
+            CAST(fs.splm     AS REAL) AS own_splm,
+            CAST(fs.td_avg   AS REAL) AS own_td_avg
+        FROM fight_stats fs
+        JOIN fights f ON fs.fight_id = f.fight_id
+        JOIN fight_stats opp
+            ON f.fight_id = opp.fight_id
+            AND opp.fighter_id != fs.fighter_id
+        ORDER BY fs.fighter_id, f.date ASC, f.fight_id ASC
+        """,
+        ufc_conn,
+    )
     ufc_conn.close()
 
     import hashlib as _hl
@@ -223,6 +247,50 @@ def main(dry_run: bool = False) -> None:
         ["fight_id", "fighter_id", "ewma_str_acc", "ewma_td_acc", "str_acc_var"]
     ]
 
+    # --- Opponent-adjusted stats ---
+    # Zero str_def/td_def means no prior data; replace with NaN before averaging
+    # so first-fight opponents don't pull down the quality estimate.
+    _oadj_raw["opp_str_def"] = _oadj_raw["opp_str_def"].where(_oadj_raw["opp_str_def"] > 0)
+    _oadj_raw["opp_td_def"]  = _oadj_raw["opp_td_def"].where(_oadj_raw["opp_td_def"] > 0)
+
+    _league_str_def = _oadj_raw["opp_str_def"].mean()
+    _league_td_def  = _oadj_raw["opp_td_def"].mean()
+    _league_str_allowed = 1.0 - _league_str_def / 100.0
+    _league_td_allowed  = 1.0 - _league_td_def  / 100.0
+
+    _oadj_raw = _oadj_raw.sort_values(["fighter_id", "date", "fight_id"]).copy()
+    _oadj_grp = _oadj_raw.groupby("fighter_id")
+
+    # shift(1) so fight i uses opponents from fights 0..i-1 (leakage-free)
+    _oadj_raw["_osd_shifted"] = _oadj_grp["opp_str_def"].shift(1)
+    _oadj_raw["_otd_shifted"] = _oadj_grp["opp_td_def"].shift(1)
+
+    _oadj_raw["avg_opp_str_def"] = (
+        _oadj_grp["_osd_shifted"]
+        .transform(lambda s: s.expanding(min_periods=1).mean())
+        .fillna(_league_str_def)
+    )
+    _oadj_raw["avg_opp_td_def"] = (
+        _oadj_grp["_otd_shifted"]
+        .transform(lambda s: s.expanding(min_periods=1).mean())
+        .fillna(_league_td_def)
+    )
+
+    # opp_adj = own_stat * (league_avg_allowed / this_fighter_avg_opp_allowed)
+    _opp_str_allowed = (1.0 - _oadj_raw["avg_opp_str_def"] / 100.0).clip(lower=0.05)
+    _opp_td_allowed  = (1.0 - _oadj_raw["avg_opp_td_def"]  / 100.0).clip(lower=0.05)
+    _oadj_raw["opp_adj_splm"]   = (_oadj_raw["own_splm"]   * (_league_str_allowed / _opp_str_allowed)).fillna(0)
+    _oadj_raw["opp_adj_td_avg"] = (_oadj_raw["own_td_avg"] * (_league_td_allowed  / _opp_td_allowed)).fillna(0)
+
+    oadj_df = _oadj_raw[["fight_id", "fighter_id", "opp_adj_splm", "opp_adj_td_avg"]].copy()
+    oadj_df["fight_id"]   = oadj_df["fight_id"].map(ufc_fight_map)
+    oadj_df["fighter_id"] = oadj_df["fighter_id"].map(
+        lambda fid: _md5id(ufc_fid_to_name[fid]) if fid in ufc_fid_to_name else None
+    )
+    oadj_df = oadj_df.dropna(subset=["fight_id", "fighter_id"])[
+        ["fight_id", "fighter_id", "opp_adj_splm", "opp_adj_td_avg"]
+    ]
+
     # ── Slope features ────────────────────────────────────────────────────────
     print("  Slope features ...")
     slope_df = compute_slope_features_v1(conn)
@@ -251,6 +319,8 @@ def main(dry_run: bool = False) -> None:
         (ewma_df,      "ewma_str_acc",       "R_ewma_str_acc",       "B_ewma_str_acc"),
         (ewma_df,      "ewma_td_acc",        "R_ewma_td_acc",        "B_ewma_td_acc"),
         (ewma_df,      "str_acc_var",        "R_str_acc_var",        "B_str_acc_var"),
+        (oadj_df,      "opp_adj_splm",       "R_opp_adj_splm",       "B_opp_adj_splm"),
+        (oadj_df,      "opp_adj_td_avg",     "R_opp_adj_td_avg",     "B_opp_adj_td_avg"),
     ]
 
     for feat_df, db_col, red_col, blue_col in per_fighter_data:
