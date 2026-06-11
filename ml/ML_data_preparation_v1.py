@@ -300,7 +300,7 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
         "elo", "glicko", "glicko_rd",
         "recent_win_rate", "recent_finish_rate",
         "sos", "ko_rate", "sub_rate", "dec_rate",
-        "days_since_last", "ko_vuln",
+        "days_since_last", "ko_vuln", "kd_received",
         "str_acc_slope", "splm_slope", "td_acc_slope",
         "sapm", "str_def", "td_def",
     )
@@ -349,7 +349,7 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
     _DIFF_STATS = (
         "recent_win_rate", "recent_finish_rate",
         "ko_rate", "sub_rate", "dec_rate",
-        "days_since_last", "sos", "ko_vuln",
+        "days_since_last", "sos", "ko_vuln", "kd_received",
         "str_acc_slope", "splm_slope", "td_acc_slope",
         "sapm", "str_def", "td_def",
     )
