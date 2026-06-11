@@ -204,6 +204,9 @@ def ingest(csv_path: Path, db_path: Path) -> None:
         "days_since_last":   ("R_days_since_last",   "B_days_since_last"),
         "ko_vuln":           ("R_ko_vuln",           "B_ko_vuln"),
         "kd_received":       ("R_kd_received",       "B_kd_received"),
+        "ewma_str_acc":      ("R_ewma_str_acc",      "B_ewma_str_acc"),
+        "ewma_td_acc":       ("R_ewma_td_acc",       "B_ewma_td_acc"),
+        "str_acc_var":       ("R_str_acc_var",        "B_str_acc_var"),
     }
 
     r_stats = df[["fight_id", "r_fighter_id"]].rename(columns={"r_fighter_id": "fighter_id"}).copy()
