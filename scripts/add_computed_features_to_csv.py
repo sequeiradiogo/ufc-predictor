@@ -29,7 +29,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from config import DB_V1_PATH
+from config import DB_V1_PATH, DB_PATH
 from ml.ELO_calculator import build_elo_features, build_glicko_features
 from ml.ML_data_preparation import (
     compute_finish_rates,
@@ -64,6 +64,7 @@ _PER_FIGHTER_COLS = [
     ("dec_rate",           "R_dec_rate",           "B_dec_rate"),
     ("days_since_last",    "R_days_since_last",     "B_days_since_last"),
     ("ko_vuln",            "R_ko_vuln",            "B_ko_vuln"),
+    ("kd_received",        "R_kd_received",        "B_kd_received"),
 ]
 
 
@@ -136,9 +137,42 @@ def main(dry_run: bool = False) -> None:
     print("  Inactivity ...")
     inact_df = compute_inactivity(conn)
 
-    # ── KO vulnerability ──────────────────────────────────────────────────────
+    # ── KO vulnerability + kd received (needs UFCStats DB for per-fight kd) ───
     print("  KO vulnerability ...")
-    kovuln_df = compute_ko_vulnerability(conn)
+    ufc_conn = sqlite3.connect(str(DB_PATH))
+    kovuln_raw = compute_ko_vulnerability(ufc_conn)
+
+    # Map UFCStats (fight_id, fighter_id) -> mdabbert (fight_id, fighter_id)
+    ufc_fighters = pd.read_sql_query(
+        "SELECT fighter_id, name FROM fighters", ufc_conn
+    )
+    ufc_fights = pd.read_sql_query(
+        "SELECT f.fight_id, f.date, r.name r_name, b.name b_name "
+        "FROM fights f "
+        "JOIN fighters r ON f.r_fighter_id = r.fighter_id "
+        "JOIN fighters b ON f.b_fighter_id = b.fighter_id",
+        ufc_conn,
+    )
+    ufc_conn.close()
+
+    import hashlib as _hl
+    def _md5id(s: str) -> str:
+        return _hl.md5(s.lower().strip().encode()).hexdigest()[:16]
+
+    ufc_fid_to_name = dict(zip(ufc_fighters["fighter_id"], ufc_fighters["name"]))
+    ufc_fights["mab_fight_id"] = ufc_fights.apply(
+        lambda r: _fight_id(r["r_name"], r["b_name"], str(r["date"])[:10]), axis=1
+    )
+    ufc_fight_map    = dict(zip(ufc_fights["fight_id"], ufc_fights["mab_fight_id"]))
+
+    kovuln_df = kovuln_raw.copy()
+    kovuln_df["fight_id"]   = kovuln_df["fight_id"].map(ufc_fight_map)
+    kovuln_df["fighter_id"] = kovuln_df["fighter_id"].map(
+        lambda fid: _md5id(ufc_fid_to_name[fid]) if fid in ufc_fid_to_name else None
+    )
+    kovuln_df = kovuln_df.dropna(subset=["fight_id", "fighter_id"])[
+        ["fight_id", "fighter_id", "ko_vuln", "kd_received"]
+    ]
 
     # ── Slope features ────────────────────────────────────────────────────────
     print("  Slope features ...")
@@ -164,6 +198,7 @@ def main(dry_run: bool = False) -> None:
         (fin_df,       "dec_rate",           "R_dec_rate",           "B_dec_rate"),
         (inact_df,     "days_since_last",    "R_days_since_last",    "B_days_since_last"),
         (kovuln_df,    "ko_vuln",            "R_ko_vuln",            "B_ko_vuln"),
+        (kovuln_df,    "kd_received",        "R_kd_received",        "B_kd_received"),
     ]
 
     for feat_df, db_col, red_col, blue_col in per_fighter_data:

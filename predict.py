@@ -57,7 +57,6 @@ from config import (
     RECENT_FORM_WINDOW,
     FINISH_METHOD_MAP,
     SOS_WINDOW,
-    KO_VULN_WINDOW,
     EWMA_SPAN,
     TRAJECTORY_WINDOW,
     NAME_ALIASES,
@@ -613,31 +612,59 @@ def compute_sos_single(
 def compute_ko_vulnerability_single(
     conn: sqlite3.Connection,
     fighter_id: str,
-    window: int = KO_VULN_WINDOW,
 ) -> dict[str, float]:
-    """Return count of KO/TKO stoppages suffered in the last `window` fights."""
-    df = pd.read_sql_query(
-        """
-        SELECT winner_id, method FROM fights
-        WHERE r_fighter_id = ? OR b_fighter_id = ?
-        ORDER BY date DESC, fight_id DESC
-        LIMIT ?
-        """,
-        conn,
-        params=(fighter_id, fighter_id, window),
-    )
-    if df.empty:
-        return {"ko_vuln": 0.0}
+    """Return lifetime KO vulnerability: cumulative KO/TKO losses + knockdowns received.
 
-    df = df[df["winner_id"].notna()]
-    ko_stopped = 0
-    for _, row in df.iterrows():
-        if row["winner_id"] != fighter_id:
-            method_cls = FINISH_METHOD_MAP.get(row["method"], -1)
-            if method_cls == 1:
-                ko_stopped += 1
+    When connected to the UFCStats DB (has per-fight kd column), recomputes from raw
+    fight history.  When connected to the mdabbert DB (has stored ko_vuln/kd_received),
+    reads the most recent stored value.
+    """
+    # Detect which DB we have by checking for the per-fight kd column
+    has_kd = bool(conn.execute(
+        "SELECT COUNT(*) FROM pragma_table_info('fight_stats') WHERE name='kd'"
+    ).fetchone()[0])
 
-    return {"ko_vuln": float(ko_stopped)}
+    if has_kd:
+        # UFCStats DB: recompute from raw history
+        df = pd.read_sql_query(
+            """
+            SELECT f.winner_id, f.method,
+                   CAST(opp.kd AS INTEGER) AS kd_received
+            FROM fights f
+            JOIN fight_stats opp ON opp.fight_id = f.fight_id
+                                 AND opp.fighter_id != ?
+            WHERE f.r_fighter_id = ? OR f.b_fighter_id = ?
+            ORDER BY f.date ASC, f.fight_id ASC
+            """,
+            conn,
+            params=(fighter_id, fighter_id, fighter_id),
+        )
+        if df.empty:
+            return {"ko_vuln": 0.0, "kd_received": 0.0}
+        ko_stopped = 0
+        kd_total = 0
+        for _, row in df.iterrows():
+            if pd.notna(row["winner_id"]) and row["winner_id"] != fighter_id:
+                if FINISH_METHOD_MAP.get(row["method"], -1) == 1:
+                    ko_stopped += 1
+            kd_total += int(row["kd_received"] or 0)
+        return {"ko_vuln": float(ko_stopped), "kd_received": float(kd_total)}
+    else:
+        # mdabbert DB: read the most recent stored cumulative values
+        row = conn.execute(
+            """
+            SELECT fs.ko_vuln, fs.kd_received
+            FROM fight_stats fs
+            JOIN fights f ON fs.fight_id = f.fight_id
+            WHERE fs.fighter_id = ?
+            ORDER BY f.date DESC, f.fight_id DESC
+            LIMIT 1
+            """,
+            (fighter_id,),
+        ).fetchone()
+        if row is None:
+            return {"ko_vuln": 0.0, "kd_received": 0.0}
+        return {"ko_vuln": float(row[0] or 0), "kd_received": float(row[1] or 0)}
 
 
 def compute_ewma_stats_single(
@@ -818,6 +845,8 @@ def build_feature_vector(
         # ── KO vulnerability ──────────────────────────────────────────────────
         elif feat == "ko_vuln_diff":
             row[feat] = _er.get("ko_vuln", 0.0) - _eb.get("ko_vuln", 0.0)
+        elif feat == "kd_received_diff":
+            row[feat] = _er.get("kd_received", 0.0) - _eb.get("kd_received", 0.0)
 
         # ── EWMA accuracy and variance ────────────────────────────────────────
         elif feat == "ewma_str_acc_diff":

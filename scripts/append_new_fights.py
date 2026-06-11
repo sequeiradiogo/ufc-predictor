@@ -205,20 +205,22 @@ def _history_stats(fighter_id: str, fight_date: str, conn: sqlite3.Connection) -
     """Compute career stats for fighter_id before fight_date by replaying history."""
     rows = conn.execute(
         """
-        SELECT f.method, f.winner_id, f.title_fight, f.finish_round, f.no_of_rounds
+        SELECT f.method, f.winner_id, f.title_fight, f.finish_round, f.no_of_rounds,
+               CAST(opp.kd AS INTEGER) AS opp_kd
         FROM fight_stats fs
         JOIN fights f ON fs.fight_id = f.fight_id
+        JOIN fight_stats opp ON opp.fight_id = f.fight_id AND opp.fighter_id != ?
         WHERE fs.fighter_id = ? AND f.date < ?
         ORDER BY f.date
         """,
-        (fighter_id, fight_date),
+        (fighter_id, fighter_id, fight_date),
     ).fetchall()
 
     cur_win = cur_lose = longest_win = 0
     ko_w = sub_w = udec_w = sdec_w = mdec_w = 0
-    title_bouts = total_rounds = 0
+    title_bouts = total_rounds = kd_received = 0
 
-    for method, winner_id, title_fight, finish_round, no_of_rounds in rows:
+    for method, winner_id, title_fight, finish_round, no_of_rounds, opp_kd in rows:
         is_win = winner_id == fighter_id
         if is_win:
             cur_win += 1
@@ -241,6 +243,7 @@ def _history_stats(fighter_id: str, fight_date: str, conn: sqlite3.Connection) -
         if title_fight:
             title_bouts += 1
         total_rounds += finish_round or no_of_rounds or 3
+        kd_received += opp_kd or 0
 
     return {
         "current_win_streak":  cur_win,
@@ -252,6 +255,7 @@ def _history_stats(fighter_id: str, fight_date: str, conn: sqlite3.Connection) -
         "win_by_dec_split":    sdec_w,
         "total_title_bouts":   title_bouts,
         "total_rounds_fought": total_rounds,
+        "kd_received":         kd_received,
     }
 
 
@@ -510,6 +514,9 @@ def build_rows(
             "B_str_def": round(b_roll.get("str_def", np.nan) or np.nan, 2),
             "R_td_def":  round(r_roll.get("td_def",  np.nan) or np.nan, 2),
             "B_td_def":  round(b_roll.get("td_def",  np.nan) or np.nan, 2),
+            # kd_received is filled by add_computed_features_to_csv.py; leave NaN here
+            "R_kd_received": np.nan,
+            "B_kd_received": np.nan,
         }
         rows.append(row)
 

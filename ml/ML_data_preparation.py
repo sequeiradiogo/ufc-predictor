@@ -49,7 +49,6 @@ from config import (
     SHRINKAGE_LAMBDA,
     STARTING_ELO,
     SOS_WINDOW,
-    KO_VULN_WINDOW,
     EWMA_SPAN,
     TRAJECTORY_WINDOW,
 )
@@ -348,21 +347,18 @@ def compute_sos_features(df_fights: pd.DataFrame, window: int = SOS_WINDOW) -> p
 # KO vulnerability
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def compute_ko_vulnerability(
-    conn: sqlite3.Connection, window: int = KO_VULN_WINDOW
-) -> pd.DataFrame:
+def compute_ko_vulnerability(conn: sqlite3.Connection) -> pd.DataFrame:
     """
-    For every (fight_id, fighter_id) pair compute the number of times the
-    fighter was stopped by KO/TKO in their last `window` fights (as the loser).
+    For every (fight_id, fighter_id) pair compute lifetime KO vulnerability:
+      - cumulative KO/TKO losses across all prior fights
+      - plus cumulative knockdowns received (opponent kd) across all prior fights
 
-    Distinct from ko_rate (which measures KO wins) — this captures chin damage:
-    a fighter who has been knocked out recently is more susceptible going forward.
-
-    shift(1) ensures the current fight result is never included.
+    Cumulative over all history (not a rolling window) because chin damage is
+    career-long. shift(1) ensures the current fight is never included.
     """
-    log.info("Computing KO vulnerability (window=%d)...", window)
+    log.info("Computing KO vulnerability (lifetime, with kd received)...")
 
-    df = pd.read_sql_query(
+    fights_df = pd.read_sql_query(
         """
         SELECT fight_id, date, r_fighter_id, b_fighter_id, winner_id, method
         FROM fights
@@ -371,20 +367,32 @@ def compute_ko_vulnerability(
         conn,
     )
 
+    kd_df = pd.read_sql_query(
+        "SELECT fight_id, fighter_id, CAST(kd AS INTEGER) AS kd FROM fight_stats WHERE kd IS NOT NULL",
+        conn,
+    )
+    opp_kd = kd_df.rename(columns={"fighter_id": "opp_id", "kd": "kd_received"})
+    kd_merged = kd_df.merge(opp_kd, on="fight_id", how="left")
+    kd_merged = kd_merged[kd_merged["fighter_id"] != kd_merged["opp_id"]]
+    kd_lookup: dict = {
+        (r["fight_id"], r["fighter_id"]): int(r["kd_received"] or 0)
+        for _, r in kd_merged.iterrows()
+    }
+
     long_rows = []
-    for _, row in df.iterrows():
+    for _, row in fights_df.iterrows():
         method_cls = FINISH_METHOD_MAP.get(row["method"], -1)
-        for fighter_id, is_winner in [
-            (row["r_fighter_id"], row["winner_id"] == row["r_fighter_id"]),
-            (row["b_fighter_id"], row["winner_id"] == row["b_fighter_id"]),
-        ]:
-            # ko_stopped = fighter LOST by KO/TKO
-            ko_stopped = int(not is_winner and method_cls == 1)
+        winner_id  = row["winner_id"]
+        for fighter_id in (row["r_fighter_id"], row["b_fighter_id"]):
+            is_winner  = winner_id == fighter_id
+            ko_stopped = int(not is_winner and winner_id is not None and method_cls == 1)
+            kd_recv    = kd_lookup.get((row["fight_id"], fighter_id), 0)
             long_rows.append({
-                "fight_id":   row["fight_id"],
-                "date":       row["date"],
-                "fighter_id": fighter_id,
-                "ko_stopped": ko_stopped,
+                "fight_id":    row["fight_id"],
+                "date":        row["date"],
+                "fighter_id":  fighter_id,
+                "ko_stopped":  ko_stopped,
+                "kd_received": kd_recv,
             })
 
     long = pd.DataFrame(long_rows)
@@ -392,11 +400,10 @@ def compute_ko_vulnerability(
     long = long.sort_values(["fighter_id", "date", "fight_id"]).reset_index(drop=True)
 
     grp = long.groupby("fighter_id", sort=False)
-    long["ko_vuln"] = grp["ko_stopped"].transform(
-        lambda s: s.shift(1).rolling(window, min_periods=1).sum()
-    ).fillna(0)
+    long["ko_vuln"]       = grp["ko_stopped"].transform(lambda s: s.shift(1).cumsum()).fillna(0)
+    long["kd_received"]   = grp["kd_received"].transform(lambda s: s.shift(1).cumsum()).fillna(0)
 
-    return long[["fight_id", "fighter_id", "ko_vuln"]]
+    return long[["fight_id", "fighter_id", "ko_vuln", "kd_received"]]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
