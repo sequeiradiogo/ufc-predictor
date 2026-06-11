@@ -79,19 +79,22 @@ _EPS = 1e-6
 
 def _get_v2_defensive_stats(conn_v2: sqlite3.Connection, fighter_name: str) -> dict:
     """
-    Return the most recent pre-fight sapm/str_def/td_def for a fighter from
-    the v2 (UFCStats) DB, matched by exact name.  Returns zeros on no match.
+    Return the most recent pre-fight sapm/str_def/td_def/head_acc/body_acc/leg_acc
+    for a fighter from the UFCStats DB, matched by exact name.
+    Returns zeros on no match.
     """
     row = conn_v2.execute(
         "SELECT fighter_id FROM fighters WHERE name = ? LIMIT 1",
         (fighter_name,),
     ).fetchone()
     if not row:
-        return {"sapm": 0.0, "str_def": 0.0, "td_def": 0.0}
+        return {"sapm": 0.0, "str_def": 0.0, "td_def": 0.0,
+                "head_acc": 0.0, "body_acc": 0.0, "leg_acc": 0.0}
     fid = row[0]
     stats = conn_v2.execute(
         """
-        SELECT CAST(fs.sapm AS REAL), CAST(fs.str_def AS REAL), CAST(fs.td_def AS REAL)
+        SELECT CAST(fs.sapm     AS REAL), CAST(fs.str_def  AS REAL), CAST(fs.td_def   AS REAL),
+               CAST(fs.head_acc AS REAL), CAST(fs.body_acc AS REAL), CAST(fs.leg_acc  AS REAL)
         FROM fight_stats fs
         JOIN fights f ON fs.fight_id = f.fight_id
         WHERE fs.fighter_id = ?
@@ -101,11 +104,37 @@ def _get_v2_defensive_stats(conn_v2: sqlite3.Connection, fighter_name: str) -> d
         (fid,),
     ).fetchone()
     if not stats:
-        return {"sapm": 0.0, "str_def": 0.0, "td_def": 0.0}
+        return {"sapm": 0.0, "str_def": 0.0, "td_def": 0.0,
+                "head_acc": 0.0, "body_acc": 0.0, "leg_acc": 0.0}
     return {
-        "sapm":    float(stats[0] or 0),
-        "str_def": float(stats[1] or 0),
-        "td_def":  float(stats[2] or 0),
+        "sapm":     float(stats[0] or 0),
+        "str_def":  float(stats[1] or 0),
+        "td_def":   float(stats[2] or 0),
+        "head_acc": float(stats[3] or 0),
+        "body_acc": float(stats[4] or 0),
+        "leg_acc":  float(stats[5] or 0),
+    }
+
+
+def _get_strike_zone_accs(conn_v2: sqlite3.Connection, fighter_id: str) -> dict:
+    """Return most recent rolling head/body/leg accuracy from UFCStats fight_stats."""
+    row = conn_v2.execute(
+        """
+        SELECT CAST(fs.head_acc AS REAL), CAST(fs.body_acc AS REAL), CAST(fs.leg_acc AS REAL)
+        FROM fight_stats fs
+        JOIN fights f ON fs.fight_id = f.fight_id
+        WHERE fs.fighter_id = ?
+        ORDER BY f.date DESC, f.fight_id DESC
+        LIMIT 1
+        """,
+        (fighter_id,),
+    ).fetchone()
+    if not row:
+        return {"head_acc": 0.0, "body_acc": 0.0, "leg_acc": 0.0}
+    return {
+        "head_acc": float(row[0] or 0),
+        "body_acc": float(row[1] or 0),
+        "leg_acc":  float(row[2] or 0),
     }
 
 
@@ -677,17 +706,25 @@ def compute_ewma_stats_single(
     fighter_id: str,
     span: int = EWMA_SPAN,
 ) -> dict[str, float]:
-    """Return EWMA striking/TD accuracy and striking accuracy variance.
+    """Return EWMA striking/TD accuracy, accuracy variance, and per-fight output rates.
     Returns zeros on schema mismatch (e.g. v1 career-aggregate DB)."""
+    _zero = {
+        "ewma_str_acc": 0.0, "ewma_td_acc": 0.0, "str_acc_var": 0.0,
+        "ewma_splm": 0.0, "ewma_td_avg": 0.0, "ewma_sapm": 0.0,
+    }
     try:
         df = pd.read_sql_query(
             """
             SELECT CAST(fs.sig_str_landed  AS REAL) AS str_land,
                    CAST(fs.sig_str_atmpted AS REAL) AS str_att,
                    CAST(fs.td_landed       AS REAL) AS td_land,
-                   CAST(fs.td_atmpted      AS REAL) AS td_att
+                   CAST(fs.td_atmpted      AS REAL) AS td_att,
+                   CAST(fs.total_fight_time AS REAL) AS fight_time,
+                   CAST(opp.sig_str_landed  AS REAL) AS opp_str_land
             FROM fight_stats fs
             JOIN fights f ON fs.fight_id = f.fight_id
+            JOIN fight_stats opp
+                ON opp.fight_id = f.fight_id AND opp.fighter_id != fs.fighter_id
             WHERE fs.fighter_id = ?
             ORDER BY f.date ASC, f.fight_id ASC
             """,
@@ -695,9 +732,9 @@ def compute_ewma_stats_single(
             params=(fighter_id,),
         )
     except Exception:
-        return {"ewma_str_acc": 0.0, "ewma_td_acc": 0.0, "str_acc_var": 0.0}
+        return _zero
     if df.empty:
-        return {"ewma_str_acc": 0.0, "ewma_td_acc": 0.0, "str_acc_var": 0.0}
+        return _zero
 
     _eps = 1e-6
     df["pf_str_acc"] = df["str_land"] / (df["str_att"] + _eps)
@@ -705,11 +742,24 @@ def compute_ewma_stats_single(
     df["pf_td_acc"]  = df["td_land"]  / (df["td_att"]  + _eps)
     df.loc[df["td_att"]  == 0, "pf_td_acc"]  = 0.0
 
-    ewma_str = float(df["pf_str_acc"].ewm(span=span, min_periods=1).mean().iloc[-1])
-    ewma_td  = float(df["pf_td_acc"].ewm(span=span, min_periods=1).mean().iloc[-1])
-    var_str  = float(df["pf_str_acc"].rolling(span, min_periods=2).std().fillna(0).iloc[-1])
+    fight_min = df["fight_time"] / 60.0
+    df["pf_splm"]   = df["str_land"]     / fight_min.clip(lower=_eps)
+    df["pf_td_avg"] = df["td_land"] * 900.0 / df["fight_time"].clip(lower=_eps)
+    df["pf_sapm"]   = df["opp_str_land"] / fight_min.clip(lower=_eps)
+    for col in ("pf_splm", "pf_td_avg", "pf_sapm"):
+        df.loc[df["fight_time"] <= 0, col] = 0.0
 
-    return {"ewma_str_acc": ewma_str, "ewma_td_acc": ewma_td, "str_acc_var": var_str}
+    ewma_str    = float(df["pf_str_acc"].ewm(span=span, min_periods=1).mean().iloc[-1])
+    ewma_td     = float(df["pf_td_acc"].ewm(span=span, min_periods=1).mean().iloc[-1])
+    var_str     = float(df["pf_str_acc"].rolling(span, min_periods=2).std().fillna(0).iloc[-1])
+    ewma_splm   = float(df["pf_splm"].ewm(span=span, min_periods=1).mean().iloc[-1])
+    ewma_td_avg = float(df["pf_td_avg"].ewm(span=span, min_periods=1).mean().iloc[-1])
+    ewma_sapm   = float(df["pf_sapm"].ewm(span=span, min_periods=1).mean().iloc[-1])
+
+    return {
+        "ewma_str_acc": ewma_str, "ewma_td_acc": ewma_td, "str_acc_var": var_str,
+        "ewma_splm": ewma_splm, "ewma_td_avg": ewma_td_avg, "ewma_sapm": ewma_sapm,
+    }
 
 
 # ── Style Ratios ──────────────────────────────────────────────────────────────
@@ -861,6 +911,14 @@ def build_feature_vector(
         elif feat == "str_acc_var_diff":
             row[feat] = _er.get("str_acc_var", 0.0) - _eb.get("str_acc_var", 0.0)
 
+        # ── EWMA per-fight output rates ───────────────────────────────────────
+        elif feat == "ewma_splm_diff":
+            row[feat] = _er.get("ewma_splm", 0.0) - _eb.get("ewma_splm", 0.0)
+        elif feat == "ewma_td_avg_diff":
+            row[feat] = _er.get("ewma_td_avg", 0.0) - _eb.get("ewma_td_avg", 0.0)
+        elif feat == "ewma_sapm_diff":
+            row[feat] = _er.get("ewma_sapm", 0.0) - _eb.get("ewma_sapm", 0.0)
+
         # ── v2 defensive metrics (extra_r/extra_b for v1; red_stats for v2) ──
         elif feat == "sapm_diff":
             r_val = _er["sapm"] if "sapm" in _er else float(pd.to_numeric(red_stats.get("sapm",    0), errors="coerce") or 0)
@@ -874,6 +932,20 @@ def build_feature_vector(
             r_val = _er["td_def"] if "td_def" in _er else float(pd.to_numeric(red_stats.get("td_def",  0), errors="coerce") or 0)
             b_val = _eb["td_def"] if "td_def" in _eb else float(pd.to_numeric(blue_stats.get("td_def", 0), errors="coerce") or 0)
             row[feat] = r_val - b_val
+
+        # ── Strike zone accuracy (head/body/leg) ──────────────────────────────
+        elif feat == "head_acc_diff":
+            r_val = _er.get("head_acc") if "head_acc" in _er else float(pd.to_numeric(red_stats.get("head_acc",  0), errors="coerce") or 0)
+            b_val = _eb.get("head_acc") if "head_acc" in _eb else float(pd.to_numeric(blue_stats.get("head_acc", 0), errors="coerce") or 0)
+            row[feat] = (r_val or 0.0) - (b_val or 0.0)
+        elif feat == "body_acc_diff":
+            r_val = _er.get("body_acc") if "body_acc" in _er else float(pd.to_numeric(red_stats.get("body_acc",  0), errors="coerce") or 0)
+            b_val = _eb.get("body_acc") if "body_acc" in _eb else float(pd.to_numeric(blue_stats.get("body_acc", 0), errors="coerce") or 0)
+            row[feat] = (r_val or 0.0) - (b_val or 0.0)
+        elif feat == "leg_acc_diff":
+            r_val = _er.get("leg_acc") if "leg_acc" in _er else float(pd.to_numeric(red_stats.get("leg_acc",  0), errors="coerce") or 0)
+            b_val = _eb.get("leg_acc") if "leg_acc" in _eb else float(pd.to_numeric(blue_stats.get("leg_acc", 0), errors="coerce") or 0)
+            row[feat] = (r_val or 0.0) - (b_val or 0.0)
 
         # ── UFC ranking differential (v1 only; unranked encoded as 16) ───────
         elif feat == "weightclass_rank_diff":
@@ -913,6 +985,15 @@ def build_feature_vector(
             b_reach = float(pd.to_numeric(blue_stats.get("reach", 0), errors="coerce") or 0)
             div_std = DIV_REACH_STD.get(div_lower, DIV_REACH_STD_FALLBACK) if div_lower else DIV_REACH_STD_FALLBACK
             row[feat] = (r_reach - b_reach) / max(div_std, 1.0)
+
+        # ── Reach ratio (R/B - 1, zeros when either reach unknown) ───────────
+        elif feat == "reach_ratio_diff":
+            r_reach = float(pd.to_numeric(red_stats.get("reach",  0), errors="coerce") or 0)
+            b_reach = float(pd.to_numeric(blue_stats.get("reach", 0), errors="coerce") or 0)
+            if r_reach > 0 and b_reach > 0:
+                row[feat] = (r_reach / max(b_reach, 1.0)) - 1.0
+            else:
+                row[feat] = 0.0
 
         # ── Division-normalized SPLM diff ─────────────────────────────────────
         elif feat == "splm_div_norm_diff":
@@ -1138,6 +1219,11 @@ def compute_prediction(
                 extra_r["sapm"]    = live_r["sapm"]
                 extra_r["str_def"] = live_r["str_def"]
                 extra_r["td_def"]  = live_r["td_def"]
+                if r_fid_v2:
+                    extra_r.update(_get_strike_zone_accs(conn_v2, r_fid_v2))
+                else:
+                    zone_r = _get_v2_defensive_stats(conn_v2, r_name)
+                    extra_r.update({k: zone_r[k] for k in ("head_acc", "body_acc", "leg_acc") if k in zone_r})
             else:
                 log.warning("Live stat refresh failed for %s -- using stale mdabbert snapshot.", r_name)
                 v2_def_r = _get_v2_defensive_stats(conn_v2, r_name)
@@ -1149,6 +1235,11 @@ def compute_prediction(
                 extra_b["sapm"]    = live_b["sapm"]
                 extra_b["str_def"] = live_b["str_def"]
                 extra_b["td_def"]  = live_b["td_def"]
+                if b_fid_v2:
+                    extra_b.update(_get_strike_zone_accs(conn_v2, b_fid_v2))
+                else:
+                    zone_b = _get_v2_defensive_stats(conn_v2, b_name)
+                    extra_b.update({k: zone_b[k] for k in ("head_acc", "body_acc", "leg_acc") if k in zone_b})
             else:
                 log.warning("Live stat refresh failed for %s -- using stale mdabbert snapshot.", b_name)
                 v2_def_b = _get_v2_defensive_stats(conn_v2, b_name)

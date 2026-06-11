@@ -185,9 +185,12 @@ def ingest(csv_path: Path, db_path: Path) -> None:
         "win_by_dec_unanimous": ("R_win_by_Decision_Unanimous", "B_win_by_Decision_Unanimous"),
         "win_by_dec_split":     ("R_win_by_Decision_Split",     "B_win_by_Decision_Split"),
         # Defensive metrics (from UFCStats, now stored in CSV)
-        "sapm":    ("R_sapm",    "B_sapm"),
-        "str_def": ("R_str_def", "B_str_def"),
-        "td_def":  ("R_td_def",  "B_td_def"),
+        "sapm":     ("R_sapm",     "B_sapm"),
+        "str_def":  ("R_str_def",  "B_str_def"),
+        "td_def":   ("R_td_def",   "B_td_def"),
+        "head_acc": ("R_head_acc", "B_head_acc"),
+        "body_acc": ("R_body_acc", "B_body_acc"),
+        "leg_acc":  ("R_leg_acc",  "B_leg_acc"),
         # Pre-computed features (from add_computed_features_to_csv.py)
         "elo":               ("R_elo",               "B_elo"),
         "glicko":            ("R_glicko",            "B_glicko"),
@@ -209,6 +212,9 @@ def ingest(csv_path: Path, db_path: Path) -> None:
         "str_acc_var":       ("R_str_acc_var",        "B_str_acc_var"),
         "opp_adj_splm":      ("R_opp_adj_splm",      "B_opp_adj_splm"),
         "opp_adj_td_avg":    ("R_opp_adj_td_avg",    "B_opp_adj_td_avg"),
+        "ewma_splm":         ("R_ewma_splm",         "B_ewma_splm"),
+        "ewma_td_avg":       ("R_ewma_td_avg",       "B_ewma_td_avg"),
+        "ewma_sapm":         ("R_ewma_sapm",         "B_ewma_sapm"),
     }
 
     r_stats = df[["fight_id", "r_fighter_id"]].rename(columns={"r_fighter_id": "fighter_id"}).copy()

@@ -305,7 +305,9 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
         "days_since_last", "ko_vuln", "kd_received",
         "str_acc_slope", "splm_slope", "td_acc_slope",
         "sapm", "str_def", "td_def",
+        "head_acc", "body_acc", "leg_acc",
         "ewma_str_acc", "ewma_td_acc", "str_acc_var",
+        "ewma_splm", "ewma_td_avg", "ewma_sapm",
         "opp_adj_splm", "opp_adj_td_avg",
     )
     for col in _PRECOMPUTED:
@@ -356,7 +358,9 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
         "days_since_last", "sos", "ko_vuln", "kd_received",
         "str_acc_slope", "splm_slope", "td_acc_slope",
         "sapm", "str_def", "td_def",
+        "head_acc", "body_acc", "leg_acc",
         "ewma_str_acc", "ewma_td_acc", "str_acc_var",
+        "ewma_splm", "ewma_td_avg", "ewma_sapm",
         "opp_adj_splm", "opp_adj_td_avg",
     )
     _FILLNA = {
@@ -384,6 +388,15 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
     div_reach_std_map = _both_reach.groupby("division")["v"].std().fillna(DIV_REACH_STD_FALLBACK)
     per_row_reach_std = wide["division"].map(div_reach_std_map).fillna(DIV_REACH_STD_FALLBACK).clip(lower=1.0)
     ml["reach_div_norm_diff"] = (ml["reach_diff"] / per_row_reach_std.values).fillna(0)
+
+    # Reach ratio: relative advantage vs raw gap; 0 when either reach is unknown
+    _both_known = (r_reach_num > 0) & (b_reach_num > 0)
+    ml["reach_ratio_diff"] = (
+        ((r_reach_num / b_reach_num.clip(lower=1.0)) - 1.0)
+        .where(_both_known, 0.0)
+        .fillna(0.0)
+        .values
+    )
 
     r_splm_num = pd.to_numeric(wide.get("r_splm"), errors="coerce").fillna(0)
     b_splm_num = pd.to_numeric(wide.get("b_splm"), errors="coerce").fillna(0)

@@ -193,7 +193,6 @@ def main(dry_run: bool = False) -> None:
         """,
         ufc_conn,
     )
-    ufc_conn.close()
 
     import hashlib as _hl
     def _md5id(s: str) -> str:
@@ -291,6 +290,57 @@ def main(dry_run: bool = False) -> None:
         ["fight_id", "fighter_id", "opp_adj_splm", "opp_adj_td_avg"]
     ]
 
+    # --- EWMA of per-fight output rates (splm, td_avg, sapm) ---
+    print("  EWMA output rates (splm, td_avg, sapm) ...")
+    _ewma_rates_raw = pd.read_sql_query(
+        """
+        SELECT fs.fighter_id, f.fight_id, f.date,
+               CAST(fs.sig_str_landed  AS REAL) AS str_land,
+               CAST(fs.td_landed       AS REAL) AS td_land,
+               CAST(opp.sig_str_landed AS REAL) AS opp_str_land,
+               CAST(f.match_time_sec   AS REAL) AS match_sec,
+               CAST(f.finish_round     AS REAL) AS finish_round
+        FROM fight_stats fs
+        JOIN fights f ON fs.fight_id = f.fight_id
+        JOIN fight_stats opp
+            ON f.fight_id = opp.fight_id
+            AND opp.fighter_id != fs.fighter_id
+        ORDER BY f.date ASC, f.fight_id ASC
+        """,
+        ufc_conn,
+    )
+    ufc_conn.close()
+
+    _ewma_rates_raw["date"] = pd.to_datetime(_ewma_rates_raw["date"])
+    _ewma_rates_raw = _ewma_rates_raw.sort_values(["fighter_id", "date", "fight_id"]).copy()
+
+    _fight_secs = (
+        _ewma_rates_raw["match_sec"].fillna(0) +
+        (_ewma_rates_raw["finish_round"].fillna(1) - 1) * 300
+    )
+    _fight_min = (_fight_secs / 60.0).clip(lower=1e-6)
+    _has_time = _fight_secs > 0
+
+    _ewma_rates_raw["pf_splm"]   = (_ewma_rates_raw["str_land"]     / _fight_min).where(_has_time, 0.0)
+    _ewma_rates_raw["pf_td_avg"] = (_ewma_rates_raw["td_land"] * 900.0 / _fight_secs.clip(lower=1e-6)).where(_has_time, 0.0)
+    _ewma_rates_raw["pf_sapm"]   = (_ewma_rates_raw["opp_str_land"] / _fight_min).where(_has_time, 0.0)
+
+    _rates_grp = _ewma_rates_raw.groupby("fighter_id")
+    for _pf_col, _out_col in [("pf_splm", "ewma_splm"), ("pf_td_avg", "ewma_td_avg"), ("pf_sapm", "ewma_sapm")]:
+        _ewma_rates_raw[_out_col] = (
+            _rates_grp[_pf_col].transform(lambda s: s.shift(1).ewm(span=EWMA_SPAN, min_periods=1).mean())
+            .fillna(0)
+        )
+
+    ewma_rates_df = _ewma_rates_raw[["fight_id", "fighter_id", "ewma_splm", "ewma_td_avg", "ewma_sapm"]].copy()
+    ewma_rates_df["fight_id"]   = ewma_rates_df["fight_id"].map(ufc_fight_map)
+    ewma_rates_df["fighter_id"] = ewma_rates_df["fighter_id"].map(
+        lambda fid: _md5id(ufc_fid_to_name[fid]) if fid in ufc_fid_to_name else None
+    )
+    ewma_rates_df = ewma_rates_df.dropna(subset=["fight_id", "fighter_id"])[
+        ["fight_id", "fighter_id", "ewma_splm", "ewma_td_avg", "ewma_sapm"]
+    ]
+
     # ── Slope features ────────────────────────────────────────────────────────
     print("  Slope features ...")
     slope_df = compute_slope_features_v1(conn)
@@ -319,8 +369,11 @@ def main(dry_run: bool = False) -> None:
         (ewma_df,      "ewma_str_acc",       "R_ewma_str_acc",       "B_ewma_str_acc"),
         (ewma_df,      "ewma_td_acc",        "R_ewma_td_acc",        "B_ewma_td_acc"),
         (ewma_df,      "str_acc_var",        "R_str_acc_var",        "B_str_acc_var"),
-        (oadj_df,      "opp_adj_splm",       "R_opp_adj_splm",       "B_opp_adj_splm"),
-        (oadj_df,      "opp_adj_td_avg",     "R_opp_adj_td_avg",     "B_opp_adj_td_avg"),
+        (oadj_df,          "opp_adj_splm",       "R_opp_adj_splm",       "B_opp_adj_splm"),
+        (oadj_df,          "opp_adj_td_avg",     "R_opp_adj_td_avg",     "B_opp_adj_td_avg"),
+        (ewma_rates_df,    "ewma_splm",          "R_ewma_splm",          "B_ewma_splm"),
+        (ewma_rates_df,    "ewma_td_avg",        "R_ewma_td_avg",        "B_ewma_td_avg"),
+        (ewma_rates_df,    "ewma_sapm",          "R_ewma_sapm",          "B_ewma_sapm"),
     ]
 
     for feat_df, db_col, red_col, blue_col in per_fighter_data:

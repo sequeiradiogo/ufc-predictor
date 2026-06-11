@@ -225,13 +225,13 @@ All v1 models are saved to `models_v1/` as `.joblib` files and tracked in git. T
 | Logistic Regression | `logistic_regression.joblib`, `lr_scaler.joblib`, `lr_features.joblib` | 64.5% | Platt-calibrated |
 | Random Forest | `random_forest.joblib`, `rf_features.joblib` | 64.4% | Default params in `config.RF_PARAMS` |
 | LightGBM | `lightgbm.joblib`, `lgbm_features.joblib` | 64.0% | Default params in `config.LGBM_PARAMS` |
-| Ensemble | `ensemble.joblib` | **66.7%** | Calibrated soft-vote; LR-weighted (~54% LR, ~27% XGB) |
+| Ensemble | `ensemble.joblib` | **68.1%** | Calibrated soft-vote; RF+MLP-weighted (~34% RF, ~32% MLP) |
 
-Honest out-of-sample backtest (2025-2026, 678 fights): **66.7%** accuracy (ensemble). Naive Red baseline ~55%.
+Honest out-of-sample backtest (2025-2026, 678 fights): **68.1%** accuracy (ensemble). Naive Red baseline ~55%.
 
 Note: `--from-year 2022` backtest numbers (82-90%) are inflated because 2022-2024 fights fall inside the training window with the 80/20 split. Always use `--from-year 2025` for honest evaluation.
 
-**Ensemble weight stability**: Logistic Regression is consistently the best individual model on 2025+ data (+1.5pp over LGBM). Optuna naturally assigns it ~60-70% weight. The ensemble uses 5 independent Optuna restarts (100 trials each) and keeps the best, reducing single-run variance. Using `--tune` re-tunes base model hyperparameters via Optuna -- this has consistently hurt 2025+ accuracy (overfits to CV folds). Do not use `--tune` for routine retraining; default params are preferred.
+**Ensemble weight stability**: After the 2026-06-11 retrain (71 features), RF and MLP share the highest ensemble weight (~34%/32%). Params in `config.py` are the Optuna-tuned values for this 71-feature set. Using `--tune` re-tunes base model hyperparameters via Optuna -- this has consistently hurt 2025+ accuracy (overfits to CV folds) on older feature sets, but DID help after the major feature expansion to 71 features. Use `--tune` after significant feature changes; use default params otherwise.
 
 ### v2 Models (reference)
 
@@ -336,8 +336,8 @@ If any excluded files were previously committed, untrack them with `git rm --cac
 - **Do not use --tune for routine retraining**: `--tune` re-optimises base model hyperparameters via Optuna. This has consistently produced worse 2025+ accuracy than the default params in `config.py` (overfits to CV folds). Only use `--tune` if deliberately re-tuning after a major feature change, and always backtest before committing.
 - **Backtest year for v1**: Use `--from-year 2025` for honest evaluation. The 80/20 split puts 2022-2024 fights inside the training window; `--from-year 2022` numbers are inflated.
 - **v1 DB does not auto-update**: After each event, run the scraper, then the three CSV enrichment scripts, then `db/ingest_mdabbert.py`, then `ml/ML_data_preparation_v1.py`. Always backtest before committing retrained models.
-- **Sync script accuracy caveat**: `sync_v1_from_v2.py` produces correct per-minute `splm` from UFCStats rolling stats, while the Kaggle-sourced `ufc-master.csv` has a different `splm` scale for early-career fighters that happens to be more discriminative. After running sync, always backtest with `--from-year 2025` before committing. The current `ufc_v2.db` and `models_v1/` artifacts use the Kaggle-sourced pipeline (66.7% accuracy).
-- **Model performance ceiling**: v1 career-average models achieve 66.7% on the 2025+ backtest (678 fights). The naive "always pick Red" baseline is ~55% on recent data. Update `MODEL_RESULTS.md` after any significant retrain.
+- **Sync script accuracy caveat**: `sync_v1_from_v2.py` produces correct per-minute `splm` from UFCStats rolling stats, while the Kaggle-sourced `ufc-master.csv` has a different `splm` scale for early-career fighters that happens to be more discriminative. After running sync, always backtest with `--from-year 2025` before committing. The current `ufc_v2.db` and `models_v1/` artifacts use the Kaggle-sourced pipeline (68.1% accuracy).
+- **Model performance ceiling**: v1 career-average models achieve 68.1% on the 2025+ backtest (678 fights) as of 2026-06-11 (71 features, Optuna-tuned). The naive "always pick Red" baseline is ~55% on recent data. Update `MODEL_RESULTS.md` after any significant retrain.
 - **Shrinkage is v2 training-only**: `apply_shrinkage()` in `ML_data_preparation.py` modifies the training CSV. It is NOT applied in `predict.py` at inference time. v1 uses raw career averages with no shrinkage.
 - **Global ELO for training**: `build_elo_features()` uses a single universal ELO per fighter (not per division) to avoid cold-start when fighters change weight class. Prediction inference (`predict.py`) still calls `get_current_ratings_by_division()` for per-division ratings, which is a minor inconsistency to be aware of.
 - **CSV is the source of truth**: `raw_data/ufc-master.csv` is enriched with all features before ingestion. Never compute ELO, Glicko, SOS, slopes, style matchup, or division one-hots inside `ML_data_preparation_v1.py` -- those must come from the CSV/DB. `ML_data_preparation_v1.py` is a pure diff-builder.
