@@ -209,12 +209,27 @@ def ingest(csv_path: Path, db_path: Path) -> None:
         "kd_received":       ("R_kd_received",       "B_kd_received"),
         "ewma_str_acc":      ("R_ewma_str_acc",      "B_ewma_str_acc"),
         "ewma_td_acc":       ("R_ewma_td_acc",       "B_ewma_td_acc"),
+        "ewma_head_acc":     ("R_ewma_head_acc",     "B_ewma_head_acc"),
+        "ewma_body_acc":     ("R_ewma_body_acc",     "B_ewma_body_acc"),
+        "ewma_dist_acc":     ("R_ewma_dist_acc",     "B_ewma_dist_acc"),
         "str_acc_var":       ("R_str_acc_var",        "B_str_acc_var"),
         "opp_adj_splm":      ("R_opp_adj_splm",      "B_opp_adj_splm"),
         "opp_adj_td_avg":    ("R_opp_adj_td_avg",    "B_opp_adj_td_avg"),
         "ewma_splm":         ("R_ewma_splm",         "B_ewma_splm"),
         "ewma_td_avg":       ("R_ewma_td_avg",       "B_ewma_td_avg"),
         "ewma_sapm":         ("R_ewma_sapm",         "B_ewma_sapm"),
+        "ewma_clinch_per":   ("R_ewma_clinch_per",   "B_ewma_clinch_per"),
+        "ewma_sub_att":      ("R_ewma_sub_att",      "B_ewma_sub_att"),
+        "ewma_kd_received":  ("R_ewma_kd_received",  "B_ewma_kd_received"),
+        # Group A: zone-specific defense (from add_defensive_stats_to_csv.py)
+        "head_def":          ("R_head_def",          "B_head_def"),
+        "body_def":          ("R_body_def",          "B_body_def"),
+        "dist_def":          ("R_dist_def",          "B_dist_def"),
+        "ground_def":        ("R_ground_def",        "B_ground_def"),
+        # Group C: opponent-adjusted zone accuracy (from add_computed_features_to_csv.py)
+        "opp_adj_head_acc":  ("R_opp_adj_head_acc",  "B_opp_adj_head_acc"),
+        "opp_adj_body_acc":  ("R_opp_adj_body_acc",  "B_opp_adj_body_acc"),
+        "opp_adj_dist_acc":  ("R_opp_adj_dist_acc",  "B_opp_adj_dist_acc"),
     }
 
     r_stats = df[["fight_id", "r_fighter_id"]].rename(columns={"r_fighter_id": "fighter_id"}).copy()

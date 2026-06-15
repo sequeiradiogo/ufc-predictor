@@ -12,8 +12,9 @@ feature improvements as v2 PRs 36, 46, 50, 52:
   PR 50: age_diff removed (dead feature)
   PR 52: Glicko-2 (glicko_diff, glicko_rd_diff)
 
-Features NOT ported (require per-fight raw counts -- unavailable in v1 DB):
-  ewma_str_acc_diff, ewma_td_acc_diff, str_acc_var_diff
+Group B EWMA expansion (issue #63):
+  ewma_head_acc_diff, ewma_body_acc_diff, ewma_dist_acc_diff (zone accuracy decay)
+  ewma_clinch_per_diff, ewma_sub_att_diff, ewma_kd_received_diff (rate decay)
 
 v1 already covers win/loss streaks via career_win_streak_diff / career_lose_streak_diff.
 
@@ -306,9 +307,11 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
         "str_acc_slope", "splm_slope", "td_acc_slope",
         "sapm", "str_def", "td_def",
         "head_acc", "body_acc", "leg_acc",
-        "ewma_str_acc", "ewma_td_acc", "str_acc_var",
-        "ewma_splm", "ewma_td_avg", "ewma_sapm",
+        "ewma_str_acc", "ewma_td_acc", "ewma_head_acc", "ewma_body_acc", "ewma_dist_acc", "str_acc_var",
+        "ewma_splm", "ewma_td_avg", "ewma_sapm", "ewma_clinch_per", "ewma_sub_att", "ewma_kd_received",
         "opp_adj_splm", "opp_adj_td_avg",
+        "head_def", "body_def", "dist_def", "ground_def",
+        "opp_adj_head_acc", "opp_adj_body_acc", "opp_adj_dist_acc",
     )
     for col in _PRECOMPUTED:
         wide[f"{col}_red"]  = pd.to_numeric(wide.get(f"r_{col}"), errors="coerce")
@@ -359,9 +362,11 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
         "str_acc_slope", "splm_slope", "td_acc_slope",
         "sapm", "str_def", "td_def",
         "head_acc", "body_acc", "leg_acc",
-        "ewma_str_acc", "ewma_td_acc", "str_acc_var",
-        "ewma_splm", "ewma_td_avg", "ewma_sapm",
+        "ewma_str_acc", "ewma_td_acc", "ewma_head_acc", "ewma_body_acc", "ewma_dist_acc", "str_acc_var",
+        "ewma_splm", "ewma_td_avg", "ewma_sapm", "ewma_clinch_per", "ewma_sub_att", "ewma_kd_received",
         "opp_adj_splm", "opp_adj_td_avg",
+        "head_def", "body_def", "dist_def", "ground_def",
+        "opp_adj_head_acc", "opp_adj_body_acc", "opp_adj_dist_acc",
     )
     _FILLNA = {
         "days_since_last": 365,
@@ -432,6 +437,23 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
         r_age_vals.values * r_days_vals.values -
         b_age_vals.values * b_days_vals.values
     )
+
+    # ── Group D: Age ratio + UFC experience (issue #63) ───────────────────────
+    # age_ratio_diff: mma-ai.net feature #7 -- relative age advantage.
+    _both_age_known = (r_age_vals > 0) & (b_age_vals > 0)
+    ml["age_ratio_diff"] = (
+        (r_age_vals / b_age_vals.clip(lower=1.0) - 1.0)
+        .where(_both_age_known, 0.0)
+        .fillna(0.0)
+        .values
+    )
+
+    # ufc_experience_diff: mma-ai.net feature #9 -- total UFC fights as proxy.
+    r_exp = pd.to_numeric(wide.get("r_wins"), errors="coerce").fillna(0) + \
+            pd.to_numeric(wide.get("r_losses"), errors="coerce").fillna(0)
+    b_exp = pd.to_numeric(wide.get("b_wins"), errors="coerce").fillna(0) + \
+            pd.to_numeric(wide.get("b_losses"), errors="coerce").fillna(0)
+    ml["ufc_experience_diff"] = (r_exp - b_exp).values
 
     # ── Exclusion filters ─────────────────────────────────────────────────────
     n_before = len(ml)

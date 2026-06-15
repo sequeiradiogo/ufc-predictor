@@ -162,7 +162,13 @@ def main(dry_run: bool = False) -> None:
                CAST(fs.sig_str_landed  AS REAL) AS str_land,
                CAST(fs.sig_str_atmpted AS REAL) AS str_att,
                CAST(fs.td_landed       AS REAL) AS td_land,
-               CAST(fs.td_atmpted      AS REAL) AS td_att
+               CAST(fs.td_atmpted      AS REAL) AS td_att,
+               CAST(fs.head_landed     AS REAL) AS head_land,
+               CAST(fs.head_atmpted    AS REAL) AS head_att,
+               CAST(fs.body_landed     AS REAL) AS body_land,
+               CAST(fs.body_atmpted    AS REAL) AS body_att,
+               CAST(fs.dist_landed     AS REAL) AS dist_land,
+               CAST(fs.dist_atmpted    AS REAL) AS dist_att
         FROM fight_stats fs
         JOIN fights f ON fs.fight_id = f.fight_id
         ORDER BY f.date ASC, f.fight_id ASC
@@ -170,9 +176,9 @@ def main(dry_run: bool = False) -> None:
         ufc_conn,
     )
 
-    # Opponent-adjusted SPLM and TD avg: normalize offensive stats by the
-    # defensive quality of prior opponents.
-    # opp.str_def/td_def are pre-fight rolling values (rolling.py shift(1) applied).
+    # Opponent-adjusted SPLM, TD avg, and zone accuracy: normalize offensive
+    # stats by the defensive quality of prior opponents.
+    # opp.str_def/td_def/zone_def are pre-fight rolling values (rolling.py shift(1) applied).
     print("  Opponent-adjusted stats ...")
     _oadj_raw = pd.read_sql_query(
         """
@@ -180,10 +186,16 @@ def main(dry_run: bool = False) -> None:
             fs.fighter_id,
             f.fight_id,
             f.date,
-            CAST(opp.str_def AS REAL) AS opp_str_def,
-            CAST(opp.td_def  AS REAL) AS opp_td_def,
-            CAST(fs.splm     AS REAL) AS own_splm,
-            CAST(fs.td_avg   AS REAL) AS own_td_avg
+            CAST(opp.str_def    AS REAL) AS opp_str_def,
+            CAST(opp.td_def     AS REAL) AS opp_td_def,
+            CAST(opp.head_def   AS REAL) AS opp_head_def,
+            CAST(opp.body_def   AS REAL) AS opp_body_def,
+            CAST(opp.dist_def   AS REAL) AS opp_dist_def,
+            CAST(fs.splm        AS REAL) AS own_splm,
+            CAST(fs.td_avg      AS REAL) AS own_td_avg,
+            CAST(fs.head_acc    AS REAL) AS own_head_acc,
+            CAST(fs.body_acc    AS REAL) AS own_body_acc,
+            CAST(fs.dist_acc    AS REAL) AS own_dist_acc
         FROM fight_stats fs
         JOIN fights f ON fs.fight_id = f.fight_id
         JOIN fight_stats opp
@@ -218,76 +230,95 @@ def main(dry_run: bool = False) -> None:
     _ewma_raw["date"] = pd.to_datetime(_ewma_raw["date"])
     _ewma_raw = _ewma_raw.sort_values(["fighter_id", "date", "fight_id"]).copy()
 
-    _ewma_raw["pf_str_acc"] = (_ewma_raw["str_land"] / (_ewma_raw["str_att"] + _eps)).where(_ewma_raw["str_att"] > 0, 0.0)
-    _ewma_raw["pf_td_acc"]  = (_ewma_raw["td_land"]  / (_ewma_raw["td_att"]  + _eps)).where(_ewma_raw["td_att"]  > 0, 0.0)
+    _ewma_raw["pf_str_acc"]  = (_ewma_raw["str_land"]  / (_ewma_raw["str_att"]  + _eps)).where(_ewma_raw["str_att"]  > 0, 0.0)
+    _ewma_raw["pf_td_acc"]   = (_ewma_raw["td_land"]   / (_ewma_raw["td_att"]   + _eps)).where(_ewma_raw["td_att"]   > 0, 0.0)
+    _ewma_raw["pf_head_acc"] = (_ewma_raw["head_land"] / (_ewma_raw["head_att"] + _eps)).where(_ewma_raw["head_att"] > 0, 0.0)
+    _ewma_raw["pf_body_acc"] = (_ewma_raw["body_land"] / (_ewma_raw["body_att"] + _eps)).where(_ewma_raw["body_att"] > 0, 0.0)
+    _ewma_raw["pf_dist_acc"] = (_ewma_raw["dist_land"] / (_ewma_raw["dist_att"] + _eps)).where(_ewma_raw["dist_att"] > 0, 0.0)
 
     _grp = _ewma_raw.groupby("fighter_id")
-    _ewma_raw["str_shifted"] = _grp["pf_str_acc"].shift(1)
-    _ewma_raw["td_shifted"]  = _grp["pf_td_acc"].shift(1)
-    _ewma_raw["ewma_str_acc"] = (
-        _grp["str_shifted"].transform(lambda s: s.ewm(span=EWMA_SPAN, min_periods=1).mean())
-        .fillna(0)
-    )
-    _ewma_raw["ewma_td_acc"] = (
-        _grp["td_shifted"].transform(lambda s: s.ewm(span=EWMA_SPAN, min_periods=1).mean())
-        .fillna(0)
-    )
+    _ewma_acc_cols = [
+        ("pf_str_acc",  "ewma_str_acc"),
+        ("pf_td_acc",   "ewma_td_acc"),
+        ("pf_head_acc", "ewma_head_acc"),
+        ("pf_body_acc", "ewma_body_acc"),
+        ("pf_dist_acc", "ewma_dist_acc"),
+    ]
+    for _pf_col, _out_col in _ewma_acc_cols:
+        _ewma_raw[_out_col] = (
+            _grp[_pf_col].transform(lambda s: s.shift(1).ewm(span=EWMA_SPAN, min_periods=1).mean())
+            .fillna(0)
+        )
     _ewma_raw["str_acc_var"] = (
-        _grp["str_shifted"].transform(lambda s: s.rolling(EWMA_SPAN, min_periods=2).std())
+        _grp["pf_str_acc"].transform(lambda s: s.shift(1).rolling(EWMA_SPAN, min_periods=2).std())
         .fillna(0)
     )
-    ewma_computed = _ewma_raw[["fight_id", "fighter_id", "ewma_str_acc", "ewma_td_acc", "str_acc_var"]].copy()
+    _ewma_acc_out_cols = [c for _, c in _ewma_acc_cols] + ["str_acc_var"]
+    ewma_computed = _ewma_raw[["fight_id", "fighter_id"] + _ewma_acc_out_cols].copy()
     ewma_df = ewma_computed.copy()
     ewma_df["fight_id"]   = ewma_df["fight_id"].map(ufc_fight_map)
     ewma_df["fighter_id"] = ewma_df["fighter_id"].map(
         lambda fid: _md5id(ufc_fid_to_name[fid]) if fid in ufc_fid_to_name else None
     )
     ewma_df = ewma_df.dropna(subset=["fight_id", "fighter_id"])[
-        ["fight_id", "fighter_id", "ewma_str_acc", "ewma_td_acc", "str_acc_var"]
+        ["fight_id", "fighter_id"] + _ewma_acc_out_cols
     ]
 
     # --- Opponent-adjusted stats ---
-    # Zero str_def/td_def means no prior data; replace with NaN before averaging
+    # Zero def values mean no prior data; replace with NaN before averaging
     # so first-fight opponents don't pull down the quality estimate.
-    _oadj_raw["opp_str_def"] = _oadj_raw["opp_str_def"].where(_oadj_raw["opp_str_def"] > 0)
-    _oadj_raw["opp_td_def"]  = _oadj_raw["opp_td_def"].where(_oadj_raw["opp_td_def"] > 0)
+    _oadj_def_cols = ["opp_str_def", "opp_td_def", "opp_head_def", "opp_body_def", "opp_dist_def"]
+    for _dc in _oadj_def_cols:
+        _oadj_raw[_dc] = _oadj_raw[_dc].where(_oadj_raw[_dc] > 0)
 
-    _league_str_def = _oadj_raw["opp_str_def"].mean()
-    _league_td_def  = _oadj_raw["opp_td_def"].mean()
-    _league_str_allowed = 1.0 - _league_str_def / 100.0
-    _league_td_allowed  = 1.0 - _league_td_def  / 100.0
+    _league_str_def  = _oadj_raw["opp_str_def"].mean()
+    _league_td_def   = _oadj_raw["opp_td_def"].mean()
+    _league_head_def = _oadj_raw["opp_head_def"].mean()
+    _league_body_def = _oadj_raw["opp_body_def"].mean()
+    _league_dist_def = _oadj_raw["opp_dist_def"].mean()
+    _league_str_allowed  = 1.0 - _league_str_def  / 100.0
+    _league_td_allowed   = 1.0 - _league_td_def   / 100.0
+    _league_head_allowed = 1.0 - _league_head_def  / 100.0
+    _league_body_allowed = 1.0 - _league_body_def  / 100.0
+    _league_dist_allowed = 1.0 - _league_dist_def  / 100.0
 
     _oadj_raw = _oadj_raw.sort_values(["fighter_id", "date", "fight_id"]).copy()
     _oadj_grp = _oadj_raw.groupby("fighter_id")
 
     # shift(1) so fight i uses opponents from fights 0..i-1 (leakage-free)
-    _oadj_raw["_osd_shifted"] = _oadj_grp["opp_str_def"].shift(1)
-    _oadj_raw["_otd_shifted"] = _oadj_grp["opp_td_def"].shift(1)
-
-    _oadj_raw["avg_opp_str_def"] = (
-        _oadj_grp["_osd_shifted"]
-        .transform(lambda s: s.expanding(min_periods=1).mean())
-        .fillna(_league_str_def)
-    )
-    _oadj_raw["avg_opp_td_def"] = (
-        _oadj_grp["_otd_shifted"]
-        .transform(lambda s: s.expanding(min_periods=1).mean())
-        .fillna(_league_td_def)
-    )
+    _oadj_avg_map = {
+        "opp_str_def":  (_league_str_def,  "avg_opp_str_def"),
+        "opp_td_def":   (_league_td_def,   "avg_opp_td_def"),
+        "opp_head_def": (_league_head_def,  "avg_opp_head_def"),
+        "opp_body_def": (_league_body_def,  "avg_opp_body_def"),
+        "opp_dist_def": (_league_dist_def,  "avg_opp_dist_def"),
+    }
+    for _src_col, (_fill, _avg_col) in _oadj_avg_map.items():
+        _shifted = _oadj_grp[_src_col].shift(1)
+        _oadj_raw[_avg_col] = (
+            _oadj_grp[_src_col]
+            .transform(lambda s: s.shift(1).expanding(min_periods=1).mean())
+            .fillna(_fill)
+        )
 
     # opp_adj = own_stat * (league_avg_allowed / this_fighter_avg_opp_allowed)
-    _opp_str_allowed = (1.0 - _oadj_raw["avg_opp_str_def"] / 100.0).clip(lower=0.05)
-    _opp_td_allowed  = (1.0 - _oadj_raw["avg_opp_td_def"]  / 100.0).clip(lower=0.05)
-    _oadj_raw["opp_adj_splm"]   = (_oadj_raw["own_splm"]   * (_league_str_allowed / _opp_str_allowed)).fillna(0)
-    _oadj_raw["opp_adj_td_avg"] = (_oadj_raw["own_td_avg"] * (_league_td_allowed  / _opp_td_allowed)).fillna(0)
+    def _allowed(avg_col):
+        return (1.0 - _oadj_raw[avg_col] / 100.0).clip(lower=0.05)
 
-    oadj_df = _oadj_raw[["fight_id", "fighter_id", "opp_adj_splm", "opp_adj_td_avg"]].copy()
+    _oadj_raw["opp_adj_splm"]     = (_oadj_raw["own_splm"]    * (_league_str_allowed  / _allowed("avg_opp_str_def"))).fillna(0)
+    _oadj_raw["opp_adj_td_avg"]   = (_oadj_raw["own_td_avg"]  * (_league_td_allowed   / _allowed("avg_opp_td_def"))).fillna(0)
+    _oadj_raw["opp_adj_head_acc"] = (_oadj_raw["own_head_acc"] * (_league_head_allowed / _allowed("avg_opp_head_def"))).fillna(0)
+    _oadj_raw["opp_adj_body_acc"] = (_oadj_raw["own_body_acc"] * (_league_body_allowed / _allowed("avg_opp_body_def"))).fillna(0)
+    _oadj_raw["opp_adj_dist_acc"] = (_oadj_raw["own_dist_acc"] * (_league_dist_allowed / _allowed("avg_opp_dist_def"))).fillna(0)
+
+    _oadj_out_cols = ["opp_adj_splm", "opp_adj_td_avg", "opp_adj_head_acc", "opp_adj_body_acc", "opp_adj_dist_acc"]
+    oadj_df = _oadj_raw[["fight_id", "fighter_id"] + _oadj_out_cols].copy()
     oadj_df["fight_id"]   = oadj_df["fight_id"].map(ufc_fight_map)
     oadj_df["fighter_id"] = oadj_df["fighter_id"].map(
         lambda fid: _md5id(ufc_fid_to_name[fid]) if fid in ufc_fid_to_name else None
     )
     oadj_df = oadj_df.dropna(subset=["fight_id", "fighter_id"])[
-        ["fight_id", "fighter_id", "opp_adj_splm", "opp_adj_td_avg"]
+        ["fight_id", "fighter_id"] + _oadj_out_cols
     ]
 
     # --- EWMA of per-fight output rates (splm, td_avg, sapm) ---
@@ -297,7 +328,10 @@ def main(dry_run: bool = False) -> None:
         SELECT fs.fighter_id, f.fight_id, f.date,
                CAST(fs.sig_str_landed  AS REAL) AS str_land,
                CAST(fs.td_landed       AS REAL) AS td_land,
+               CAST(fs.clinch_landed   AS REAL) AS clinch_land,
+               CAST(fs.sub_att         AS REAL) AS sub_att,
                CAST(opp.sig_str_landed AS REAL) AS opp_str_land,
+               CAST(opp.kd             AS REAL) AS opp_kd,
                CAST(f.match_time_sec   AS REAL) AS match_sec,
                CAST(f.finish_round     AS REAL) AS finish_round
         FROM fight_stats fs
@@ -321,24 +355,36 @@ def main(dry_run: bool = False) -> None:
     _fight_min = (_fight_secs / 60.0).clip(lower=1e-6)
     _has_time = _fight_secs > 0
 
-    _ewma_rates_raw["pf_splm"]   = (_ewma_rates_raw["str_land"]     / _fight_min).where(_has_time, 0.0)
-    _ewma_rates_raw["pf_td_avg"] = (_ewma_rates_raw["td_land"] * 900.0 / _fight_secs.clip(lower=1e-6)).where(_has_time, 0.0)
-    _ewma_rates_raw["pf_sapm"]   = (_ewma_rates_raw["opp_str_land"] / _fight_min).where(_has_time, 0.0)
+    _ewma_rates_raw["pf_splm"]        = (_ewma_rates_raw["str_land"]     / _fight_min).where(_has_time, 0.0)
+    _ewma_rates_raw["pf_td_avg"]      = (_ewma_rates_raw["td_land"] * 900.0 / _fight_secs.clip(lower=1e-6)).where(_has_time, 0.0)
+    _ewma_rates_raw["pf_sapm"]        = (_ewma_rates_raw["opp_str_land"] / _fight_min).where(_has_time, 0.0)
+    _ewma_rates_raw["pf_clinch_per"]  = (_ewma_rates_raw["clinch_land"]  / _fight_min).where(_has_time, 0.0)
+    _ewma_rates_raw["pf_sub_att"]     = (_ewma_rates_raw["sub_att"] * 900.0 / _fight_secs.clip(lower=1e-6)).where(_has_time, 0.0)
+    _ewma_rates_raw["pf_kd_received"] = (_ewma_rates_raw["opp_kd"].fillna(0) / _fight_min).where(_has_time, 0.0)
 
     _rates_grp = _ewma_rates_raw.groupby("fighter_id")
-    for _pf_col, _out_col in [("pf_splm", "ewma_splm"), ("pf_td_avg", "ewma_td_avg"), ("pf_sapm", "ewma_sapm")]:
+    _rate_cols = [
+        ("pf_splm",        "ewma_splm"),
+        ("pf_td_avg",      "ewma_td_avg"),
+        ("pf_sapm",        "ewma_sapm"),
+        ("pf_clinch_per",  "ewma_clinch_per"),
+        ("pf_sub_att",     "ewma_sub_att"),
+        ("pf_kd_received", "ewma_kd_received"),
+    ]
+    for _pf_col, _out_col in _rate_cols:
         _ewma_rates_raw[_out_col] = (
             _rates_grp[_pf_col].transform(lambda s: s.shift(1).ewm(span=EWMA_SPAN, min_periods=1).mean())
             .fillna(0)
         )
 
-    ewma_rates_df = _ewma_rates_raw[["fight_id", "fighter_id", "ewma_splm", "ewma_td_avg", "ewma_sapm"]].copy()
+    _rate_out_cols = [c for _, c in _rate_cols]
+    ewma_rates_df = _ewma_rates_raw[["fight_id", "fighter_id"] + _rate_out_cols].copy()
     ewma_rates_df["fight_id"]   = ewma_rates_df["fight_id"].map(ufc_fight_map)
     ewma_rates_df["fighter_id"] = ewma_rates_df["fighter_id"].map(
         lambda fid: _md5id(ufc_fid_to_name[fid]) if fid in ufc_fid_to_name else None
     )
     ewma_rates_df = ewma_rates_df.dropna(subset=["fight_id", "fighter_id"])[
-        ["fight_id", "fighter_id", "ewma_splm", "ewma_td_avg", "ewma_sapm"]
+        ["fight_id", "fighter_id"] + _rate_out_cols
     ]
 
     # ── Slope features ────────────────────────────────────────────────────────
@@ -368,12 +414,21 @@ def main(dry_run: bool = False) -> None:
         (kovuln_df,    "kd_received",        "R_kd_received",        "B_kd_received"),
         (ewma_df,      "ewma_str_acc",       "R_ewma_str_acc",       "B_ewma_str_acc"),
         (ewma_df,      "ewma_td_acc",        "R_ewma_td_acc",        "B_ewma_td_acc"),
+        (ewma_df,      "ewma_head_acc",      "R_ewma_head_acc",      "B_ewma_head_acc"),
+        (ewma_df,      "ewma_body_acc",      "R_ewma_body_acc",      "B_ewma_body_acc"),
+        (ewma_df,      "ewma_dist_acc",      "R_ewma_dist_acc",      "B_ewma_dist_acc"),
         (ewma_df,      "str_acc_var",        "R_str_acc_var",        "B_str_acc_var"),
         (oadj_df,          "opp_adj_splm",       "R_opp_adj_splm",       "B_opp_adj_splm"),
         (oadj_df,          "opp_adj_td_avg",     "R_opp_adj_td_avg",     "B_opp_adj_td_avg"),
+        (oadj_df,          "opp_adj_head_acc",   "R_opp_adj_head_acc",   "B_opp_adj_head_acc"),
+        (oadj_df,          "opp_adj_body_acc",   "R_opp_adj_body_acc",   "B_opp_adj_body_acc"),
+        (oadj_df,          "opp_adj_dist_acc",   "R_opp_adj_dist_acc",   "B_opp_adj_dist_acc"),
         (ewma_rates_df,    "ewma_splm",          "R_ewma_splm",          "B_ewma_splm"),
         (ewma_rates_df,    "ewma_td_avg",        "R_ewma_td_avg",        "B_ewma_td_avg"),
         (ewma_rates_df,    "ewma_sapm",          "R_ewma_sapm",          "B_ewma_sapm"),
+        (ewma_rates_df,    "ewma_clinch_per",    "R_ewma_clinch_per",    "B_ewma_clinch_per"),
+        (ewma_rates_df,    "ewma_sub_att",       "R_ewma_sub_att",       "B_ewma_sub_att"),
+        (ewma_rates_df,    "ewma_kd_received",   "R_ewma_kd_received",   "B_ewma_kd_received"),
     ]
 
     for feat_df, db_col, red_col, blue_col in per_fighter_data:

@@ -45,7 +45,7 @@ _AVG_STATS    = [
 ]
 _ROLLING_STATS        = ["losses", "wins"]
 _TIME_DEPENDENT_STATS = ["sub_avg", "td_avg", "splm"]
-_RELATIVE_STATS       = ["sapm", "str_def", "td_def"]
+_RELATIVE_STATS       = ["sapm", "str_def", "td_def", "head_def", "body_def", "dist_def", "ground_def"]
 
 _TARGET_TABLE = "fight_stats"
 _MATCH_COLS   = ["fight_id", "fighter_id"]
@@ -208,6 +208,10 @@ def _compute_time_dependent(df: pd.DataFrame, prior_landed: pd.DataFrame, prior_
 
 def _compute_relative_stats(df: pd.DataFrame, total_fight_time: pd.Series) -> pd.DataFrame:
     """Compute strike/takedown defense and strikes absorbed per minute."""
+    _zone_cols = ["head", "body", "dist", "ground"]
+    _zone_atm_src  = [f"{z}_atmpted" for z in _zone_cols]
+    _zone_land_src = [f"{z}_landed"  for z in _zone_cols]
+
     rel = df[[
         "fighter_id", "date", "fight_id",
         "r_fighter_id", "b_fighter_id",
@@ -221,19 +225,29 @@ def _compute_relative_stats(df: pd.DataFrame, total_fight_time: pd.Series) -> pd
         rel["r_fighter_id"],
     )
 
-    opp = df[["fight_id", "fighter_id", "td_atmpted", "td_landed", "sig_str_atmpted", "sig_str_landed"]].rename(
+    opp = df[[
+        "fight_id", "fighter_id",
+        "td_atmpted", "td_landed",
+        "sig_str_atmpted", "sig_str_landed",
+    ] + _zone_atm_src + _zone_land_src].rename(
         columns={
             "fighter_id":      "opp_id",
             "td_atmpted":      "td_atmpted_against",
             "td_landed":       "td_landed_against",
             "sig_str_atmpted": "sig_str_atmpted_against",
             "sig_str_landed":  "sig_str_landed_against",
+            **{f"{z}_atmpted": f"{z}_atmpted_against" for z in _zone_cols},
+            **{f"{z}_landed":  f"{z}_landed_against"  for z in _zone_cols},
         }
     )
     rel = rel.merge(opp, left_on=["fight_id", "opponent_id"], right_on=["fight_id", "opp_id"], how="left")
     rel = rel.drop(columns=["opp_id"])
 
-    against_cols = ["td_atmpted_against", "td_landed_against", "sig_str_atmpted_against", "sig_str_landed_against"]
+    against_cols = (
+        ["td_atmpted_against", "td_landed_against", "sig_str_atmpted_against", "sig_str_landed_against"]
+        + [f"{z}_atmpted_against" for z in _zone_cols]
+        + [f"{z}_landed_against"  for z in _zone_cols]
+    )
     rel[against_cols] = rel.groupby("fighter_id")[against_cols].transform(
         lambda g: g.cumsum().shift(1).fillna(0)
     )
@@ -246,12 +260,18 @@ def _compute_relative_stats(df: pd.DataFrame, total_fight_time: pd.Series) -> pd
         ((rel["td_atmpted_against"] - rel["td_landed_against"]) / rel["td_atmpted_against"]) * 100
     ).fillna(0)
 
+    # Zone-specific defense: how well the fighter prevents opponent zone strikes
+    for z in _zone_cols:
+        att  = rel[f"{z}_atmpted_against"]
+        land = rel[f"{z}_landed_against"]
+        rel[f"{z}_def"] = ((att - land) / att * 100).fillna(0)
+
     drop = [
         "fighter_id", "date", "fight_id", "r_fighter_id", "b_fighter_id",
         "td_atmpted", "td_landed", "sig_str_atmpted", "sig_str_landed",
         "td_atmpted_against", "td_landed_against",
         "sig_str_atmpted_against", "sig_str_landed_against",
-    ]
+    ] + [f"{z}_atmpted_against" for z in _zone_cols] + [f"{z}_landed_against" for z in _zone_cols]
     return rel.drop(columns=drop)
 
 
