@@ -321,15 +321,21 @@ def main(dry_run: bool = False) -> None:
         ["fight_id", "fighter_id"] + _oadj_out_cols
     ]
 
-    # --- EWMA of per-fight output rates (splm, td_avg, sapm) ---
-    print("  EWMA output rates (splm, td_avg, sapm) ...")
+    # --- EWMA of per-fight output rates (splm, td_avg, sapm, reversals) ---
+    print("  EWMA output rates (splm, td_avg, sapm, reversals) ...")
+
+    # Guard: reversals column may not exist if backfill_reversals.py hasn't run yet
+    _ufc_cols = {row[1] for row in ufc_conn.execute("PRAGMA table_info(fight_stats)").fetchall()}
+    _rev_sel = "COALESCE(CAST(fs.reversals AS REAL), 0)" if "reversals" in _ufc_cols else "0"
+
     _ewma_rates_raw = pd.read_sql_query(
-        """
+        f"""
         SELECT fs.fighter_id, f.fight_id, f.date,
                CAST(fs.sig_str_landed  AS REAL) AS str_land,
                CAST(fs.td_landed       AS REAL) AS td_land,
                CAST(fs.clinch_landed   AS REAL) AS clinch_land,
                CAST(fs.sub_att         AS REAL) AS sub_att,
+               {_rev_sel}                        AS reversals,
                CAST(opp.sig_str_landed AS REAL) AS opp_str_land,
                CAST(opp.kd             AS REAL) AS opp_kd,
                CAST(f.match_time_sec   AS REAL) AS match_sec,
@@ -343,6 +349,34 @@ def main(dry_run: bool = False) -> None:
         """,
         ufc_conn,
     )
+
+    # Guard: fight_stats_rounds may not exist if backfill_rounds.py hasn't run yet
+    _has_rounds_table = bool(ufc_conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='fight_stats_rounds'"
+    ).fetchone())
+
+    if _has_rounds_table:
+        print("  R1 features (ctrl, splm, reversals per round 1) ...")
+        _r1_raw = pd.read_sql_query(
+            """
+            SELECT fsr.fighter_id, f.fight_id, f.date,
+                   CAST(fsr.ctrl           AS REAL) AS ctrl_r1,
+                   CAST(fsr.sig_str_landed AS REAL) AS sig_land_r1,
+                   CAST(fsr.reversals      AS REAL) AS reversals_r1,
+                   CAST(fsr.td_landed      AS REAL) AS td_land_r1,
+                   CAST(f.match_time_sec   AS REAL) AS match_sec,
+                   CAST(f.finish_round     AS REAL) AS finish_round
+            FROM fight_stats_rounds fsr
+            JOIN fights f ON fsr.fight_id = f.fight_id
+            WHERE fsr.round = 1
+            ORDER BY f.date ASC, f.fight_id ASC
+            """,
+            ufc_conn,
+        )
+    else:
+        print("  [skip] fight_stats_rounds not found -- run backfill_rounds.py first")
+        _r1_raw = None
+
     ufc_conn.close()
 
     _ewma_rates_raw["date"] = pd.to_datetime(_ewma_rates_raw["date"])
@@ -361,6 +395,14 @@ def main(dry_run: bool = False) -> None:
     _ewma_rates_raw["pf_clinch_per"]  = (_ewma_rates_raw["clinch_land"]  / _fight_min).where(_has_time, 0.0)
     _ewma_rates_raw["pf_sub_att"]     = (_ewma_rates_raw["sub_att"] * 900.0 / _fight_secs.clip(lower=1e-6)).where(_has_time, 0.0)
     _ewma_rates_raw["pf_kd_received"] = (_ewma_rates_raw["opp_kd"].fillna(0) / _fight_min).where(_has_time, 0.0)
+    _ewma_rates_raw["pf_reversals"]   = (_ewma_rates_raw["reversals"].fillna(0) * 900.0 / _fight_secs.clip(lower=1e-6)).where(_has_time, 0.0)
+
+    # Career cumulative reversals (leakage-free: cumsum shifted by 1)
+    _ewma_rates_raw = _ewma_rates_raw.sort_values(["fighter_id", "date", "fight_id"]).copy()
+    _ewma_rates_raw["career_reversals"] = (
+        _ewma_rates_raw.groupby("fighter_id")["reversals"]
+        .transform(lambda s: s.fillna(0).cumsum().shift(1).fillna(0))
+    )
 
     _rates_grp = _ewma_rates_raw.groupby("fighter_id")
     _rate_cols = [
@@ -370,6 +412,7 @@ def main(dry_run: bool = False) -> None:
         ("pf_clinch_per",  "ewma_clinch_per"),
         ("pf_sub_att",     "ewma_sub_att"),
         ("pf_kd_received", "ewma_kd_received"),
+        ("pf_reversals",   "ewma_reversals"),
     ]
     for _pf_col, _out_col in _rate_cols:
         _ewma_rates_raw[_out_col] = (
@@ -377,7 +420,7 @@ def main(dry_run: bool = False) -> None:
             .fillna(0)
         )
 
-    _rate_out_cols = [c for _, c in _rate_cols]
+    _rate_out_cols = [c for _, c in _rate_cols] + ["career_reversals"]
     ewma_rates_df = _ewma_rates_raw[["fight_id", "fighter_id"] + _rate_out_cols].copy()
     ewma_rates_df["fight_id"]   = ewma_rates_df["fight_id"].map(ufc_fight_map)
     ewma_rates_df["fighter_id"] = ewma_rates_df["fighter_id"].map(
@@ -386,6 +429,42 @@ def main(dry_run: bool = False) -> None:
     ewma_rates_df = ewma_rates_df.dropna(subset=["fight_id", "fighter_id"])[
         ["fight_id", "fighter_id"] + _rate_out_cols
     ]
+
+    # R1 features: EWMA of R1 ctrl, sig strikes per minute, reversals
+    if _r1_raw is not None and not _r1_raw.empty:
+        _r1_raw["date"] = pd.to_datetime(_r1_raw["date"])
+        _r1_raw = _r1_raw.sort_values(["fighter_id", "date", "fight_id"]).copy()
+        # R1 duration: 300s if fight went past R1, else match_time_sec
+        _r1_dur_sec = _r1_raw["match_sec"].fillna(0).where(
+            _r1_raw["finish_round"].fillna(0) <= 1,
+            300.0,
+        ).clip(lower=1.0)
+        _r1_dur_min = _r1_dur_sec / 60.0
+        _r1_raw["pf_ctrl_r1"]      = _r1_raw["ctrl_r1"].fillna(0) / _r1_dur_sec
+        _r1_raw["pf_splm_r1"]      = _r1_raw["sig_land_r1"].fillna(0) / _r1_dur_min.clip(lower=1e-6)
+        _r1_raw["pf_reversals_r1"] = _r1_raw["reversals_r1"].fillna(0) / _r1_dur_min.clip(lower=1e-6)
+        _r1_grp = _r1_raw.groupby("fighter_id")
+        _r1_cols = [
+            ("pf_ctrl_r1",      "ewma_ctrl_r1"),
+            ("pf_splm_r1",      "ewma_splm_r1"),
+            ("pf_reversals_r1", "ewma_reversals_r1"),
+        ]
+        for _pf_col, _out_col in _r1_cols:
+            _r1_raw[_out_col] = (
+                _r1_grp[_pf_col].transform(lambda s: s.shift(1).ewm(span=EWMA_SPAN, min_periods=1).mean())
+                .fillna(0)
+            )
+        _r1_out_cols = [c for _, c in _r1_cols]
+        r1_df = _r1_raw[["fight_id", "fighter_id"] + _r1_out_cols].copy()
+        r1_df["fight_id"]   = r1_df["fight_id"].map(ufc_fight_map)
+        r1_df["fighter_id"] = r1_df["fighter_id"].map(
+            lambda fid: _md5id(ufc_fid_to_name[fid]) if fid in ufc_fid_to_name else None
+        )
+        r1_df = r1_df.dropna(subset=["fight_id", "fighter_id"])[
+            ["fight_id", "fighter_id"] + _r1_out_cols
+        ]
+    else:
+        r1_df = None
 
     # ── Slope features ────────────────────────────────────────────────────────
     print("  Slope features ...")
@@ -429,7 +508,15 @@ def main(dry_run: bool = False) -> None:
         (ewma_rates_df,    "ewma_clinch_per",    "R_ewma_clinch_per",    "B_ewma_clinch_per"),
         (ewma_rates_df,    "ewma_sub_att",       "R_ewma_sub_att",       "B_ewma_sub_att"),
         (ewma_rates_df,    "ewma_kd_received",   "R_ewma_kd_received",   "B_ewma_kd_received"),
+        (ewma_rates_df,    "ewma_reversals",     "R_ewma_reversals",     "B_ewma_reversals"),
+        (ewma_rates_df,    "career_reversals",   "R_career_reversals",   "B_career_reversals"),
     ]
+    if r1_df is not None:
+        per_fighter_data += [
+            (r1_df, "ewma_ctrl_r1",      "R_ewma_ctrl_r1",      "B_ewma_ctrl_r1"),
+            (r1_df, "ewma_splm_r1",      "R_ewma_splm_r1",      "B_ewma_splm_r1"),
+            (r1_df, "ewma_reversals_r1", "R_ewma_reversals_r1", "B_ewma_reversals_r1"),
+        ]
 
     for feat_df, db_col, red_col, blue_col in per_fighter_data:
         wide = _assign_per_fighter(wide, feat_df, db_col, red_col, blue_col)

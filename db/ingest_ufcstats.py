@@ -99,6 +99,7 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             td_landed         INTEGER,
             td_atmpted        INTEGER,
             sub_att           INTEGER,
+            reversals         INTEGER,
             ctrl              INTEGER,
             head_landed       INTEGER,
             head_atmpted      INTEGER,
@@ -122,10 +123,40 @@ def _create_schema(conn: sqlite3.Connection) -> None:
             PRIMARY KEY (fight_id, fighter_id)
         );
 
-        CREATE INDEX IF NOT EXISTS idx_fights_date      ON fights(date);
-        CREATE INDEX IF NOT EXISTS idx_fights_rfighter  ON fights(r_fighter_id);
-        CREATE INDEX IF NOT EXISTS idx_fightstats_fight ON fight_stats(fight_id);
-        CREATE INDEX IF NOT EXISTS idx_fightstats_fid   ON fight_stats(fighter_id);
+        CREATE TABLE IF NOT EXISTS fight_stats_rounds (
+            fight_id          TEXT,
+            fighter_id        TEXT,
+            round             INTEGER,
+            kd                INTEGER,
+            sig_str_landed    INTEGER,
+            sig_str_atmpted   INTEGER,
+            td_landed         INTEGER,
+            td_atmpted        INTEGER,
+            sub_att           INTEGER,
+            reversals         INTEGER,
+            ctrl              INTEGER,
+            head_landed       INTEGER,
+            head_atmpted      INTEGER,
+            body_landed       INTEGER,
+            body_atmpted      INTEGER,
+            leg_landed        INTEGER,
+            leg_atmpted       INTEGER,
+            dist_landed       INTEGER,
+            dist_atmpted      INTEGER,
+            clinch_landed     INTEGER,
+            clinch_atmpted    INTEGER,
+            ground_landed     INTEGER,
+            ground_atmpted    INTEGER,
+            PRIMARY KEY (fight_id, fighter_id, round)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_fights_date        ON fights(date);
+        CREATE INDEX IF NOT EXISTS idx_fights_rfighter    ON fights(r_fighter_id);
+        CREATE INDEX IF NOT EXISTS idx_fightstats_fight   ON fight_stats(fight_id);
+        CREATE INDEX IF NOT EXISTS idx_fightstats_fid     ON fight_stats(fighter_id);
+        CREATE INDEX IF NOT EXISTS idx_fsrounds_fight     ON fight_stats_rounds(fight_id);
+        CREATE INDEX IF NOT EXISTS idx_fsrounds_fid       ON fight_stats_rounds(fighter_id);
+        CREATE INDEX IF NOT EXISTS idx_fsrounds_round     ON fight_stats_rounds(round);
     """)
     conn.commit()
 
@@ -254,6 +285,7 @@ def ingest(data: dict, db_path: Path = DB_UFCSTATS_PATH) -> None:
             "td_landed":         s.get("td_landed", 0),
             "td_atmpted":        s.get("td_atmpted", 0),
             "sub_att":           s.get("sub_att", 0),
+            "reversals":         s.get("reversals", 0),
             "ctrl":              s.get("ctrl", 0),
             "head_landed":       s.get("head_landed", 0),
             "head_atmpted":      s.get("head_atmpted", 0),
@@ -280,7 +312,7 @@ def ingest(data: dict, db_path: Path = DB_UFCSTATS_PATH) -> None:
         INSERT INTO fight_stats (
             fight_id, fighter_id, corner,
             kd, sig_str_landed, sig_str_atmpted, total_str_landed, total_str_atmpted,
-            td_landed, td_atmpted, sub_att, ctrl,
+            td_landed, td_atmpted, sub_att, reversals, ctrl,
             head_landed, head_atmpted, body_landed, body_atmpted,
             leg_landed, leg_atmpted, dist_landed, dist_atmpted,
             clinch_landed, clinch_atmpted, ground_landed, ground_atmpted,
@@ -288,7 +320,7 @@ def ingest(data: dict, db_path: Path = DB_UFCSTATS_PATH) -> None:
         ) VALUES (
             :fight_id, :fighter_id, :corner,
             :kd, :sig_str_landed, :sig_str_atmpted, :total_str_landed, :total_str_atmpted,
-            :td_landed, :td_atmpted, :sub_att, :ctrl,
+            :td_landed, :td_atmpted, :sub_att, :reversals, :ctrl,
             :head_landed, :head_atmpted, :body_landed, :body_atmpted,
             :leg_landed, :leg_atmpted, :dist_landed, :dist_atmpted,
             :clinch_landed, :clinch_atmpted, :ground_landed, :ground_atmpted,
@@ -303,6 +335,7 @@ def ingest(data: dict, db_path: Path = DB_UFCSTATS_PATH) -> None:
             td_landed         = excluded.td_landed,
             td_atmpted        = excluded.td_atmpted,
             sub_att           = excluded.sub_att,
+            reversals         = excluded.reversals,
             ctrl              = excluded.ctrl,
             head_landed       = excluded.head_landed,
             head_atmpted      = excluded.head_atmpted,
@@ -326,6 +359,53 @@ def ingest(data: dict, db_path: Path = DB_UFCSTATS_PATH) -> None:
         stats_rows,
     )
     conn.commit()
+
+    # ── fight_stats_rounds ────────────────────────────────────────────────────
+    round_stats: list[dict] = data.get("round_stats", [])
+    if round_stats:
+        log.info("Upserting %d fight_stats_rounds rows...", len(round_stats))
+        cur.executemany(
+            """
+            INSERT INTO fight_stats_rounds (
+                fight_id, fighter_id, round,
+                kd, sig_str_landed, sig_str_atmpted,
+                td_landed, td_atmpted, sub_att, reversals, ctrl,
+                head_landed, head_atmpted, body_landed, body_atmpted,
+                leg_landed, leg_atmpted, dist_landed, dist_atmpted,
+                clinch_landed, clinch_atmpted, ground_landed, ground_atmpted
+            ) VALUES (
+                :fight_id, :fighter_id, :round,
+                :kd, :sig_str_landed, :sig_str_atmpted,
+                :td_landed, :td_atmpted, :sub_att, :reversals, :ctrl,
+                :head_landed, :head_atmpted, :body_landed, :body_atmpted,
+                :leg_landed, :leg_atmpted, :dist_landed, :dist_atmpted,
+                :clinch_landed, :clinch_atmpted, :ground_landed, :ground_atmpted
+            )
+            ON CONFLICT(fight_id, fighter_id, round) DO UPDATE SET
+                kd                = excluded.kd,
+                sig_str_landed    = excluded.sig_str_landed,
+                sig_str_atmpted   = excluded.sig_str_atmpted,
+                td_landed         = excluded.td_landed,
+                td_atmpted        = excluded.td_atmpted,
+                sub_att           = excluded.sub_att,
+                reversals         = excluded.reversals,
+                ctrl              = excluded.ctrl,
+                head_landed       = excluded.head_landed,
+                head_atmpted      = excluded.head_atmpted,
+                body_landed       = excluded.body_landed,
+                body_atmpted      = excluded.body_atmpted,
+                leg_landed        = excluded.leg_landed,
+                leg_atmpted       = excluded.leg_atmpted,
+                dist_landed       = excluded.dist_landed,
+                dist_atmpted      = excluded.dist_atmpted,
+                clinch_landed     = excluded.clinch_landed,
+                clinch_atmpted    = excluded.clinch_atmpted,
+                ground_landed     = excluded.ground_landed,
+                ground_atmpted    = excluded.ground_atmpted
+            """,
+            round_stats,
+        )
+        conn.commit()
 
     n_f  = cur.execute("SELECT COUNT(*) FROM fighters").fetchone()[0]
     n_fi = cur.execute("SELECT COUNT(*) FROM fights").fetchone()[0]

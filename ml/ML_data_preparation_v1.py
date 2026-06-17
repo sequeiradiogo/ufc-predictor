@@ -312,6 +312,10 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
         "opp_adj_splm", "opp_adj_td_avg",
         "head_def", "body_def", "dist_def", "ground_def",
         "opp_adj_head_acc", "opp_adj_body_acc", "opp_adj_dist_acc",
+        # Group E: reversals
+        "career_reversals", "ewma_reversals",
+        # Group F: R1 stats (zero-filled when backfill not yet run)
+        "ewma_ctrl_r1", "ewma_splm_r1", "ewma_reversals_r1",
     )
     for col in _PRECOMPUTED:
         wide[f"{col}_red"]  = pd.to_numeric(wide.get(f"r_{col}"), errors="coerce")
@@ -367,6 +371,10 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
         "opp_adj_splm", "opp_adj_td_avg",
         "head_def", "body_def", "dist_def", "ground_def",
         "opp_adj_head_acc", "opp_adj_body_acc", "opp_adj_dist_acc",
+        # Group E: reversals
+        "career_reversals", "ewma_reversals",
+        # Group F: R1 stats
+        "ewma_ctrl_r1", "ewma_splm_r1", "ewma_reversals_r1",
     )
     _FILLNA = {
         "days_since_last": 365,

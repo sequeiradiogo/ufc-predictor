@@ -68,6 +68,7 @@ def _flush(buffer: dict, db_path: Path) -> None:
     buffer["fighters"].clear()
     buffer["fights"].clear()
     buffer["fight_stats"].clear()
+    buffer["round_stats"].clear()
 
 
 def main() -> None:
@@ -99,7 +100,7 @@ def main() -> None:
             len(existing_event_ids), len(existing_fighter_ids),
         )
 
-    buffer: dict = {"fighters": [], "fights": [], "fight_stats": []}
+    buffer: dict = {"fighters": [], "fights": [], "fight_stats": [], "round_stats": []}
     events_scraped = 0
     fights_total   = 0
 
@@ -111,6 +112,7 @@ def main() -> None:
         buffer["fighters"].extend(data["fighters"])
         buffer["fights"].extend(data["fights"])
         buffer["fight_stats"].extend(data["fight_stats"])
+        buffer["round_stats"].extend(data.get("round_stats", []))
         events_scraped += 1
         fights_total   += len(data["fights"])
 
