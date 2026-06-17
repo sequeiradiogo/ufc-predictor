@@ -41,6 +41,7 @@ BFO_EVENT_URLS: dict[str, str] = {
     "2026-05-16": f"{BASE}/events/ufc-vegas-117-4186",
     "2026-05-30": f"{BASE}/events/ufc-macau-4188",
     "2026-06-06": f"{BASE}/events/ufc-vegas-118-4200",
+    "2026-06-14": f"{BASE}/events/ufc-freedom-fights-250-4082",
 }
 
 # Extra BFO pages that cover prelims/undercard for split events

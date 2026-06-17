@@ -300,14 +300,10 @@ def _run_prediction(req: PredictRequest) -> PredictResponse:
         red_stats  = get_latest_stats(conn, r["fighter_id"])
         blue_stats = get_latest_stats(conn, b["fighter_id"])
 
-        # ELO — read from startup cache (O(1) lookup, no replay)
+        # ELO — global ratings match what the model was trained on
         div_lower = (req.division or "").lower().strip()
-        if div_lower:
-            elo_r = _elo_div.get((r["fighter_id"], div_lower), STARTING_ELO)
-            elo_b = _elo_div.get((b["fighter_id"], div_lower), STARTING_ELO)
-        else:
-            elo_r = _elo_global.get(r["fighter_id"], STARTING_ELO)
-            elo_b = _elo_global.get(b["fighter_id"], STARTING_ELO)
+        elo_r = _elo_global.get(r["fighter_id"], STARTING_ELO)
+        elo_b = _elo_global.get(b["fighter_id"], STARTING_ELO)
 
         # Recent form
         form_r = compute_recent_form(conn, r["fighter_id"])
