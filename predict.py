@@ -66,7 +66,7 @@ from config import (
     TRAJECTORY_WINDOW,
     NAME_ALIASES,
 )
-from ml.ELO_calculator import get_current_ratings_by_division, get_current_glicko_by_division
+from ml.ELO_calculator import get_current_glicko_by_division
 from utils.odds import print_value_bet_summary
 from utils.logger import get_logger
 
@@ -614,14 +614,18 @@ def compute_inactivity_single(
 def compute_sos_single(
     conn: sqlite3.Connection,
     fighter_id: str,
-    elo_by_division: dict[tuple[str, str], float],
+    global_elo: dict[str, float],
     window: int = SOS_WINDOW,
 ) -> dict[str, float]:
-    """Return average ELO of the last `window` opponents (strength of schedule)."""
+    """Return average ELO of the last `window` opponents (strength of schedule).
+
+    Uses global ELO (not per-division) to match the training-time computation in
+    ML_data_preparation.py where opponent ELO comes from build_elo_features() which
+    uses _replay_fights() (global, single rating per fighter).
+    """
     df = pd.read_sql_query(
         """
-        SELECT f.division,
-               CASE WHEN f.r_fighter_id = ? THEN f.b_fighter_id
+        SELECT CASE WHEN f.r_fighter_id = ? THEN f.b_fighter_id
                     ELSE f.r_fighter_id END AS opp_id
         FROM fights f
         WHERE (f.r_fighter_id = ? OR f.b_fighter_id = ?)
@@ -634,11 +638,7 @@ def compute_sos_single(
     if df.empty:
         return {"sos": float(STARTING_ELO)}
 
-    elo_vals = []
-    for _, row in df.iterrows():
-        div = str(row["division"]).lower().strip()
-        opp_elo = elo_by_division.get((row["opp_id"], div), STARTING_ELO)
-        elo_vals.append(opp_elo)
+    elo_vals = [global_elo.get(row["opp_id"], STARTING_ELO) for _, row in df.iterrows()]
 
     return {"sos": float(np.mean(elo_vals))}
 
@@ -1147,11 +1147,8 @@ def compute_prediction(
     elo_r = elo_ratings.get(r_id, STARTING_ELO)
     elo_b = elo_ratings.get(b_id, STARTING_ELO)
 
-    # SOS requires per-division ELO ratings for opponent lookup
-    div_elo = {}
-    if _need_sos:
-        log.info("Computing per-division ELO for SOS...")
-        div_elo = get_current_ratings_by_division(conn)
+    # SOS uses global ELO (reuse already-computed ratings) to match training
+    div_elo = elo_ratings if _need_sos else {}
 
     # ── Glicko-2 ──────────────────────────────────────────────────────────────
     glicko_r_tuple = glicko_b_tuple = _def_glicko_t
@@ -1273,7 +1270,7 @@ def compute_prediction(
             # Per-fight-history features: form, finish rates, inactivity, SOS,
             # ko_vuln, ewma -- all query fights/fight_stats so must use UFCStats IDs.
             # SOS also needs per-division ELO (skip if sos_diff excluded).
-            div_elo_v2 = get_current_ratings_by_division(conn_v2) if _need_sos else {}
+            div_elo_v2 = compute_current_elo(conn_v2) if _need_sos else {}
 
             if r_fid_v2:
                 form_r   = compute_recent_form(conn_v2, r_fid_v2)
