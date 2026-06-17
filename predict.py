@@ -1422,6 +1422,48 @@ def compute_prediction(
         ).fillna(0)
         finish_proba = finish_model.predict_proba(X_fin.values)[0].tolist()
 
+    def _fv(stats: pd.Series, extra: dict, key: str, default: float = 0.0) -> float:
+        v = extra.get(key, stats.get(key, default))
+        try:
+            return float(v) if v is not None else default
+        except (TypeError, ValueError):
+            return default
+
+    def _pct(stats: pd.Series, extra: dict, key: str) -> float:
+        # str_def / str_acc / td_acc can be stored as 0-100 or 0-1 depending on source.
+        # Normalise to 0-1 fraction.
+        v = _fv(stats, extra, key)
+        return v / 100.0 if v > 1.5 else v
+
+    stats_red = {
+        "str_acc":    _pct(red_stats,  extra_r, "avg_sig_str_pct"),
+        "splm":       _fv(red_stats,   extra_r, "splm"),
+        "td_acc":     _pct(red_stats,  extra_r, "avg_td_pct"),
+        "td_avg":     _fv(red_stats,   extra_r, "td_avg"),
+        "str_def":    _pct(red_stats,  extra_r, "str_def"),
+        "td_def":     _pct(red_stats,  extra_r, "td_def"),
+        "sapm":       _fv(red_stats,   extra_r, "sapm"),
+        "win_rate":   float(form_r.get("recent_win_rate", 0.0)),
+        "win_streak": float(form_r.get("win_streak", 0.0)),
+        "ko_rate":    _fv(red_stats,  extra_r, "win_by_ko") / max(
+            _fv(red_stats, extra_r, "wins") + _fv(red_stats, extra_r, "losses"), 1),
+        "sos":        _fv(red_stats,  red_stats,  "sos", float(STARTING_ELO)),
+    }
+    stats_blue = {
+        "str_acc":    _pct(blue_stats, extra_b, "avg_sig_str_pct"),
+        "splm":       _fv(blue_stats,  extra_b, "splm"),
+        "td_acc":     _pct(blue_stats, extra_b, "avg_td_pct"),
+        "td_avg":     _fv(blue_stats,  extra_b, "td_avg"),
+        "str_def":    _pct(blue_stats, extra_b, "str_def"),
+        "td_def":     _pct(blue_stats, extra_b, "td_def"),
+        "sapm":       _fv(blue_stats,  extra_b, "sapm"),
+        "win_rate":   float(form_b.get("recent_win_rate", 0.0)),
+        "win_streak": float(form_b.get("win_streak", 0.0)),
+        "ko_rate":    _fv(blue_stats, extra_b, "win_by_ko") / max(
+            _fv(blue_stats, extra_b, "wins") + _fv(blue_stats, extra_b, "losses"), 1),
+        "sos":        _fv(blue_stats, blue_stats, "sos", float(STARTING_ELO)),
+    }
+
     return {
         "red_name":    r_name,
         "blue_name":   b_name,
@@ -1434,6 +1476,8 @@ def compute_prediction(
         "form_red":    form_r,
         "form_blue":   form_b,
         "finish_proba": finish_proba,
+        "stats_red":   stats_red,
+        "stats_blue":  stats_blue,
     }
 
 
