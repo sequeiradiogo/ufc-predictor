@@ -4,6 +4,8 @@ Model: Ensemble (Soft Vote) | Generated: 2026-06-17
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
 
+> Interactive fighter comparison: [ufc-fight-night-kape-vs-horiguchi-2026-06-20.html](./ufc-fight-night-kape-vs-horiguchi-2026-06-20.html)
+
 ---
 
 ## Predictions
