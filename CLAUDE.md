@@ -52,6 +52,14 @@ python ml/soft_vote_ensemble.py --trials 100
 python scripts/scrape_history.py --no-rolling
 python -c "from db.rolling import main; from config import DB_UFCSTATS_PATH; main(db_path=DB_UFCSTATS_PATH)"
 
+# Backfill reversals for historical fights (run once after scraper update, ~6 hours for ~8700 fights)
+python scripts/backfill_reversals.py
+python scripts/backfill_reversals.py --limit 100    # test first 100 fights
+
+# Backfill per-round stats for historical fights (run once, ~6 hours for ~8700 fights)
+python scripts/backfill_rounds.py
+python scripts/backfill_rounds.py --limit 50        # test first 50 fights
+
 # Sync v1 career-average DB from UFCStats DB after each event (replaces manual CSV update)
 python scripts/sync_v1_from_v2.py
 python scripts/sync_v1_from_v2.py --dry-run   # preview without writing
@@ -132,7 +140,9 @@ Three tables:
 
 - **`fighters`** -- one row per fighter: `fighter_id` (hex from UFCStats URL), `name`, `height`, `reach`, `stance`, `dob`
 - **`fights`** -- one row per fight: `fight_id`, `event_id`, `date`, `division`, `r_fighter_id`, `b_fighter_id`, `winner_id`, `method`, `title_fight`, `odds_red`, `odds_blue`
-- **`fight_stats`** -- two rows per fight (one per corner): raw per-fight stats (`kd`, `sig_str_landed`, `sig_str_atmpted`, `head_landed/atmpted`, `body_landed/atmpted`, `leg_landed/atmpted`, `dist/clinch/ground landed/atmpted`, `td_landed/atmpted`, `sub_att`, `ctrl`, `total_fight_time`) plus all rolling columns added by `rolling.py` (accuracies, rates, splm, sapm, str_def, td_avg, td_def, sub_avg, wins, losses, etc.)
+- **`fight_stats`** -- two rows per fight (one per corner): raw per-fight stats (`kd`, `sig_str_landed`, `sig_str_atmpted`, `head_landed/atmpted`, `body_landed/atmpted`, `leg_landed/atmpted`, `dist/clinch/ground landed/atmpted`, `td_landed/atmpted`, `sub_att`, `reversals`, `ctrl`, `total_fight_time`) plus all rolling columns added by `rolling.py` (accuracies, rates, splm, sapm, str_def, td_avg, td_def, sub_avg, wins, losses, etc.). `reversals` was added by `backfill_reversals.py` after the initial scrape.
+
+- **`fight_stats_rounds`** -- two rows per fight per round (one per corner): same columns as `fight_stats` per-fight counts but scoped to one round. Populated by `scripts/backfill_rounds.py` (historical backfill) and by the scraper going forward. Primary key `(fight_id, fighter_id, round)`. Round 0 is a sentinel row used by the backfill to mark fights where UFCStats had no round data. Used by `add_computed_features_to_csv.py` to compute R1 rolling features (`ewma_ctrl_r1`, `ewma_splm_r1`, `ewma_reversals_r1`).
 
 Fighter IDs are hex strings from UFCStats.com URLs (e.g. `c2299ec916bc7c56`). Red/Blue corners are read from the fight detail page `div.b-fight-details__person` divs (first = Red, second = Blue) -- NOT from the event listing order which puts the winner first.
 
@@ -142,7 +152,7 @@ Three tables:
 
 - **`fighters`** -- one row per fighter: `fighter_id` (MD5 hash of name), `name`, `height`, `reach`, `stance`, `dob`, `weight`
 - **`fights`** -- one row per fight: `fight_id`, `event_id`, `date`, `r_fighter_id`, `b_fighter_id`, `winner_id`, `method`, `division`, `title_fight`, plus pre-computed fight-level features: `grapple_ratio_diff`, `striker_vs_wrestler`, `wrestler_vs_striker`, `southpaw_adv_diff`, `both_southpaw`, `weightclass_rank_diff`, and 12 `div_*` one-hot columns
-- **`fight_stats`** -- two rows per fight (one per corner): career-aggregate stats at the time of the fight (`avg_sig_str_pct`, `avg_td_pct`, `splm`, `td_avg`, `avg_sub_att`, `win_by_ko`, `win_by_sub`, `win_by_dec_unanimous`, `win_by_dec_split`, `wins`, `losses`, `career_win_streak`, `career_lose_streak`, `longest_win_streak`, `total_rounds_fought`, `total_title_bouts`, `total_fight_time`, `height`, `reach`, `stance`, `age`, `weightclass_rank`) plus pre-computed features: `elo`, `glicko`, `glicko_rd`, `recent_win_rate`, `recent_finish_rate`, `sos`, `str_acc_slope`, `splm_slope`, `td_acc_slope`, `ko_rate`, `sub_rate`, `dec_rate`, `days_since_last`, `ko_vuln`, `kd_received`, `sapm`, `str_def`, `td_def`
+- **`fight_stats`** -- two rows per fight (one per corner): career-aggregate stats at the time of the fight (`avg_sig_str_pct`, `avg_td_pct`, `splm`, `td_avg`, `avg_sub_att`, `win_by_ko`, `win_by_sub`, `win_by_dec_unanimous`, `win_by_dec_split`, `wins`, `losses`, `career_win_streak`, `career_lose_streak`, `longest_win_streak`, `total_rounds_fought`, `total_title_bouts`, `total_fight_time`, `height`, `reach`, `stance`, `age`, `weightclass_rank`) plus pre-computed features: `elo`, `glicko`, `glicko_rd`, `recent_win_rate`, `recent_finish_rate`, `sos`, `str_acc_slope`, `splm_slope`, `td_acc_slope`, `ko_rate`, `sub_rate`, `dec_rate`, `days_since_last`, `ko_vuln`, `kd_received`, `sapm`, `str_def`, `td_def`, `head_def`, `body_def`, `dist_def`, `ground_def`, `opp_adj_head_acc`, `opp_adj_body_acc`, `opp_adj_dist_acc`, `career_reversals`, `ewma_reversals`, `ewma_ctrl_r1`, `ewma_splm_r1`, `ewma_reversals_r1`
 
 Note: `sapm`, `str_def`, `td_def` are enriched at CSV-build time from the UFCStats DB by `add_defensive_stats_to_csv.py`, then stored in `ufc-master.csv` and ingested into the mdabbert DB. `ML_data_preparation_v1.py` no longer does live cross-DB lookups.
 
@@ -198,7 +208,7 @@ Pure diff-builder: reads pre-computed feature columns from the mdabbert DB and c
 
 Pre-computed features (stored in CSV/DB, diffed at build time):
 - **Base stats from mdabbert**: `avg_sig_str_pct`, `avg_td_pct`, `splm`, `td_avg`, `avg_sub_att`, finish rates, wins, losses, streaks, `weightclass_rank`
-- **Defensive stats** (from `add_defensive_stats_to_csv.py`): `sapm`, `str_def`, `td_def`
+- **Defensive stats** (from `add_defensive_stats_to_csv.py`): `sapm`, `str_def`, `td_def`, `head_acc`, `body_acc`, `leg_acc`, `head_def`, `body_def`, `dist_def`, `ground_def`
 - **ELO** (global, from `add_computed_features_to_csv.py`): `elo_diff`
 - **Glicko-2** (from `add_computed_features_to_csv.py`): `glicko_diff`, `glicko_rd_diff`
 - **Recent form** (from `add_computed_features_to_csv.py`): `recent_win_rate_diff`, `recent_finish_rate_diff`
@@ -212,6 +222,9 @@ Pre-computed features (stored in CSV/DB, diffed at build time):
 - **Style matchup** (fight-level, from `add_computed_features_to_csv.py`): `grapple_ratio_diff`, `striker_vs_wrestler`, `wrestler_vs_striker`
 - **Stance** (fight-level, from `add_computed_features_to_csv.py`): `southpaw_adv_diff`, `both_southpaw`
 - **Division** (fight-level, from `add_computed_features_to_csv.py`): 12 `div_*` one-hot columns
+- **Opponent-adjusted stats** (from `add_computed_features_to_csv.py`): `opp_adj_splm_diff`, `opp_adj_td_avg_diff`, `opp_adj_head_acc_diff`, `opp_adj_body_acc_diff`, `opp_adj_dist_acc_diff` -- output stats adjusted for opponent defense quality
+- **Group E -- Reversals** (from `add_computed_features_to_csv.py`): `career_reversals_diff` -- cumulative reversals scored (all history); `ewma_reversals_diff` -- EWMA reversals per 15 min. Requires `backfill_reversals.py` to have been run; zero-filled until then.
+- **Group F -- Round 1 stats** (from `add_computed_features_to_csv.py`): `ewma_ctrl_r1_diff`, `ewma_splm_r1_diff`, `ewma_reversals_r1_diff` -- EWMA of control time, striking output, and reversals in round 1 specifically. Requires `backfill_rounds.py` to have been run; zero-filled until then.
 - Training cutoff: `MIN_FIGHT_DATE = "2018-01-01"` (adversarial validation confirmed pre-2018 distribution shift)
 - Sample weighting: `SAMPLE_WEIGHT_ALPHA = 0.01`, `SAMPLE_WEIGHT_BETA = 1.5` -- power-law decay `exp(-alpha * delta^beta)`; beta=1.5 steepens decay for older fights while keeping recent fights near full weight (issue #54)
 
@@ -221,17 +234,17 @@ All v1 models are saved to `models_v1/` as `.joblib` files and tracked in git. T
 
 | Model | Artifacts | 2025+ Acc | Notes |
 |-------|-----------|-----------|-------|
-| XGBoost | `xgboost.joblib`, `xgb_features.joblib` | 67.7% | Default params in `config.XGB_PARAMS` |
-| Logistic Regression | `logistic_regression.joblib`, `lr_scaler.joblib`, `lr_features.joblib` | 66.8% | Platt-calibrated |
-| Random Forest | `random_forest.joblib`, `rf_features.joblib` | 66.5% | Default params in `config.RF_PARAMS` |
-| LightGBM | `lightgbm.joblib`, `lgbm_features.joblib` | 67.4% | Default params in `config.LGBM_PARAMS` |
-| Ensemble | `ensemble.joblib` | **69.0%** | Calibrated soft-vote; LR+MLP-weighted (~31% LR, ~39% MLP) |
+| XGBoost | `xgboost.joblib`, `xgb_features.joblib` | 67.5% | Default params in `config.XGB_PARAMS` |
+| Logistic Regression | `logistic_regression.joblib`, `lr_scaler.joblib`, `lr_features.joblib` | 65.3% | Platt-calibrated |
+| Random Forest | `random_forest.joblib`, `rf_features.joblib` | 67.0% | Default params in `config.RF_PARAMS` |
+| LightGBM | `lightgbm.joblib`, `lgbm_features.joblib` | 67.0% | Default params in `config.LGBM_PARAMS` |
+| Ensemble | `ensemble.joblib` | **69.2%** | Calibrated soft-vote; XGB+MLP-weighted (~40% XGB, ~44% MLP) |
 
-Honest out-of-sample backtest (2025-2026, 678 fights): **69.0%** accuracy (ensemble). Naive Red baseline ~55%.
+Honest out-of-sample backtest (2025-2026, 678 fights): **69.2%** accuracy (ensemble). Naive Red baseline ~55%.
 
 Note: `--from-year 2022` backtest numbers (82-90%) are inflated because 2022-2024 fights fall inside the training window with the 80/20 split. Always use `--from-year 2025` for honest evaluation.
 
-**Ensemble weight stability**: After the 2026-06-15 retrain (86 features), LR and MLP share the highest ensemble weight (~31%/39%). Params in `config.py` are the default values for this 86-feature set. Using `--tune` re-tunes base model hyperparameters via Optuna -- this has consistently hurt 2025+ accuracy (overfits to CV folds). Tested on the 86-feature set: tuning gave 68.6% vs 69.0% untuned. Use default params.
+**Ensemble weight stability**: After the 2026-06-16 retrain (91 features), XGB and MLP dominate ensemble weight (~40%/44%); LR dropped to ~15%. Params in `config.py` are the default values for this 91-feature set. Using `--tune` re-tunes base model hyperparameters via Optuna -- this has consistently hurt 2025+ accuracy (overfits to CV folds). Tested on the 86-feature set: tuning gave 68.6% vs 69.0% untuned. Use default params.
 
 ### v2 Models (reference)
 
@@ -317,7 +330,7 @@ Files that must never be committed:
 
 Files that ARE tracked:
 
-- `raw_data/ufc-master.csv` -- source of truth for v1 pipeline; now 172 columns including all pre-computed features
+- `raw_data/ufc-master.csv` -- source of truth for v1 pipeline; now 230 columns including all pre-computed features
 - `models/*.joblib` -- v2 trained model artifacts
 - `models_v1/*.joblib` -- v1 trained model artifacts; tracked so predictions work immediately after cloning
 - `predictions/*.md` -- event prediction files
@@ -332,12 +345,12 @@ If any excluded files were previously committed, untrack them with `git rm --cac
 - **Corner assignment**: Red/Blue corners come from the fight detail page (`div.b-fight-details__person`), NOT the event listing (which puts the winner first). Getting this wrong causes ~100% Red win rate in training data.
 - **Symmetry augmentation**: during training, each fight is duplicated with corners swapped and target flipped. This is applied *per fold* to the training split only -- never to the validation/test split.
 - **SQLite TEXT affinity**: some numeric columns (e.g. `kd`, `ctrl`) are stored as TEXT. Always use `CAST(col AS REAL)` in numeric comparisons or aggregations.
-- **Ensemble weights**: Optuna uses 5 independent restarts (100 trials each) on the first half of the test set; the reported hold-out accuracy is on the second half. LR consistently earns the highest weight (~60-70%) because it is the best individual model on 2025+ data. Do not force balanced weights -- that hurts accuracy.
+- **Ensemble weights**: Optuna uses 5 independent restarts (100 trials each) on the first half of the test set; the reported hold-out accuracy is on the second half. XGB and MLP dominate on the 91-feature set (~40%/44%); weights shift between retrains -- do not hardcode them. Do not force balanced weights -- that hurts accuracy.
 - **Do not use --tune for routine retraining**: `--tune` re-optimises base model hyperparameters via Optuna. This has consistently produced worse 2025+ accuracy than the default params in `config.py` (overfits to CV folds). Only use `--tune` if deliberately re-tuning after a major feature change, and always backtest before committing.
 - **Backtest year for v1**: Use `--from-year 2025` for honest evaluation. The 80/20 split puts 2022-2024 fights inside the training window; `--from-year 2022` numbers are inflated.
 - **v1 DB does not auto-update**: After each event, run the scraper, then the three CSV enrichment scripts, then `db/ingest_mdabbert.py`, then `ml/ML_data_preparation_v1.py`. Always backtest before committing retrained models.
-- **Sync script accuracy caveat**: `sync_v1_from_v2.py` produces correct per-minute `splm` from UFCStats rolling stats, while the Kaggle-sourced `ufc-master.csv` has a different `splm` scale for early-career fighters that happens to be more discriminative. After running sync, always backtest with `--from-year 2025` before committing. The current `ufc_v2.db` and `models_v1/` artifacts use the Kaggle-sourced pipeline (68.1% accuracy).
-- **Model performance ceiling**: v1 career-average models achieve 69.0% on the 2025+ backtest (678 fights) as of 2026-06-15 (86 features, default params). The naive "always pick Red" baseline is ~55% on recent data. Update `MODEL_RESULTS.md` after any significant retrain.
+- **Sync script accuracy caveat**: `sync_v1_from_v2.py` produces correct per-minute `splm` from UFCStats rolling stats, while the Kaggle-sourced `ufc-master.csv` has a different `splm` scale for early-career fighters that happens to be more discriminative. After running sync, always backtest with `--from-year 2025` before committing. The current `ufc_v2.db` and `models_v1/` artifacts use the Kaggle-sourced pipeline (69.2% accuracy).
+- **Model performance ceiling**: v1 career-average models achieve 69.2% on the 2025+ backtest (678 fights) as of 2026-06-16 (91 features, default params). The naive "always pick Red" baseline is ~55% on recent data. Update `MODEL_RESULTS.md` after any significant retrain.
 - **Shrinkage is v2 training-only**: `apply_shrinkage()` in `ML_data_preparation.py` modifies the training CSV. It is NOT applied in `predict.py` at inference time. v1 uses raw career averages with no shrinkage.
 - **Global ELO for training**: `build_elo_features()` uses a single universal ELO per fighter (not per division) to avoid cold-start when fighters change weight class. Prediction inference (`predict.py`) still calls `get_current_ratings_by_division()` for per-division ratings, which is a minor inconsistency to be aware of.
 - **CSV is the source of truth**: `raw_data/ufc-master.csv` is enriched with all features before ingestion. Never compute ELO, Glicko, SOS, slopes, style matchup, or division one-hots inside `ML_data_preparation_v1.py` -- those must come from the CSV/DB. `ML_data_preparation_v1.py` is a pure diff-builder.

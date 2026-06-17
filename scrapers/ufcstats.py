@@ -214,16 +214,17 @@ def _fetch_completed_events(since: date, get) -> list[dict]:
 # ── Event detail ──────────────────────────────────────────────────────────────
 
 def _scrape_event(event: dict, seen_fids: set[str], get) -> dict:
-    """Scrape one event page. Returns {fighters, fights, fight_stats}."""
+    """Scrape one event page. Returns {fighters, fights, fight_stats, round_stats}."""
     try:
         soup = get(event["url"])
     except Exception as exc:
         log.warning("Failed to load event %s: %s", event["name"], exc)
-        return {"fighters": [], "fights": [], "fight_stats": []}
+        return {"fighters": [], "fights": [], "fight_stats": [], "round_stats": []}
 
     fighters: list[dict] = []
     fights:   list[dict] = []
     fight_stats: list[dict] = []
+    round_stats: list[dict] = []
 
     for row in soup.select("tr.b-fight-details__table-row__hover"):
         fight_url = row.get("data-link", "").strip()
@@ -271,6 +272,7 @@ def _scrape_event(event: dict, seen_fids: set[str], get) -> dict:
             continue
         fights.append(fight_data["fight"])
         fight_stats.extend(fight_data["stats"])
+        round_stats.extend(fight_data.get("round_stats", []))
 
         for fid, furl, fa in (
             (r_fid, r_url, fighter_links[0]),
@@ -281,7 +283,7 @@ def _scrape_event(event: dict, seen_fids: set[str], get) -> dict:
                 fighters.append(_scrape_fighter_bio(fid, furl, fname, get))
                 seen_fids.add(fid)
 
-    return {"fighters": fighters, "fights": fights, "fight_stats": fight_stats}
+    return {"fighters": fighters, "fights": fights, "fight_stats": fight_stats, "round_stats": round_stats}
 
 
 def _col_ps_text(tds: list, td_idx: int, p_idx: int) -> str:
@@ -290,6 +292,98 @@ def _col_ps_text(tds: list, td_idx: int, p_idx: int) -> str:
         return ""
     ps = tds[td_idx].find_all("p")
     return ps[p_idx].get_text(strip=True) if p_idx < len(ps) else tds[td_idx].get_text(strip=True)
+
+
+# ── Round-by-round stats parser ───────────────────────────────────────────────
+
+# td indices in the sig-strike section: Head=3, Body=4, Leg=5, Dist=6, Clinch=7, Ground=8
+_SIG_COL = {3: "head", 4: "body", 5: "leg", 6: "dist", 7: "clinch", 8: "ground"}
+
+
+def _parse_round_stats(
+    soup: "BeautifulSoup",
+    fight_id: str,
+    r_fid: str,
+    b_fid: str,
+    r_idx: int,
+) -> list[dict]:
+    """
+    Parse per-round stats from a fight detail page.
+
+    sections[2]: per-round totals (one tbody per round)
+    sections[4]: per-round sig-strike breakdown (one tbody per round)
+
+    Returns a list of dicts, two per round (one per fighter).
+    """
+    sections = soup.select("section.b-fight-details__section.js-fight-section")
+    b_idx = 1 - r_idx
+    round_stats: list[dict] = []
+
+    if len(sections) <= 2:
+        return round_stats
+
+    # Collect non-empty per-round total rows from section[2]
+    r_total_tds: list[list] = []
+    for tb in sections[2].find_all("tbody"):
+        tr = tb.find("tr")
+        if tr:
+            cells = tr.find_all("td")
+            if cells:
+                r_total_tds.append(cells)
+
+    # Collect non-empty per-round sig-strike rows from section[4]
+    r_sig_tds: list[list] = []
+    if len(sections) > 4:
+        for tb in sections[4].find_all("tbody"):
+            tr = tb.find("tr")
+            if tr:
+                cells = tr.find_all("td")
+                if cells:
+                    r_sig_tds.append(cells)
+
+    for round_idx, tds_r in enumerate(r_total_tds):
+        tds_s = r_sig_tds[round_idx] if round_idx < len(r_sig_tds) else []
+        rnd = round_idx + 1
+
+        rnd_zone: dict[str, list[tuple[int, int]]] = {
+            z: [(0, 0), (0, 0)] for z in _SIG_COL.values()
+        }
+        for td_idx, stat in _SIG_COL.items():
+            for pi2 in range(2):
+                l, a = _p_of(tds_s, td_idx, pi2) if tds_s else (0, 0)
+                rnd_zone[stat][pi2] = (l, a)
+
+        for fid_r, corner_r in ((r_fid, "r"), (b_fid, "b")):
+            pi2 = r_idx if corner_r == "r" else b_idx
+            sig_l, sig_a   = _p_of(tds_r, 2, pi2)
+            td_l_r, td_a_r = _p_of(tds_r, 5, pi2)
+            round_stats.append({
+                "fight_id":          fight_id,
+                "fighter_id":        fid_r,
+                "round":             rnd,
+                "kd":                _p_int(tds_r, 1, pi2),
+                "sig_str_landed":    sig_l,
+                "sig_str_atmpted":   sig_a,
+                "td_landed":         td_l_r,
+                "td_atmpted":        td_a_r,
+                "sub_att":           _p_int(tds_r, 7, pi2),
+                "reversals":         _p_int(tds_r, 8, pi2),
+                "ctrl":              _ctrl_to_seconds(_p_text(tds_r, 9, pi2)),
+                "head_landed":       rnd_zone["head"][pi2][0],
+                "head_atmpted":      rnd_zone["head"][pi2][1],
+                "body_landed":       rnd_zone["body"][pi2][0],
+                "body_atmpted":      rnd_zone["body"][pi2][1],
+                "leg_landed":        rnd_zone["leg"][pi2][0],
+                "leg_atmpted":       rnd_zone["leg"][pi2][1],
+                "dist_landed":       rnd_zone["dist"][pi2][0],
+                "dist_atmpted":      rnd_zone["dist"][pi2][1],
+                "clinch_landed":     rnd_zone["clinch"][pi2][0],
+                "clinch_atmpted":    rnd_zone["clinch"][pi2][1],
+                "ground_landed":     rnd_zone["ground"][pi2][0],
+                "ground_atmpted":    rnd_zone["ground"][pi2][1],
+            })
+
+    return round_stats
 
 
 # ── Fight detail ──────────────────────────────────────────────────────────────
@@ -409,9 +503,6 @@ def _scrape_fight(
         "clinch": [(0, 0), (0, 0)],
         "ground": [(0, 0), (0, 0)],
     }
-    # td indices in sig-strike table: Head=3, Body=4, Leg=5, Distance=6, Clinch=7, Ground=8
-    _SIG_COL = {3: "head", 4: "body", 5: "leg", 6: "dist", 7: "clinch", 8: "ground"}
-
     if len(sections) > 4:
         for tb in sections[4].find_all("tbody"):
             row4 = tb.find("tr")
@@ -434,6 +525,7 @@ def _scrape_fight(
         total_str_l, total_str_a   = _p_of(tds, 4, pi)
         td_l, td_a                 = _p_of(tds, 5, pi)
         sub_att                    = _p_int(tds, 7, pi)
+        reversals                  = _p_int(tds, 8, pi)
         ctrl                       = _ctrl_to_seconds(_p_text(tds, 9, pi))
 
         head_l,   head_a   = sig["head"][pi]
@@ -455,6 +547,7 @@ def _scrape_fight(
             "td_landed":         td_l,
             "td_atmpted":        td_a,
             "sub_att":           sub_att,
+            "reversals":         reversals,
             "ctrl":              ctrl,
             "head_landed":       head_l,
             "head_atmpted":      head_a,
@@ -471,7 +564,8 @@ def _scrape_fight(
             "total_fight_time":  total_secs,
         })
 
-    return {"fight": fight, "stats": stats}
+    round_stats = _parse_round_stats(soup, fight_id, r_fid, b_fid, r_idx)
+    return {"fight": fight, "stats": stats, "round_stats": round_stats}
 
 
 # ── Fighter bio ───────────────────────────────────────────────────────────────

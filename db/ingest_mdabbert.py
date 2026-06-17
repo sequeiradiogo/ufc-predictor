@@ -230,6 +230,13 @@ def ingest(csv_path: Path, db_path: Path) -> None:
         "opp_adj_head_acc":  ("R_opp_adj_head_acc",  "B_opp_adj_head_acc"),
         "opp_adj_body_acc":  ("R_opp_adj_body_acc",  "B_opp_adj_body_acc"),
         "opp_adj_dist_acc":  ("R_opp_adj_dist_acc",  "B_opp_adj_dist_acc"),
+        # Group E: reversals (from add_computed_features_to_csv.py)
+        "career_reversals":  ("R_career_reversals",  "B_career_reversals"),
+        "ewma_reversals":    ("R_ewma_reversals",    "B_ewma_reversals"),
+        # Group F: R1 features (from add_computed_features_to_csv.py; optional)
+        "ewma_ctrl_r1":      ("R_ewma_ctrl_r1",      "B_ewma_ctrl_r1"),
+        "ewma_splm_r1":      ("R_ewma_splm_r1",      "B_ewma_splm_r1"),
+        "ewma_reversals_r1": ("R_ewma_reversals_r1", "B_ewma_reversals_r1"),
     }
 
     r_stats = df[["fight_id", "r_fighter_id"]].rename(columns={"r_fighter_id": "fighter_id"}).copy()
