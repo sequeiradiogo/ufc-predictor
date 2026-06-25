@@ -25,7 +25,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
-from config import DB_PATH, DB_V1_PATH, MODELS_V1_DIR, FINISH_CLASS_NAMES
+from config import DB_PATH, DB_V1_PATH, MODELS_V1_DIR, MODELS_V1_PROD_DIR, FINISH_CLASS_NAMES
 from predict import compute_prediction
 from scrapers.ufcstats import scrape_upcoming_event
 from utils.logger import get_logger
@@ -531,6 +531,8 @@ def main() -> None:
         print("[ERROR]  v1 DB or models not found. Run the v1 training pipeline first.")
         sys.exit(1)
 
+    _models_dir = MODELS_V1_PROD_DIR if MODELS_V1_PROD_DIR.exists() and any(MODELS_V1_PROD_DIR.iterdir()) else MODELS_V1_DIR
+
     conn    = sqlite3.connect(str(DB_PATH))
     results = []
     skipped = []
@@ -563,7 +565,7 @@ def main() -> None:
                 division=fight["division"] or None,
                 title_fight=fight["title_fight"],
                 db_path=DB_V1_PATH,
-                models_dir=MODELS_V1_DIR,
+                models_dir=_models_dir,
             )
             results.append(result)
         except SystemExit:
