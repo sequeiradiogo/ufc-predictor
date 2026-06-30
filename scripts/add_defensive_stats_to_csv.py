@@ -167,9 +167,7 @@ def _lookup(name: str, fight_date: pd.Timestamp,
     _nan10 = (np.nan,) * 10
     if grp is None or grp.empty:
         return _nan10
-    before = grp[grp["date"] < fight_date]
-    if before.empty:
-        before = grp[grp["date"] <= fight_date]
+    before = grp[grp["date"] <= fight_date]
     if before.empty:
         return _nan10
     row = before.iloc[-1]
