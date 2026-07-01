@@ -27,9 +27,6 @@ import time
 from pathlib import Path
 from typing import Optional
 
-import joblib
-import numpy as np
-import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -37,18 +34,14 @@ ROOT_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT_DIR))
 
 from config import (
-    DB_PATH,
+    DB_V1_PATH,
     STARTING_ELO,
-    MODEL_XGB_PATH, MODEL_XGB_FEATURES,
-    MODEL_LR_PATH, MODEL_LR_SCALER, MODEL_LR_FEATURES,
-    MODEL_FINISH_PATH, MODEL_FINISH_FEATURES,
+    MODELS_V1_PROD_DIR, MODELS_V1_DIR,
     FINISH_CLASS_NAMES, DIVISIONS,
 )
 from predict import (
-    resolve_fighter,
-    get_latest_stats,
-    compute_recent_form,
-    build_feature_vector,
+    compute_prediction,
+    compute_current_elo,
 )
 from ml.ELO_calculator import get_current_ratings, get_current_ratings_by_division, get_elo_history_for_fighter
 from utils.odds import american_to_prob, remove_vig, compute_edge, kelly_fraction
@@ -60,21 +53,19 @@ app = FastAPI(
 )
 
 
-# ── Startup: load models + ELO cache ─────────────────────────────────────────
+# ── Startup: ELO cache (used by fighter profile / compare endpoints) ──────────
 
-_models: dict = {}
-
-# ELO caches — populated at startup, refreshed via POST /admin/refresh-elo.
-# Read-only after startup so no locking needed.
-_elo_global: dict[str, float]                  = {}  # fighter_id -> elo
-_elo_div:    dict[tuple[str, str], float]       = {}  # (fighter_id, division) -> elo
+# ELO caches keyed by v1 DB fighter_id (MD5 of name).
+# Populated at startup, refreshed via POST /admin/refresh-elo.
+_elo_global: dict[str, float]            = {}  # fighter_id -> elo
+_elo_div:    dict[tuple[str, str], float] = {}  # (fighter_id, division) -> elo
 
 
 def _build_elo_caches() -> None:
-    """Replay all historical fights and populate both ELO caches."""
-    if not DB_PATH.exists():
+    """Replay all historical fights from the v1 DB and populate ELO caches."""
+    if not DB_V1_PATH.exists():
         return
-    conn = sqlite3.connect(str(DB_PATH))
+    conn = sqlite3.connect(str(DB_V1_PATH))
     try:
         t0 = time.monotonic()
         _elo_global.clear()
@@ -92,23 +83,8 @@ def _build_elo_caches() -> None:
 
 
 @app.on_event("startup")
-def load_models() -> None:
-    """Pre-load model artifacts and ELO cache at startup."""
-    if MODEL_XGB_PATH.exists():
-        _models["xgb"]          = joblib.load(MODEL_XGB_PATH)
-        _models["xgb_features"] = joblib.load(MODEL_XGB_FEATURES)
-
-    if MODEL_LR_PATH.exists():
-        artifact                = joblib.load(MODEL_LR_PATH)
-        _models["lr_base"]      = artifact["base"]
-        _models["lr_platt"]     = artifact["platt"]
-        _models["lr_scaler"]    = joblib.load(MODEL_LR_SCALER)
-        _models["lr_features"]  = joblib.load(MODEL_LR_FEATURES)
-
-    if MODEL_FINISH_PATH.exists():
-        _models["finish"]          = joblib.load(MODEL_FINISH_PATH)
-        _models["finish_features"] = joblib.load(MODEL_FINISH_FEATURES)
-
+def startup() -> None:
+    """Build ELO cache at startup. Models are loaded on demand by compute_prediction."""
     _build_elo_caches()
 
 
@@ -169,9 +145,9 @@ class PredictResponse(BaseModel):
 # ── DB helpers ────────────────────────────────────────────────────────────────
 
 def _get_conn() -> sqlite3.Connection:
-    if not DB_PATH.exists():
-        raise HTTPException(status_code=503, detail=f"Database not found: {DB_PATH}")
-    return sqlite3.connect(str(DB_PATH))
+    if not DB_V1_PATH.exists():
+        raise HTTPException(status_code=503, detail=f"Database not found: {DB_V1_PATH}")
+    return sqlite3.connect(str(DB_V1_PATH))
 
 
 def _search_fighters(conn: sqlite3.Connection, name: str) -> list[dict]:
@@ -252,103 +228,43 @@ def _get_fighter_stats(conn: sqlite3.Connection, fighter_id: str) -> dict:
 # ── Prediction logic (shared) ─────────────────────────────────────────────────
 
 def _run_prediction(req: PredictRequest) -> PredictResponse:
-    # ── Model selection ───────────────────────────────────────────────────────
-    if req.model == "xgb":
-        if "xgb" not in _models:
-            raise HTTPException(status_code=503, detail="XGBoost model not loaded. Train it first.")
-        model         = _models["xgb"]
-        feature_names = _models["xgb_features"]
-        scaler        = None
-        platt         = None
-        model_label   = "XGBoost"
-    else:
-        if "lr_base" not in _models:
-            raise HTTPException(status_code=503, detail="LR model not loaded. Train it first.")
-        model         = None
-        feature_names = _models["lr_features"]
-        scaler        = _models["lr_scaler"]
-        platt         = _models["lr_platt"]
-        base_model    = _models["lr_base"]
-        model_label   = "Logistic Regression"
+    _models_dir = (
+        MODELS_V1_PROD_DIR
+        if MODELS_V1_PROD_DIR.exists() and any(MODELS_V1_PROD_DIR.iterdir())
+        else MODELS_V1_DIR
+    )
 
-    # ── DB queries ────────────────────────────────────────────────────────────
+    try:
+        result = compute_prediction(
+            red_name=req.red_fighter,
+            blue_name=req.blue_fighter,
+            model_type=req.model,
+            division=req.division,
+            title_fight=req.title_fight or 0,
+            db_path=DB_V1_PATH,
+            models_dir=_models_dir,
+        )
+    except SystemExit:
+        raise HTTPException(status_code=404, detail=f"Fighter not found or prediction failed.")
+
+    red_win_prob  = result["red_prob"]
+    blue_win_prob = result["blue_prob"]
+
+    # ── Fighter IDs + H2H from v1 DB ─────────────────────────────────────────
     conn = _get_conn()
     try:
-        # Resolve fighters
-        r_matches = _search_fighters(conn, req.red_fighter)
-        b_matches = _search_fighters(conn, req.blue_fighter)
-
-        if not r_matches:
-            raise HTTPException(status_code=404, detail=f"Fighter not found: '{req.red_fighter}'")
-        if not b_matches:
-            raise HTTPException(status_code=404, detail=f"Fighter not found: '{req.blue_fighter}'")
-
-        # Exact match first; otherwise take first result
-        def _best(matches: list[dict], query: str) -> dict:
-            for m in matches:
-                if m["name"].lower() == query.lower():
-                    return m
-            return matches[0]
-
-        r = _best(r_matches, req.red_fighter)
-        b = _best(b_matches, req.blue_fighter)
-
-        if r["fighter_id"] == b["fighter_id"]:
-            raise HTTPException(status_code=400, detail="Both names resolved to the same fighter.")
-
-        # Stats
-        red_stats  = get_latest_stats(conn, r["fighter_id"])
-        blue_stats = get_latest_stats(conn, b["fighter_id"])
-
-        # ELO — global ratings match what the model was trained on
-        div_lower = (req.division or "").lower().strip()
-        elo_r = _elo_global.get(r["fighter_id"], STARTING_ELO)
-        elo_b = _elo_global.get(b["fighter_id"], STARTING_ELO)
-
-        # Recent form
-        form_r = compute_recent_form(conn, r["fighter_id"])
-        form_b = compute_recent_form(conn, b["fighter_id"])
-
-        # Head-to-head history
-        h2h = _get_h2h(conn, r["fighter_id"], b["fighter_id"])
-
+        r_row = _search_fighters(conn, result["red_name"])
+        b_row = _search_fighters(conn, result["blue_name"])
+        r_id  = r_row[0]["fighter_id"] if r_row else ""
+        b_id  = b_row[0]["fighter_id"] if b_row else ""
+        h2h   = _get_h2h(conn, r_id, b_id) if r_id and b_id else []
     finally:
         conn.close()
 
-    # ── Feature vector ────────────────────────────────────────────────────────
-    X = build_feature_vector(
-        red_stats, blue_stats,
-        elo_r, elo_b,
-        form_r, form_b,
-        req.division, req.title_fight or 0,
-        feature_names,
-    ).fillna(0)
-
-    X_input = scaler.transform(X) if scaler is not None else X.values
-
-    if platt is None:
-        proba = model.predict_proba(X_input)[0]
-    else:
-        raw_prob   = base_model.predict_proba(X_input)[0, 1]
-        calibrated = platt.predict_proba([[raw_prob]])[0, 1]
-        proba      = [1 - calibrated, calibrated]
-
-    red_win_prob  = float(proba[1])
-    blue_win_prob = float(proba[0])
-    winner_name   = r["name"] if red_win_prob >= 0.5 else b["name"]
-    confidence    = max(red_win_prob, blue_win_prob)
-
-    # ── Finish type ───────────────────────────────────────────────────────────
+    # ── Finish proba ──────────────────────────────────────────────────────────
     finish_proba_resp: Optional[FinishProba] = None
-    if "finish" in _models:
-        X_fin = build_feature_vector(
-            red_stats, blue_stats,
-            elo_r, elo_b,
-            form_r, form_b,
-            req.division, req.title_fight or 0,
-            _models["finish_features"],
-        ).fillna(0)
-        fp = _models["finish"].predict_proba(X_fin.values)[0]
+    if result.get("finish_proba"):
+        fp = result["finish_proba"]
         finish_proba_resp = FinishProba(
             decision=float(fp[0]),
             ko_tko=float(fp[1]),
@@ -365,12 +281,12 @@ def _run_prediction(req: PredictRequest) -> PredictResponse:
         dec_r = 1 / raw_pr if raw_pr > 0 else 0
         dec_b = 1 / raw_pb if raw_pb > 0 else 0
 
-        edge_r = compute_edge(red_win_prob,  fair_pr)
+        edge_r = compute_edge(red_win_prob, fair_pr)
         edge_b = compute_edge(blue_win_prob, fair_pb)
 
         value_bets_resp = [
             ValueBet(
-                fighter=r["name"],
+                fighter=result["red_name"],
                 model_prob=round(red_win_prob, 4),
                 market_fair=round(fair_pr, 4),
                 edge=round(edge_r, 4),
@@ -378,7 +294,7 @@ def _run_prediction(req: PredictRequest) -> PredictResponse:
                 value=edge_r >= 0.03,
             ),
             ValueBet(
-                fighter=b["name"],
+                fighter=result["blue_name"],
                 model_prob=round(blue_win_prob, 4),
                 market_fair=round(fair_pb, 4),
                 edge=round(edge_b, 4),
@@ -387,22 +303,28 @@ def _run_prediction(req: PredictRequest) -> PredictResponse:
             ),
         ]
 
+    _model_labels = {
+        "xgb": "XGBoost", "lr": "Logistic Regression", "rf": "Random Forest",
+        "lgbm": "LightGBM", "mlp": "MLP Neural Network",
+        "ensemble": "Ensemble (Soft Vote)", "stacking": "Stacking Meta-Learner",
+    }
+
     return PredictResponse(
         red=FighterResult(
-            fighter_id=r["fighter_id"],
-            name=r["name"],
+            fighter_id=r_id,
+            name=result["red_name"],
             win_prob=round(red_win_prob, 4),
-            elo=round(elo_r, 1),
+            elo=round(result["elo_red"], 1),
         ),
         blue=FighterResult(
-            fighter_id=b["fighter_id"],
-            name=b["name"],
+            fighter_id=b_id,
+            name=result["blue_name"],
             win_prob=round(blue_win_prob, 4),
-            elo=round(elo_b, 1),
+            elo=round(result["elo_blue"], 1),
         ),
-        predicted_winner=winner_name,
-        confidence=round(confidence, 4),
-        model=model_label,
+        predicted_winner=result["winner"],
+        confidence=round(result["confidence"], 4),
+        model=_model_labels.get(req.model, req.model),
         finish_proba=finish_proba_resp,
         value_bets=value_bets_resp,
         prior_fights=len(h2h) if h2h else None,
@@ -426,7 +348,7 @@ def root():
             "global_fighters": len(_elo_global),
             "division_pairs":  len(_elo_div),
         },
-        "database": DB_PATH.exists(),
+        "database": DB_V1_PATH.exists(),
         "docs": "/docs",
     }
 

@@ -1098,205 +1098,151 @@ def compute_prediction(
     finish_model = joblib.load(finish_path)       if finish_path.exists()       else None
     finish_feats = joblib.load(finish_feats_path) if finish_feats_path.exists() else None
 
-    # ── DB connection ─────────────────────────────────────────────────────────
+    # ── DB connections ────────────────────────────────────────────────────────
     if not db_path.exists():
         print(f"\n[ERROR]  Database not found at '{db_path}'.")
         print("   Run the database builder scripts first.")
         sys.exit(1)
 
-    conn = sqlite3.connect(str(db_path))
+    # v2/mdabbert: fuzzy name resolution + fallback stats
+    conn    = sqlite3.connect(str(db_path))
+    # UFCStats: always-fresh career stats and fight-history features
+    conn_v2 = sqlite3.connect(str(DB_PATH)) if DB_PATH.exists() else None
 
-    # ── Resolve fighters ──────────────────────────────────────────────────────
-    if r_fighter_id:
-        r_id, r_name = r_fighter_id, red_name
-    else:
-        r_id, r_name = resolve_fighter(conn, red_name)
-
-    if b_fighter_id:
-        b_id, b_name = b_fighter_id, blue_name
-    else:
-        b_id, b_name = resolve_fighter(conn, blue_name)
-
-    if r_id == b_id:
-        print("\n[WARN]  Both names resolved to the same fighter — please check the names.")
-        conn.close()
-        sys.exit(1)
-
-    # ── Get rolling stats ─────────────────────────────────────────────────────
-    red_stats  = get_latest_stats(conn, r_id).copy()
-    blue_stats = get_latest_stats(conn, b_id).copy()
-
-    if red_stats.empty:
-        print(f"[WARN]  No fight history for {r_name} -- all stats set to 0.")
-    if blue_stats.empty:
-        print(f"[WARN]  No fight history for {b_name} -- all stats set to 0.")
-
-    div_lower = (division or "").lower().strip()
-
-    # Gate expensive history-replay computations on whether the features are active.
-    _excluded  = set(EXCLUDED_FEATURES)
-    _need_elo  = "elo_diff"       not in _excluded
-    _need_sos  = "sos_diff"       not in _excluded
-    _need_glicko = ("glicko_diff" not in _excluded or "glicko_rd_diff" not in _excluded)
-
-    # ── ELO ───────────────────────────────────────────────────────────────────
-    # Always computed for display even when elo_diff is excluded from training.
-    _def_glicko_t = (GLICKO_START_R, GLICKO_START_RD, 0.06)
-    log.info("Computing current ELO ratings...")
-    elo_ratings = compute_current_elo(conn)
-    elo_r = elo_ratings.get(r_id, STARTING_ELO)
-    elo_b = elo_ratings.get(b_id, STARTING_ELO)
-
-    # SOS uses global ELO (reuse already-computed ratings) to match training
-    div_elo = elo_ratings if _need_sos else {}
-
-    # ── Glicko-2 ──────────────────────────────────────────────────────────────
-    glicko_r_tuple = glicko_b_tuple = _def_glicko_t
-    if _need_glicko:
-        log.info("Computing current Glicko-2 ratings...")
-        div_glicko = get_current_glicko_by_division(conn)
-        if div_lower and (r_id, div_lower) in div_glicko and (b_id, div_lower) in div_glicko:
-            glicko_r_tuple = div_glicko[(r_id, div_lower)]
-            glicko_b_tuple = div_glicko[(b_id, div_lower)]
-        elif div_lower:
-            r_divs = [(k, v) for k, v in div_glicko.items() if k[0] == r_id]
-            b_divs = [(k, v) for k, v in div_glicko.items() if k[0] == b_id]
-            glicko_r_tuple = r_divs[0][1] if r_divs else _def_glicko_t
-            glicko_b_tuple = b_divs[0][1] if b_divs else _def_glicko_t
+    try:
+        # ── Resolve fighters ──────────────────────────────────────────────────
+        if r_fighter_id:
+            r_id, r_name = r_fighter_id, red_name
         else:
-            r_divs = [(k, v) for k, v in div_glicko.items() if k[0] == r_id]
-            b_divs = [(k, v) for k, v in div_glicko.items() if k[0] == b_id]
-            glicko_r_tuple = r_divs[0][1] if r_divs else _def_glicko_t
-            glicko_b_tuple = b_divs[0][1] if b_divs else _def_glicko_t
+            r_id, r_name = resolve_fighter(conn, red_name)
 
-    # ── Recent form ───────────────────────────────────────────────────────────
-    log.info("Computing recent form...")
-    form_r = compute_recent_form(conn, r_id)
-    form_b = compute_recent_form(conn, b_id)
+        if b_fighter_id:
+            b_id, b_name = b_fighter_id, blue_name
+        else:
+            b_id, b_name = resolve_fighter(conn, blue_name)
 
-    # ── Extra features ────────────────────────────────────────────────────────
-    log.info("Computing extra features...")
-    finish_r = compute_finish_rates_single(conn, r_id)
-    finish_b = compute_finish_rates_single(conn, b_id)
-    inact_r  = compute_inactivity_single(conn, r_id)
-    inact_b  = compute_inactivity_single(conn, b_id)
-    sos_r    = compute_sos_single(conn, r_id, div_elo) if _need_sos else {"sos": float(STARTING_ELO)}
-    sos_b    = compute_sos_single(conn, b_id, div_elo) if _need_sos else {"sos": float(STARTING_ELO)}
-    kovuln_r = compute_ko_vulnerability_single(conn, r_id)
-    kovuln_b = compute_ko_vulnerability_single(conn, b_id)
-    ewma_r   = compute_ewma_stats_single(conn, r_id)
-    ewma_b   = compute_ewma_stats_single(conn, b_id)
-    glicko_extra_r = {"glicko": glicko_r_tuple[0], "glicko_rd": glicko_r_tuple[1]}
-    glicko_extra_b = {"glicko": glicko_b_tuple[0], "glicko_rd": glicko_b_tuple[1]}
-    extra_r  = {**finish_r, **inact_r, **sos_r, **kovuln_r, **ewma_r, **glicko_extra_r}
-    extra_b  = {**finish_b, **inact_b, **sos_b, **kovuln_b, **ewma_b, **glicko_extra_b}
+        if r_id == b_id:
+            print("\n[WARN]  Both names resolved to the same fighter — please check the names.")
+            sys.exit(1)
 
-    conn.close()
+        div_lower = (division or "").lower().strip()
 
-    # Refresh all stale stats from the UFCStats DB, which is updated by the
-    # scraper after every event.  The mdabbert DB only updates when
-    # ingest_mdabbert.py is run, so all features computed above from conn
-    # (form, finish rates, inactivity, SOS, ko_vuln, ewma, career averages)
-    # may lag by one event.  Recomputing from conn_v2 eliminates that gap.
-    if DB_PATH.exists():
-        try:
-            conn_v2 = sqlite3.connect(str(DB_PATH))
-            log.info("Refreshing live stats from UFCStats DB...")
+        _excluded    = set(EXCLUDED_FEATURES)
+        _need_sos    = "sos_diff"       not in _excluded
+        _need_glicko = ("glicko_diff" not in _excluded or "glicko_rd_diff" not in _excluded)
+        _def_glicko_t = (GLICKO_START_R, GLICKO_START_RD, 0.06)
 
-            r_fid_v2 = _resolve_ufcstats_id(conn_v2, r_name)
-            b_fid_v2 = _resolve_ufcstats_id(conn_v2, b_name)
+        # UFCStats hex IDs (used for all history-replay queries on conn_v2)
+        r_fid_v2 = _resolve_ufcstats_id(conn_v2, r_name) if conn_v2 else None
+        b_fid_v2 = _resolve_ufcstats_id(conn_v2, b_name) if conn_v2 else None
 
-            # Career averages + slopes (cumulative recomputation)
-            live_r = compute_live_career_stats(conn_v2, r_name)
-            live_b = compute_live_career_stats(conn_v2, b_name)
+        # Per-fighter stat connection / ID: prefer UFCStats (always fresh),
+        # fall back to v2 snapshot when UFCStats ID not found.
+        _r_conn = conn_v2 if (conn_v2 and r_fid_v2) else conn
+        _b_conn = conn_v2 if (conn_v2 and b_fid_v2) else conn
+        _r_fid  = r_fid_v2 if (conn_v2 and r_fid_v2) else r_id
+        _b_fid  = b_fid_v2 if (conn_v2 and b_fid_v2) else b_id
 
-            if live_r:
-                for k, v in live_r.items():
-                    red_stats[k] = v
-                extra_r["sapm"]    = live_r["sapm"]
-                extra_r["str_def"] = live_r["str_def"]
-                extra_r["td_def"]  = live_r["td_def"]
-                if r_fid_v2:
-                    extra_r.update(_get_strike_zone_accs(conn_v2, r_fid_v2))
-                else:
-                    zone_r = _get_v2_defensive_stats(conn_v2, r_name)
-                    extra_r.update({k: zone_r[k] for k in ("head_acc", "body_acc", "leg_acc") if k in zone_r})
+        # ── Career stats ──────────────────────────────────────────────────────
+        # compute_live_career_stats recomputes from raw UFCStats data (always
+        # includes the fighter's latest fight; v2 snapshot lags one event).
+        _live_r = compute_live_career_stats(conn_v2, r_name) if conn_v2 else None
+        _live_b = compute_live_career_stats(conn_v2, b_name) if conn_v2 else None
+
+        if _live_r:
+            red_stats = pd.Series(_live_r)
+        else:
+            log.warning("Live career stats unavailable for %s -- using v2 snapshot.", r_name)
+            red_stats = get_latest_stats(conn, r_id).copy()
+
+        if _live_b:
+            blue_stats = pd.Series(_live_b)
+        else:
+            log.warning("Live career stats unavailable for %s -- using v2 snapshot.", b_name)
+            blue_stats = get_latest_stats(conn, b_id).copy()
+
+        if red_stats.empty:
+            print(f"[WARN]  No fight history for {r_name} -- all stats set to 0.")
+        if blue_stats.empty:
+            print(f"[WARN]  No fight history for {b_name} -- all stats set to 0.")
+
+        # ── ELO ───────────────────────────────────────────────────────────────
+        # Computed once from the freshest available DB; result reused for SOS.
+        _elo_conn = conn_v2 if conn_v2 else conn
+        _elo_r_id = r_fid_v2 if r_fid_v2 else r_id
+        _elo_b_id = b_fid_v2 if b_fid_v2 else b_id
+        log.info("Computing current ELO ratings...")
+        elo_ratings = compute_current_elo(_elo_conn)
+        elo_r = elo_ratings.get(_elo_r_id, STARTING_ELO)
+        elo_b = elo_ratings.get(_elo_b_id, STARTING_ELO)
+        div_elo = elo_ratings if _need_sos else {}
+
+        # ── Glicko-2 ──────────────────────────────────────────────────────────
+        glicko_r_tuple = glicko_b_tuple = _def_glicko_t
+        if _need_glicko:
+            log.info("Computing current Glicko-2 ratings...")
+            _glicko_conn = conn_v2 if conn_v2 else conn
+            _gr_id = r_fid_v2 if r_fid_v2 else r_id
+            _gb_id = b_fid_v2 if b_fid_v2 else b_id
+            div_glicko = get_current_glicko_by_division(_glicko_conn)
+            r_gid_divs = [(k, v) for k, v in div_glicko.items() if k[0] == _gr_id]
+            b_gid_divs = [(k, v) for k, v in div_glicko.items() if k[0] == _gb_id]
+            if div_lower:
+                glicko_r_tuple = div_glicko.get((_gr_id, div_lower)) or (r_gid_divs[0][1] if r_gid_divs else _def_glicko_t)
+                glicko_b_tuple = div_glicko.get((_gb_id, div_lower)) or (b_gid_divs[0][1] if b_gid_divs else _def_glicko_t)
             else:
-                log.warning("Live stat refresh failed for %s -- using stale mdabbert snapshot.", r_name)
-                v2_def_r = _get_v2_defensive_stats(conn_v2, r_name)
-                extra_r.update(v2_def_r)
+                glicko_r_tuple = r_gid_divs[0][1] if r_gid_divs else _def_glicko_t
+                glicko_b_tuple = b_gid_divs[0][1] if b_gid_divs else _def_glicko_t
 
-            if live_b:
-                for k, v in live_b.items():
-                    blue_stats[k] = v
-                extra_b["sapm"]    = live_b["sapm"]
-                extra_b["str_def"] = live_b["str_def"]
-                extra_b["td_def"]  = live_b["td_def"]
-                if b_fid_v2:
-                    extra_b.update(_get_strike_zone_accs(conn_v2, b_fid_v2))
-                else:
-                    zone_b = _get_v2_defensive_stats(conn_v2, b_name)
-                    extra_b.update({k: zone_b[k] for k in ("head_acc", "body_acc", "leg_acc") if k in zone_b})
-            else:
-                log.warning("Live stat refresh failed for %s -- using stale mdabbert snapshot.", b_name)
-                v2_def_b = _get_v2_defensive_stats(conn_v2, b_name)
-                extra_b.update(v2_def_b)
+        # ── Recent form + extra features ──────────────────────────────────────
+        log.info("Computing recent form and extra features...")
+        form_r   = compute_recent_form(_r_conn, _r_fid)
+        form_b   = compute_recent_form(_b_conn, _b_fid)
+        finish_r = compute_finish_rates_single(_r_conn, _r_fid)
+        finish_b = compute_finish_rates_single(_b_conn, _b_fid)
+        inact_r  = compute_inactivity_single(_r_conn, _r_fid)
+        inact_b  = compute_inactivity_single(_b_conn, _b_fid)
+        sos_r    = compute_sos_single(_r_conn, _r_fid, div_elo) if _need_sos else {"sos": float(STARTING_ELO)}
+        sos_b    = compute_sos_single(_b_conn, _b_fid, div_elo) if _need_sos else {"sos": float(STARTING_ELO)}
+        kovuln_r = compute_ko_vulnerability_single(_r_conn, _r_fid)
+        kovuln_b = compute_ko_vulnerability_single(_b_conn, _b_fid)
+        ewma_r   = compute_ewma_stats_single(_r_conn, _r_fid)
+        ewma_b   = compute_ewma_stats_single(_b_conn, _b_fid)
 
-            # ELO from UFCStats (always computed for display)
-            elo_ratings_v2 = compute_current_elo(conn_v2)
+        glicko_extra_r = {"glicko": glicko_r_tuple[0], "glicko_rd": glicko_r_tuple[1]}
+        glicko_extra_b = {"glicko": glicko_b_tuple[0], "glicko_rd": glicko_b_tuple[1]}
+        extra_r = {**finish_r, **inact_r, **sos_r, **kovuln_r, **ewma_r, **glicko_extra_r}
+        extra_b = {**finish_b, **inact_b, **sos_b, **kovuln_b, **ewma_b, **glicko_extra_b}
+
+        # ── Defensive / strike-zone stats ─────────────────────────────────────
+        if _live_r:
+            extra_r["sapm"]    = _live_r["sapm"]
+            extra_r["str_def"] = _live_r["str_def"]
+            extra_r["td_def"]  = _live_r["td_def"]
             if r_fid_v2:
-                elo_r = elo_ratings_v2.get(r_fid_v2, STARTING_ELO)
+                extra_r.update(_get_strike_zone_accs(conn_v2, r_fid_v2))
+            elif conn_v2:
+                zone_r = _get_v2_defensive_stats(conn_v2, r_name)
+                extra_r.update({k: zone_r[k] for k in ("head_acc", "body_acc", "leg_acc") if k in zone_r})
+        elif conn_v2:
+            extra_r.update(_get_v2_defensive_stats(conn_v2, r_name))
+
+        if _live_b:
+            extra_b["sapm"]    = _live_b["sapm"]
+            extra_b["str_def"] = _live_b["str_def"]
+            extra_b["td_def"]  = _live_b["td_def"]
             if b_fid_v2:
-                elo_b = elo_ratings_v2.get(b_fid_v2, STARTING_ELO)
+                extra_b.update(_get_strike_zone_accs(conn_v2, b_fid_v2))
+            elif conn_v2:
+                zone_b = _get_v2_defensive_stats(conn_v2, b_name)
+                extra_b.update({k: zone_b[k] for k in ("head_acc", "body_acc", "leg_acc") if k in zone_b})
+        elif conn_v2:
+            extra_b.update(_get_v2_defensive_stats(conn_v2, b_name))
 
-            # Glicko from UFCStats (skip if both Glicko features excluded)
-            if _need_glicko:
-                div_glicko_v2 = get_current_glicko_by_division(conn_v2)
-                r_gid      = r_fid_v2 or r_id
-                b_gid      = b_fid_v2 or b_id
-                r_gid_divs = [(k, v) for k, v in div_glicko_v2.items() if k[0] == r_gid]
-                b_gid_divs = [(k, v) for k, v in div_glicko_v2.items() if k[0] == b_gid]
-                if div_lower:
-                    glicko_r_tuple = div_glicko_v2.get((r_gid, div_lower)) or (r_gid_divs[0][1] if r_gid_divs else _def_glicko_t)
-                    glicko_b_tuple = div_glicko_v2.get((b_gid, div_lower)) or (b_gid_divs[0][1] if b_gid_divs else _def_glicko_t)
-                else:
-                    glicko_r_tuple = r_gid_divs[0][1] if r_gid_divs else _def_glicko_t
-                    glicko_b_tuple = b_gid_divs[0][1] if b_gid_divs else _def_glicko_t
-                extra_r["glicko"]    = glicko_r_tuple[0]
-                extra_r["glicko_rd"] = glicko_r_tuple[1]
-                extra_b["glicko"]    = glicko_b_tuple[0]
-                extra_b["glicko_rd"] = glicko_b_tuple[1]
-
-            # Per-fight-history features: form, finish rates, inactivity, SOS,
-            # ko_vuln, ewma -- all query fights/fight_stats so must use UFCStats IDs.
-            # SOS also needs per-division ELO (skip if sos_diff excluded).
-            div_elo_v2 = compute_current_elo(conn_v2) if _need_sos else {}
-
-            if r_fid_v2:
-                form_r   = compute_recent_form(conn_v2, r_fid_v2)
-                finish_r = compute_finish_rates_single(conn_v2, r_fid_v2)
-                inact_r  = compute_inactivity_single(conn_v2, r_fid_v2)
-                sos_r    = compute_sos_single(conn_v2, r_fid_v2, div_elo_v2) if _need_sos else {"sos": float(STARTING_ELO)}
-                kovuln_r = compute_ko_vulnerability_single(conn_v2, r_fid_v2)
-                ewma_r   = compute_ewma_stats_single(conn_v2, r_fid_v2)
-                extra_r.update({**finish_r, **inact_r, **sos_r, **kovuln_r, **ewma_r})
-            else:
-                log.warning("UFCStats ID not found for %s -- live feature refresh skipped.", r_name)
-
-            if b_fid_v2:
-                form_b   = compute_recent_form(conn_v2, b_fid_v2)
-                finish_b = compute_finish_rates_single(conn_v2, b_fid_v2)
-                inact_b  = compute_inactivity_single(conn_v2, b_fid_v2)
-                sos_b    = compute_sos_single(conn_v2, b_fid_v2, div_elo_v2) if _need_sos else {"sos": float(STARTING_ELO)}
-                kovuln_b = compute_ko_vulnerability_single(conn_v2, b_fid_v2)
-                ewma_b   = compute_ewma_stats_single(conn_v2, b_fid_v2)
-                extra_b.update({**finish_b, **inact_b, **sos_b, **kovuln_b, **ewma_b})
-            else:
-                log.warning("UFCStats ID not found for %s -- live feature refresh skipped.", b_name)
-
+    finally:
+        conn.close()
+        if conn_v2:
             conn_v2.close()
-        except Exception as exc:
-            log.warning("Live stat refresh failed: %s", exc)
 
     # ── Live rankings (always from rankings_history.csv) ─────────────────────
     extra_r["weightclass_rank"] = _get_current_rank(r_name, division)
