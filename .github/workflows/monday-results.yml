@@ -1,0 +1,57 @@
+name: Monday Results Scoring
+
+on:
+  schedule:
+    - cron: '0 12 * * 1'  # Every Monday at 12:00 UTC (after the weekend's event)
+  workflow_dispatch:
+    inputs:
+      json_path:
+        description: 'Path to prediction JSON to score (default: auto-detect most recent)'
+        required: false
+
+permissions:
+  contents: write
+
+jobs:
+  score:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          playwright install chromium --with-deps
+
+      - name: Download DB artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release download data-artifacts-latest --dir db/ --pattern "*.db"
+
+      - name: Score event predictions
+        run: |
+          if [ -n "${{ inputs.json_path }}" ]; then
+            python scripts/score_event.py --json "${{ inputs.json_path }}"
+          else
+            python scripts/score_event.py
+          fi
+
+      - name: Commit scored predictions
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add predictions/
+          if git diff --cached --quiet; then
+            echo "No changes to commit (no new results or already scored)."
+          else
+            git commit -m "chore: add results for weekend event [skip ci]"
+            git push
+          fi

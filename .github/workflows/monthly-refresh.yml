@@ -1,0 +1,92 @@
+name: Monthly Data Refresh
+
+on:
+  schedule:
+    - cron: '0 6 1 * *'  # 1st of every month at 06:00 UTC
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (preview scrape, no writes)'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Download DB and rankings artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download data-artifacts-latest --dir db/ --pattern "*.db"
+          gh release download data-artifacts-latest --dir raw_data/ --pattern "rankings_history.csv"
+
+      - name: Refresh data
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            python scripts/refresh_data.py --auto --dry-run
+          else
+            python scripts/refresh_data.py --auto
+          fi
+
+      - name: Enrich v1 CSV
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          python scripts/add_defensive_stats_to_csv.py
+          python scripts/add_rankings_to_csv.py
+          python scripts/add_computed_features_to_csv.py
+
+      - name: Rebuild mdabbert DB and v1 feature CSV
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          python db/ingest_mdabbert.py
+          python ml/ML_data_preparation_v1.py
+
+      - name: Retrain v1 models
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          python ml/train_v1_models.py
+          python ml/train_v1_models.py --model ensemble
+
+      - name: Commit updated artifacts
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add raw_data/ufc-master.csv models_v1/*.joblib
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "chore: monthly data refresh and model retrain [skip ci]"
+            git push
+          fi
+
+      - name: Upload updated DB artifacts to release
+        if: ${{ inputs.dry_run != true }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload data-artifacts-latest \
+            db/ufc_ufcstats.db \
+            db/ufc_v2.db \
+            raw_data/rankings_history.csv \
+            --clobber

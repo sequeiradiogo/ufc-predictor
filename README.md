@@ -1,187 +1,225 @@
-# UFC Fight Predictor 🥊
+# UFC Fight Predictor
 
-A machine-learning system that predicts UFC fight outcomes using historical fighter statistics, rolling performance metrics, and ELO ratings.
+A machine-learning system that predicts UFC fight outcomes with **69.6% accuracy** on honest out-of-sample data (2025-2026, 704 fights). Predictions are generated weekly via GitHub Actions and published to [`predictions/`](./predictions/).
+
+---
+
+## Results
+
+| Period | Fights | Accuracy |
+|--------|--------|----------|
+| 2025 | 475 | 70.3% |
+| 2026 | 229 | 68.1% |
+| **Total (out-of-sample)** | **704** | **69.6%** |
+
+Naive "always pick Red corner" baseline: ~55%. Full history in [MODEL_RESULTS.md](./MODEL_RESULTS.md).
+
+---
 
 ## How it works
 
 ```
-Raw Data (UFC.csv)
-    ↓
-SQLite Database      (3 normalised tables: fighters, fights, fight_stats)
-    ↓
-Rolling Stats        (cumulative per-fighter stats before each fight)
-    ↓
-ELO Ratings          (dynamic skill ratings updated after every fight)
-    ↓
-Feature Diffs        (Red − Blue for every stat)
-    ↓
-ML Models            (Logistic Regression + XGBoost)
-    ↓
-Predictions
+UFCStats.com  -->  UFCStats DB (raw per-fight stats)
+                       |
+              CSV enrichment pipeline
+              (ELO, Glicko-2, form, SOS, slopes, style)
+                       |
+               mdabbert DB (career averages + pre-computed features)
+                       |
+              v1 Feature CSV (91 diff features, Red - Blue)
+                       |
+    XGBoost / LR / RF / LightGBM / MLP  -->  Ensemble (69.6%)
+                       |
+                  Predictions
 ```
+
+The ensemble is a calibrated soft-vote over five base models. XGBoost and MLP carry the most weight (~40% and ~44% respectively). All features are pre-fight snapshots -- no leakage.
 
 ---
 
 ## Setup
 
+**Clone and install:**
 ```bash
-# 1. Clone and enter the repo
-git clone <repo-url>
+git clone https://github.com/sequeiradiogo/ufc-predictor.git
 cd ufc-predictor
-
-# 2. Install dependencies
 pip install -r requirements.txt
-
-# 3. Build database + train models in one command
-#    (requires UFC.csv — download from Kaggle or ufcstats.com)
-python run_pipeline.py --full --csv path/to/UFC.csv
 ```
 
-If the database is already built and you only want to retrain the models:
-```bash
-python run_pipeline.py          # runs steps 4-6 (dataset → XGBoost → LR)
-```
+**Model artifacts are tracked in git**, so predictions work immediately after cloning -- no training required.
 
-Run specific steps only:
+**Databases are distributed as GitHub Release assets** (too large to commit). Download them before running predictions:
 ```bash
-python run_pipeline.py --steps 5        # XGBoost only
-python run_pipeline.py --steps 5,6      # both models
-python run_pipeline.py --dry-run        # preview without executing
+gh release download data-artifacts-latest --dir db/ --pattern "*.db"
 ```
 
 ---
 
-## Making a Prediction
-
-Once the models are trained, use the prediction CLI:
+## Making a prediction
 
 ```bash
-# XGBoost model (default)
+# Default: ensemble model
 python predict.py "Islam Makhachev" "Charles Oliveira"
 
-# Logistic Regression
-python predict.py "Conor McGregor" "Dustin Poirier" --model lr
+# Specific model
+python predict.py "Jon Jones" "Stipe Miocic" --model xgb
 
-# Partial names work — you'll be prompted if there are multiple matches
-python predict.py "Jones" "Miocic"
+# With division and title context
+python predict.py "Jones" "Miocic" --model ensemble --division "heavyweight" --title
 ```
 
 **Example output:**
 ```
-🥊  Islam Makhachev  (Red)  vs  Charles Oliveira  (Blue)
-────────────────────────────────────────────────────
-📊  ELO:  Islam Makhachev = 1659  |  Charles Oliveira = 1623
+Islam Makhachev  (Red)  vs  Charles Oliveira  (Blue)
+------------------------------------------------------------
+ELO:   Islam Makhachev 1624  |  Charles Oliveira 1598
 
-🏆  Predicted Winner: Islam Makhachev  (71.3% confidence)
+Predicted winner: Islam Makhachev  (68.4% confidence)
 
-    Islam Makhachev (Red)
-    ████████████████░░░░ 71.3%
+  Islam Makhachev (Red)     ||||||||||||||||.... 68.4%
+  Charles Oliveira (Blue)   |||||||............. 31.6%
 
-    Charles Oliveira (Blue)
-    █████░░░░░░░░░░░░░░░ 28.7%
-
-    Model: XGBoost
+Finish: Decision (54%) / Submission (27%) / KO-TKO (19%)
+Model: Ensemble (Soft Vote)
 ```
 
 ---
 
-## Refreshing Data
+## Predicting an upcoming event
 
-When new UFC events happen, update and retrain with:
+Scrapes the next UFC event from UFCStats and generates predictions for every non-debut fight:
 ```bash
-# From an updated UFC.csv export
-python refresh_data.py --csv path/to/updated_UFC.csv
-
-# Preview what would run
-python refresh_data.py --csv path/to/updated_UFC.csv --dry-run
+python scripts/predict_event.py
+python scripts/predict_event.py --model ensemble
 ```
+
+Output: a Markdown table + interactive HTML dashboard saved to `predictions/<event-slug>/`.
 
 ---
 
-## Project Structure
+## REST API
+
+```bash
+uvicorn api:app --reload
+```
+
+Endpoints: `POST /predict`, `GET /fighters`, `GET /health`. Full schema at `/docs` (Swagger UI) once the server is running.
+
+---
+
+## Keeping data current
+
+After each UFC event, sync the database and retrain:
+```bash
+# 1. Scrape new fights and rebuild the UFCStats DB
+python scripts/refresh_data.py --auto
+
+# 2. Enrich the v1 CSV
+python scripts/add_defensive_stats_to_csv.py
+python scripts/add_rankings_to_csv.py
+python scripts/add_computed_features_to_csv.py
+
+# 3. Rebuild the mdabbert DB and v1 feature dataset
+python db/ingest_mdabbert.py
+python ml/ML_data_preparation_v1.py
+
+# 4. Retrain v1 models
+python ml/train_v1_models.py
+python ml/train_v1_models.py --model ensemble
+
+# 5. Backtest before committing
+python scripts/backtest_v1.py --from-year 2025
+```
+
+Or use the automated GitHub Actions workflow (runs on the 1st of each month).
+
+---
+
+## Automation
+
+Three GitHub Actions workflows keep the system running without manual intervention:
+
+| Workflow | Schedule | What it does |
+|----------|----------|--------------|
+| `weekly-predictions.yml` | Every Friday | Scrapes the upcoming event card, generates predictions, commits to `predictions/` |
+| `monday-results.yml` | Every Monday | Scrapes the weekend results, updates the prediction markdown with accuracy + P/L |
+| `monthly-refresh.yml` | 1st of month | Scrapes new fights, retrains all v1 models, updates DB release assets |
+
+---
+
+## Project structure
 
 ```
 ufc-predictor/
-├── config.py                          ← All paths and constants (start here)
-├── logger.py                          ← Shared logging setup
-├── run_pipeline.py                    ← Pipeline orchestrator (run this)
-├── refresh_data.py                    ← Update DB + retrain when new events drop
-├── predict.py                         ← Prediction CLI
-├── requirements.txt
-├── README.md
-├── IMPROVEMENTS.md                    ← Change log and roadmap
+├── predict.py                    -- Prediction CLI (start here)
+├── api.py                        -- FastAPI REST wrapper
+├── config.py                     -- All paths and constants
+├── run_pipeline.py               -- v2 pipeline orchestrator
 │
-├── db/
-│   ├── raw_sql_database.py            ← Step 1: create DB from CSV
-│   ├── keys.py                        ← Step 2: add foreign keys
-│   ├── rolling.py                     ← Step 3: compute rolling stats
-│   └── ingest_mdabbert.py             ← Ingest mdabbert-format CSV
+├── scripts/
+│   ├── predict_event.py          -- Predict a full upcoming event card
+│   ├── score_event.py            -- Score predictions against actual results
+│   ├── refresh_data.py           -- Scrape new fights and rebuild the DB
+│   ├── backtest_v1.py            -- Out-of-sample accuracy evaluation
+│   ├── add_defensive_stats_to_csv.py
+│   ├── add_rankings_to_csv.py
+│   └── add_computed_features_to_csv.py
 │
 ├── ml/
-│   ├── ML_data_preparation.py         ← Step 4: build ML dataset from DB
-│   ├── ELO_calculator.py              ← ELO rating engine
-│   ├── XGBoost.py                     ← Step 5: XGBoost model
-│   ├── logistic_regression.py         ← Step 6: Logistic Regression model
-│   └── finish_type_model.py           ← Step 7: finish-type classifier
+│   ├── train_v1_models.py        -- Train all v1 models (XGB/LR/RF/LightGBM/MLP/ensemble)
+│   ├── ML_data_preparation_v1.py -- Build v1 feature CSV from mdabbert DB
+│   ├── ELO_calculator.py         -- ELO + Glicko-2 rating engine
+│   └── ...                       -- Individual model scripts
+│
+├── db/
+│   ├── ingest_mdabbert.py        -- Rebuild mdabbert DB from enriched CSV
+│   └── rolling.py                -- Compute rolling stats (leakage-safe shift)
 │
 ├── scrapers/
-│   ├── ufcstats.py                    ← Scrape fight results from ufcstats.com
-│   ├── bestfightodds.py               ← Scrape moneyline odds
-│   └── ufc_rankings.py               ← Download rankings from Kaggle
+│   ├── ufcstats.py               -- Fight results + stats from ufcstats.com
+│   └── bestfightodds.py          -- Closing moneyline odds
 │
-├── models/                            ← Saved model artifacts (auto-created)
-│   ├── xgboost.joblib
-│   ├── xgb_features.joblib
-│   ├── logistic_regression.joblib
-│   ├── lr_scaler.joblib
-│   └── lr_features.joblib
+├── models_v1/                    -- v1 model artifacts (tracked in git)
+├── models_v1_prod/               -- Production models (100% training data)
+├── predictions/                  -- Weekly prediction outputs (MD + HTML)
+├── raw_data/ufc-master.csv       -- Source CSV (2,271 fighters, 7,323 fights)
 │
-├── logs/                              ← Runtime logs (auto-created)
-│   └── ufc_predictor.log
-│
-├── raw_data/                          ← Source CSV + intermediate databases
-└── tests/
-    └── test_pipeline.py               ← 27 unit + integration tests
+├── MODEL_RESULTS.md              -- Full model iteration history
+└── tests/                        -- Unit + integration tests
 ```
 
 ---
 
 ## Models
 
-| Model | Algorithm | Key Strength |
-|-------|-----------|--------------|
-| XGBoost | Gradient Boosting | Highest accuracy, handles non-linear relationships |
-| Logistic Regression | Linear model | Interpretable feature weights, calibrated probabilities |
+| Model | 2025+ Accuracy | Notes |
+|-------|---------------|-------|
+| XGBoost | 67.5% | Default params; tuning consistently hurts |
+| Logistic Regression | 65.3% | Platt-calibrated |
+| Random Forest | 67.0% | |
+| LightGBM | 67.0% | |
+| **Ensemble** | **69.6%** | Calibrated soft-vote; XGB ~40%, MLP ~44% |
 
-Both models are trained on **difference features** (Red stat − Blue stat), so the model sees only relative advantages rather than raw numbers. The dataset is also symmetrised (each fight appears from both corners' perspective) to remove the red-corner assignment bias.
-
----
-
-## Key Features Used
-
-- **Strike accuracy** — head, body, leg, clinch, distance, ground
-- **Takedown stats** — accuracy, average per 15 min
-- **Defense** — strike defense %, takedown defense %
-- **Tempo** — significant strikes per minute, absorbed per minute
-- **Experience** — total fight time, wins, losses
-- **ELO rating** — dynamic skill rating computed from full fight history
-
----
-
-## Running Tests
-
-```bash
-python -m pytest tests/ -v
-```
-
-22 tests pass immediately. 5 model tests activate automatically after the first training run.
+Training data: post-2018 fights only (adversarial validation confirmed distribution shift pre-2018). Evaluated on `--from-year 2025` to avoid the 80/20 split leaking 2022-2024 fights into the test window.
 
 ---
 
 ## Data
 
-The raw dataset comes from [UFC Stats](http://www.ufcstats.com/). The project currently includes:
+- 2,271 fighters
+- 7,323 fights
+- 91 engineered features per matchup
 
-- **2,611** unique fighters
-- **8,337** fights
-- **16,674** fight-level stat records (2 per fight)
+The pipeline is fully reproducible -- rebuild the DB from scratch with `scripts/scrape_history.py` (takes 8-10 hours) or download the current snapshot from the GitHub Release.
+
+### Credits
+
+- **[mdabbert](https://www.kaggle.com/mdabbert)** -- the career-aggregate UFC dataset (`ufc-master.csv`) that powers the v1 prediction pipeline. The feature engineering and enrichment pipeline in this repo builds directly on top of his dataset.
+- **[martj42](https://www.kaggle.com/datasets/martj42/ufc-rankings)** -- the UFC rankings dataset used to enrich fights with pre-fight weightclass rankings.
+- **[UFCStats.com](http://www.ufcstats.com/)** -- primary source for per-fight statistics, scraped to build the UFCStats DB.
+
+---
+
+## License
+
+MIT -- see [LICENSE](./LICENSE).

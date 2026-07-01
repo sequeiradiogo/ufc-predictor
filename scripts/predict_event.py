@@ -600,6 +600,7 @@ def main() -> None:
     meta = {
         "event":      event["name"],
         "date":       event["date"],
+        "event_url":  event.get("url", ""),
         "model_type": args.model,
         "fights":     json.loads(_fight_data_for_js(results)),
     }
