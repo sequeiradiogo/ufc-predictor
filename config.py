@@ -362,6 +362,7 @@ NAME_ALIASES: dict[str, str] = {
     "joshua culibao":       "Josh Culibao",
     "joshua sampo":         "Josh Sampo",
     "kai kamaka":           "Kai Kamaka III",
+    "kai kamaka iii":       "Kai Kamaka",
     "kai kara france":      "Kai Kara-France",
     "luci pudilova":        "Lucie Pudilova",
     "montserrat conejo":    "Montserrat Conejo Ruiz",
