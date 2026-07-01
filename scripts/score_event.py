@@ -31,7 +31,7 @@ SCORED_MARKER   = "Actual Result"
 LOOKBACK_DAYS   = 10
 
 
-# ── UFCStats result scraping ──────────────────────────────────────────────────
+# -- UFCStats result scraping -------------------------------------------------
 
 def scrape_results(event_url: str) -> list[dict]:
     """
@@ -66,7 +66,7 @@ def scrape_results(event_url: str) -> list[dict]:
     return results
 
 
-# ── BFO odds ──────────────────────────────────────────────────────────────────
+# -- BFO odds -----------------------------------------------------------------
 
 def _american_to_decimal(odds: int | None) -> float | None:
     if odds is None:
@@ -120,26 +120,33 @@ def scrape_bfo_odds(
     return out
 
 
-# ── Name matching ─────────────────────────────────────────────────────────────
+# -- Name matching ------------------------------------------------------------
 
 def _sim(a: str, b: str) -> float:
     return difflib.SequenceMatcher(None, _name_key(a), _name_key(b)).ratio()
+
+
+_SIM_FLOOR = 0.6  # minimum per-fighter similarity; prevents false positives when one fighter matches exactly
 
 
 def _match_result(red: str, blue: str, results: list[dict]) -> dict | None:
     """Fuzzy-match a predicted fight to an actual result entry."""
     best_score, best = 0.0, None
     for r in results:
-        score = max(
-            _sim(red, r["winner"]) + _sim(blue, r["loser"]),
-            _sim(blue, r["winner"]) + _sim(red, r["loser"]),
-        )
+        s1 = _sim(red, r["winner"]); s2 = _sim(blue, r["loser"])
+        s3 = _sim(blue, r["winner"]); s4 = _sim(red, r["loser"])
+        if s1 >= _SIM_FLOOR and s2 >= _SIM_FLOOR:
+            score = s1 + s2
+        elif s3 >= _SIM_FLOOR and s4 >= _SIM_FLOOR:
+            score = s3 + s4
+        else:
+            continue
         if score > best_score:
             best_score, best = score, r
     return best if best_score > 1.0 else None
 
 
-# ── Result string formatting ──────────────────────────────────────────────────
+# -- Result string formatting -------------------------------------------------
 
 _METHOD_SHORT = {
     "KO/TKO":               "KO",
@@ -161,7 +168,7 @@ def _result_str(r: dict) -> str:
     return f"{r['winner']} ({method} R{r['round']})"
 
 
-# ── Markdown update ───────────────────────────────────────────────────────────
+# -- Markdown update ----------------------------------------------------------
 
 def score_markdown(
     md_path: Path,
@@ -229,20 +236,9 @@ def score_markdown(
             "blue_name":   blue,
         })
 
-    # -- Re-parse original table rows to preserve method text -----------------
-    orig_rows: list[list[str]] = []
-    table_m = re.search(
-        r"\| Fight \|.*?\n\|[-|]+\|\n(.*?)\n(?:\n|---)",
-        md,
-        re.DOTALL,
-    )
-    if table_m:
-        for line in table_m.group(1).splitlines():
-            if line.startswith("|"):
-                cols = [c.strip() for c in line.split("|")[1:-1]]
-                orig_rows.append(cols)
-
     # -- Build updated table --------------------------------------------------
+    # fight_rows is parallel to predictions; finish_str is stored in the JSON
+    # at generation time (predict_event.py) so no markdown re-parse is needed.
     has_odds = any(r["odds_red"] is not None for r in fight_rows)
 
     if has_odds:
@@ -254,8 +250,7 @@ def score_markdown(
 
     new_rows: list[str] = []
     for i, s in enumerate(fight_rows):
-        orig = orig_rows[i] if i < len(orig_rows) else []
-        meth_col = orig[3] if len(orig) > 3 else "?"
+        meth_col = predictions[i].get("finish_str", "?")
 
         if has_odds:
             r_str = f"{s['odds_red']:+d}"  if s["odds_red"]  is not None else "N/A"
@@ -276,6 +271,14 @@ def score_markdown(
         count=1,
         flags=re.DOTALL,
     )
+
+    if SCORED_MARKER not in md:
+        log.error(
+            "Table replacement regex did not match in %s -- markdown format may have changed. "
+            "File left unchanged to prevent data loss.",
+            md_path,
+        )
+        return "error: table not found"
 
     # -- Accuracy summary line ------------------------------------------------
     n_correct  = sum(1 for s in fight_rows if s["correct"] == "YES")
@@ -362,7 +365,7 @@ def score_markdown(
     return acc_str
 
 
-# ── Prediction finder ─────────────────────────────────────────────────────────
+# -- Prediction finder --------------------------------------------------------
 
 def find_unscored_prediction() -> Path | None:
     """Return the JSON path for the most recent unscored prediction, or None."""
@@ -389,7 +392,7 @@ def find_unscored_prediction() -> Path | None:
     return candidates[0][1]
 
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+# -- Main ---------------------------------------------------------------------
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Score the most recent event prediction.")

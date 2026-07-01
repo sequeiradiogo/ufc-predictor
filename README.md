@@ -114,20 +114,22 @@ After each UFC event, sync the database and retrain:
 # 1. Scrape new fights and rebuild the UFCStats DB
 python scripts/refresh_data.py --auto
 
-# 2. Enrich the v1 CSV
+# 2. Download the latest rankings (gitignored, lives in the GitHub Release)
+gh release download data-artifacts-latest --dir raw_data/ --pattern "rankings_history.csv"
+
+# 3. Enrich the v1 CSV
 python scripts/add_defensive_stats_to_csv.py
 python scripts/add_rankings_to_csv.py
 python scripts/add_computed_features_to_csv.py
 
-# 3. Rebuild the mdabbert DB and v1 feature dataset
+# 4. Rebuild the mdabbert DB and v1 feature dataset
 python db/ingest_mdabbert.py
 python ml/ML_data_preparation_v1.py
 
-# 4. Retrain v1 models
+# 5. Retrain v1 models
 python ml/train_v1_models.py
-python ml/train_v1_models.py --model ensemble
 
-# 5. Backtest before committing
+# 6. Backtest before committing
 python scripts/backtest_v1.py --from-year 2025
 ```
 

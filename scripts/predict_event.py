@@ -108,7 +108,8 @@ def _fight_data_for_js(results: list[dict]) -> str:
             "blue_prob":  pct(r["blue_prob"]),
             "elo_red":    round(r["elo_red"],  0),
             "elo_blue":   round(r["elo_blue"], 0),
-            "finish":     r.get("finish_proba") or [],
+            "finish":      r.get("finish_proba") or [],
+            "finish_str":  _format_finish(r.get("finish_proba") or []),
             "radar": {
                 "axes":  radar_axes,
                 "units": radar_units,

@@ -31,11 +31,6 @@ jobs:
           pip install -r requirements.txt
           playwright install chromium --with-deps
 
-      - name: Download DB artifacts
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release download data-artifacts-latest --dir db/ --pattern "*.db"
-
       - name: Score event predictions
         run: |
           if [ -n "${{ inputs.json_path }}" ]; then
