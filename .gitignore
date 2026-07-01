@@ -39,6 +39,7 @@ raw_data/*.csv
 # IDE
 .idea/
 .vscode/
+*.iml
 
 # Pytest
 .pytest_cache/
