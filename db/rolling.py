@@ -374,9 +374,12 @@ def upsert_to_db(prior_df: pd.DataFrame, db_path: Path) -> None:
         # Determine write columns (intersection of DF and DB).
         # Exclude raw per-fight stats written by the scraper -- rolling.py only
         # writes derived/computed stats to avoid double-cumulation on repeated runs.
-        _SCRAPER_COLS = set(
-            _LANDED_COLS + _ATMPTED_COLS + _SUM_STATS + ["total_fight_time"]
-        )
+        # kd/ctrl/sub_att (_SUM_STATS) are read from fight_stats to compute their
+        # cumulative, so writing them back would cause double-cumulation on re-runs.
+        # total_fight_time is computed from match_time_sec (fights table) and is
+        # never read from fight_stats, so it has no double-cumulation risk and IS
+        # written so that debut fighters show 0.
+        _SCRAPER_COLS = set(_LANDED_COLS + _ATMPTED_COLS + _SUM_STATS)
         cur.execute(f'PRAGMA table_info("{_TARGET_TABLE}");')
         tgt_cols  = {r[1] for r in cur.fetchall()}
         write_cols = [
