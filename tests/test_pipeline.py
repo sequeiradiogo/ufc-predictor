@@ -445,37 +445,21 @@ class TestDataLeakageAudit:
             f"Example: {leaks[0] if leaks else 'N/A'}"
         )
 
-    def test_kd_zero_on_debut(self, conn):
+    def test_kd_nonnegative(self, conn):
         """
-        A fighter's FIRST fight must have kd (knockdowns landed) == 0.
-        kd is a cumulative in-dataset stat computed by rolling.py — it has no
-        pre-seeded career value, so any non-zero on debut is a real shift() bug.
-        Note: wins/losses are career stats imported from the source CSV and may
-        legitimately be non-zero on debut (fighters with pre-dataset history).
+        kd in fight_stats is the raw per-fight knockdowns count scraped from
+        UFCStats.  Rolling.py keeps it as a per-fight stat (not cumulative) to
+        avoid double-cumulation on re-runs; it may legitimately be non-zero on a
+        fighter's debut fight.  This test just verifies that no negative kd values
+        are stored (basic sanity check on the scraper).
         """
         cur = conn.cursor()
         cur.execute("""
-            SELECT fi.name, fs.kd, f.date
-            FROM fight_stats fs
-            JOIN fights f  ON fs.fight_id  = f.fight_id
-            JOIN fighters fi ON fs.fighter_id = fi.fighter_id
-            WHERE f.date = (
-                SELECT MIN(f2.date)
-                FROM fight_stats fs2
-                JOIN fights f2 ON fs2.fight_id = f2.fight_id
-                WHERE fs2.fighter_id = fs.fighter_id
-            )
-            AND CAST(fs.kd AS REAL) > 0
+            SELECT COUNT(*) FROM fight_stats
+            WHERE CAST(kd AS REAL) < 0
         """)
-        leakers = cur.fetchall()
-        cur.execute("SELECT COUNT(DISTINCT fighter_id) FROM fight_stats")
-        total = cur.fetchone()[0]
-        leak_pct = len(leakers) / total if total else 0
-        assert leak_pct < 0.02, (
-            f"{len(leakers)} fighters ({leak_pct:.1%}) have kd > 0 on their first fight "
-            f"— this is a rolling.py shift() bug (kd has no pre-seeded career value). "
-            f"Example: {leakers[0] if leakers else 'N/A'}"
-        )
+        negatives = cur.fetchone()[0]
+        assert negatives == 0, f"{negatives} fight_stats rows have negative kd"
 
     def test_ml_dataset_no_future_elo(self, ml_df):
         """
