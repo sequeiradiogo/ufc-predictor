@@ -36,6 +36,9 @@ raw_data/*.csv
 !raw_data/ufcstats_fights.csv
 !raw_data/ufcstats_fight_stats.csv
 
+# Claude Code local config
+.claude/
+
 # IDE
 .idea/
 .vscode/
