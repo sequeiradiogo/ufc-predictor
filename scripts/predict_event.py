@@ -513,6 +513,8 @@ def main() -> None:
                         help="Model to use (default: ensemble)")
     parser.add_argument("--output", default=None,
                         help="Output .md path (default: predictions/<slug>.md)")
+    parser.add_argument("--skip-existing", action="store_true",
+                        help="Exit 0 without regenerating if predictions for this event already exist")
     args = parser.parse_args()
 
     log.info("Scraping next upcoming event from UFCStats...")
@@ -591,6 +593,9 @@ def main() -> None:
         PREDICTIONS_DIR.mkdir(exist_ok=True)
         slug      = _event_slug(event["name"], event["date"])
         event_dir = PREDICTIONS_DIR / slug
+        if args.skip_existing and event_dir.exists():
+            print(f"Predictions already exist for {slug} -- skipping (--skip-existing).")
+            sys.exit(0)
         event_dir.mkdir(exist_ok=True)
         out_path  = event_dir / f"{slug}.md"
 
