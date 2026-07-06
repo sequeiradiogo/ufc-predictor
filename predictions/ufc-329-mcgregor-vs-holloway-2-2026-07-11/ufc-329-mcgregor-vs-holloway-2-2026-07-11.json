@@ -9,16 +9,16 @@
       "red_name": "Conor McGregor",
       "blue_name": "Max Holloway",
       "winner": "Max Holloway",
-      "red_prob": 20.2,
-      "blue_prob": 79.8,
+      "red_prob": 26.2,
+      "blue_prob": 73.8,
       "elo_red": 1566.0,
       "elo_blue": 1605.0,
       "finish": [
-        0.420695960521698,
-        0.5442283749580383,
-        0.03507571294903755
+        0.46796944737434387,
+        0.49670490622520447,
+        0.03532564640045166
       ],
-      "finish_str": "KO/TKO (54%) / Decision (42%)",
+      "finish_str": "KO/TKO (50%) / Decision (47%)",
       "radar": {
         "axes": [
           "Str acc",
@@ -61,15 +61,15 @@
           "Win streak"
         ],
         "red": [
-          5.32,
-          4.66,
-          0.67,
+          0.89,
+          0.78,
+          0.11,
           0.0
         ],
         "blue": [
-          6.91,
-          4.61,
-          0.23,
+          0.53,
+          0.36,
+          0.02,
           0.0
         ],
         "units": [
@@ -84,8 +84,8 @@
         "blue_streak": 0,
         "red_finish": 100.0,
         "blue_finish": 33.3,
-        "red_sos": 1400.0,
-        "blue_sos": 1400.0
+        "red_sos": 1554.0,
+        "blue_sos": 1588.0
       }
     },
     {
@@ -93,16 +93,16 @@
       "red_name": "Benoit Saint Denis",
       "blue_name": "Paddy Pimblett",
       "winner": "Benoit Saint Denis",
-      "red_prob": 79.1,
-      "blue_prob": 20.9,
+      "red_prob": 57.3,
+      "blue_prob": 42.7,
       "elo_red": 1541.0,
       "elo_blue": 1541.0,
       "finish": [
-        0.6549651026725769,
-        0.13430528342723846,
-        0.2107296735048294
+        0.5332109332084656,
+        0.22550193965435028,
+        0.24128709733486176
       ],
-      "finish_str": "Decision (65%) / Submission (21%)",
+      "finish_str": "Decision (53%) / Submission (24%)",
       "radar": {
         "axes": [
           "Str acc",
@@ -145,15 +145,15 @@
           "Win streak"
         ],
         "red": [
-          5.62,
-          4.09,
-          4.19,
+          0.95,
+          0.69,
+          0.71,
           4.0
         ],
         "blue": [
-          5.49,
-          3.89,
-          0.69,
+          2.21,
+          1.56,
+          0.28,
           0.0
         ],
         "units": [
@@ -168,25 +168,25 @@
         "blue_streak": 0,
         "red_finish": 100.0,
         "blue_finish": 66.7,
-        "red_sos": 1400.0,
-        "blue_sos": 1400.0
+        "red_sos": 1484.0,
+        "blue_sos": 1488.0
       }
     },
     {
       "label": "Cory Sandhagen vs Mario Bautista",
       "red_name": "Cory Sandhagen",
       "blue_name": "Mario Bautista",
-      "winner": "Mario Bautista",
-      "red_prob": 47.7,
-      "blue_prob": 52.3,
+      "winner": "Cory Sandhagen",
+      "red_prob": 56.5,
+      "blue_prob": 43.5,
       "elo_red": 1566.0,
       "elo_blue": 1556.0,
       "finish": [
-        0.6901372075080872,
-        0.2167404145002365,
-        0.09312234818935394
+        0.6770554184913635,
+        0.2376086711883545,
+        0.08533591777086258
       ],
-      "finish_str": "Decision (69%) / KO/TKO (22%)",
+      "finish_str": "Decision (68%) / KO/TKO (24%)",
       "radar": {
         "axes": [
           "Str acc",
@@ -229,15 +229,15 @@
           "Win streak"
         ],
         "red": [
-          4.86,
-          3.47,
-          1.15,
+          0.85,
+          0.61,
+          0.2,
           0.0
         ],
         "blue": [
-          5.3,
-          3.98,
-          1.91,
+          0.95,
+          0.71,
+          0.34,
           1.0
         ],
         "units": [
@@ -252,25 +252,25 @@
         "blue_streak": 1,
         "red_finish": 33.3,
         "blue_finish": 33.3,
-        "red_sos": 1400.0,
-        "blue_sos": 1400.0
+        "red_sos": 1539.0,
+        "blue_sos": 1502.0
       }
     },
     {
       "label": "Brandon Royval vs Lone'er Kavanagh",
       "red_name": "Brandon Royval",
       "blue_name": "Lone'er Kavanagh",
-      "winner": "Brandon Royval",
-      "red_prob": 52.2,
-      "blue_prob": 47.8,
+      "winner": "Lone'er Kavanagh",
+      "red_prob": 33.6,
+      "blue_prob": 66.4,
       "elo_red": 1489.0,
       "elo_blue": 1451.0,
       "finish": [
-        0.6784371733665466,
-        0.17619703710079193,
-        0.14536572992801666
+        0.6277697682380676,
+        0.20152607560157776,
+        0.17070414125919342
       ],
-      "finish_str": "Decision (68%) / KO/TKO (18%)",
+      "finish_str": "Decision (63%) / KO/TKO (20%)",
       "radar": {
         "axes": [
           "Str acc",
@@ -313,15 +313,15 @@
           "Win streak"
         ],
         "red": [
-          5.54,
-          4.25,
-          0.65,
+          1.24,
+          0.95,
+          0.15,
           0.0
         ],
         "blue": [
-          4.1,
-          3.47,
-          1.16,
+          3.13,
+          2.65,
+          0.89,
           1.0
         ],
         "units": [
@@ -336,25 +336,25 @@
         "blue_streak": 1,
         "red_finish": 33.3,
         "blue_finish": 33.3,
-        "red_sos": 1400.0,
-        "blue_sos": 1400.0
+        "red_sos": 1537.0,
+        "blue_sos": 1440.0
       }
     },
     {
       "label": "King Green vs Terrance McKinney",
       "red_name": "King Green",
       "blue_name": "Terrance McKinney",
-      "winner": "Terrance McKinney",
-      "red_prob": 33.1,
-      "blue_prob": 66.9,
+      "winner": "King Green",
+      "red_prob": 52.4,
+      "blue_prob": 47.6,
       "elo_red": 1506.0,
       "elo_blue": 1451.0,
       "finish": [
-        0.6694971919059753,
-        0.26769083738327026,
-        0.06281203776597977
+        0.7028449773788452,
+        0.24615179002285004,
+        0.05100326985120773
       ],
-      "finish_str": "Decision (67%) / KO/TKO (27%)",
+      "finish_str": "Decision (70%) / KO/TKO (25%)",
       "radar": {
         "axes": [
           "Str acc",
@@ -397,15 +397,15 @@
           "Win streak"
         ],
         "red": [
-          6.56,
-          3.62,
-          1.28,
+          0.4,
+          0.22,
+          0.08,
           3.0
         ],
         "blue": [
-          7.77,
-          4.11,
-          3.05,
+          1.13,
+          0.6,
+          0.44,
           1.0
         ],
         "units": [
@@ -420,8 +420,8 @@
         "blue_streak": 1,
         "red_finish": 66.7,
         "blue_finish": 100.0,
-        "red_sos": 1400.0,
-        "blue_sos": 1400.0
+        "red_sos": 1468.0,
+        "blue_sos": 1425.0
       }
     },
     {
@@ -429,14 +429,14 @@
       "red_name": "Nikita Krylov",
       "blue_name": "Robert Whittaker",
       "winner": "Nikita Krylov",
-      "red_prob": 78.8,
-      "blue_prob": 21.2,
+      "red_prob": 63.5,
+      "blue_prob": 36.5,
       "elo_red": 1486.0,
       "elo_blue": 1565.0,
       "finish": [
-        0.6521530151367188,
-        0.2621016502380371,
-        0.08574534952640533
+        0.6513524651527405,
+        0.2587835490703583,
+        0.08986397087574005
       ],
       "finish_str": "Decision (65%) / KO/TKO (26%)",
       "radar": {
@@ -481,15 +481,15 @@
           "Win streak"
         ],
         "red": [
-          4.36,
-          2.59,
-          2.05,
+          0.5,
+          0.3,
+          0.23,
           1.0
         ],
         "blue": [
-          4.39,
-          3.36,
-          0.73,
+          0.41,
+          0.31,
+          0.07,
           0.0
         ],
         "units": [
@@ -504,8 +504,8 @@
         "blue_streak": 0,
         "red_finish": 100.0,
         "blue_finish": 66.7,
-        "red_sos": 1400.0,
-        "blue_sos": 1400.0
+        "red_sos": 1500.0,
+        "blue_sos": 1565.0
       }
     },
     {
@@ -513,16 +513,16 @@
       "red_name": "Cody Garbrandt",
       "blue_name": "Adrian Yanez",
       "winner": "Cody Garbrandt",
-      "red_prob": 53.0,
-      "blue_prob": 47.0,
+      "red_prob": 66.3,
+      "blue_prob": 33.7,
       "elo_red": 1492.0,
       "elo_blue": 1484.0,
       "finish": [
-        0.4659295678138733,
-        0.4926857352256775,
-        0.04138467088341713
+        0.4992636442184448,
+        0.46039387583732605,
+        0.04034249484539032
       ],
-      "finish_str": "KO/TKO (49%) / Decision (47%)",
+      "finish_str": "Decision (50%) / KO/TKO (46%)",
       "radar": {
         "axes": [
           "Str acc",
@@ -565,14 +565,14 @@
           "Win streak"
         ],
         "red": [
-          2.79,
-          3.66,
-          0.85,
+          0.37,
+          0.48,
+          0.11,
           1.0
         ],
         "blue": [
-          5.92,
-          5.24,
+          1.51,
+          1.34,
           0.0,
           0.0
         ],
@@ -588,8 +588,8 @@
         "blue_streak": 0,
         "red_finish": 33.3,
         "blue_finish": 66.7,
-        "red_sos": 1400.0,
-        "blue_sos": 1400.0
+        "red_sos": 1444.0,
+        "blue_sos": 1456.0
       }
     },
     {
@@ -597,16 +597,16 @@
       "red_name": "Luke Riley",
       "blue_name": "Kai Kamaka",
       "winner": "Kai Kamaka",
-      "red_prob": 22.8,
-      "blue_prob": 77.2,
+      "red_prob": 32.5,
+      "blue_prob": 67.5,
       "elo_red": 1481.0,
       "elo_blue": 1400,
       "finish": [
-        0.5426521897315979,
-        0.3738339841365814,
-        0.08351381123065948
+        0.5319789052009583,
+        0.37916991114616394,
+        0.08885122090578079
       ],
-      "finish_str": "Decision (54%) / KO/TKO (37%)",
+      "finish_str": "Decision (53%) / KO/TKO (38%)",
       "radar": {
         "axes": [
           "Str acc",
@@ -649,8 +649,8 @@
           "Win streak"
         ],
         "red": [
-          5.56,
-          3.32,
+          20.73,
+          12.36,
           0.0,
           2.0
         ],
@@ -672,8 +672,8 @@
         "blue_streak": 1,
         "red_finish": 50.0,
         "blue_finish": 33.3,
-        "red_sos": 1400.0,
-        "blue_sos": 1332.0
+        "red_sos": 1359.0,
+        "blue_sos": 1400.0
       }
     },
     {
@@ -681,16 +681,16 @@
       "red_name": "Tracy Cortez",
       "blue_name": "Wang Cong",
       "winner": "Wang Cong",
-      "red_prob": 19.6,
-      "blue_prob": 80.4,
+      "red_prob": 32.4,
+      "blue_prob": 67.6,
       "elo_red": 1510.0,
       "elo_blue": 1458.0,
       "finish": [
-        0.8569187521934509,
-        0.09592735767364502,
-        0.047153886407613754
+        0.8362687826156616,
+        0.11525461822748184,
+        0.04847663268446922
       ],
-      "finish_str": "Decision (86%) / KO/TKO (10%)",
+      "finish_str": "Decision (84%) / KO/TKO (12%)",
       "radar": {
         "axes": [
           "Str acc",
@@ -733,15 +733,15 @@
           "Win streak"
         ],
         "red": [
-          3.79,
-          3.06,
-          1.92,
+          1.07,
+          0.87,
+          0.55,
           0.0
         ],
         "blue": [
-          6.22,
-          2.28,
-          0.55,
+          4.51,
+          1.65,
+          0.4,
           3.0
         ],
         "units": [
@@ -756,8 +756,8 @@
         "blue_streak": 3,
         "red_finish": 33.3,
         "blue_finish": 0.0,
-        "red_sos": 1400.0,
-        "blue_sos": 1400.0
+        "red_sos": 1501.0,
+        "blue_sos": 1395.0
       }
     },
     {
@@ -765,16 +765,16 @@
       "red_name": "Damian Pinas",
       "blue_name": "Cesar Almeida",
       "winner": "Damian Pinas",
-      "red_prob": 78.9,
-      "blue_prob": 21.1,
+      "red_prob": 57.2,
+      "blue_prob": 42.8,
       "elo_red": 1445.0,
       "elo_blue": 1432.0,
       "finish": [
-        0.40737566351890564,
-        0.4786289632320404,
-        0.11399541050195694
+        0.36614343523979187,
+        0.5345451235771179,
+        0.09931141138076782
       ],
-      "finish_str": "KO/TKO (48%) / Decision (41%)",
+      "finish_str": "KO/TKO (53%) / Decision (37%)",
       "radar": {
         "axes": [
           "Str acc",
@@ -817,14 +817,14 @@
           "Win streak"
         ],
         "red": [
-          6.0,
-          1.2,
+          0.0,
+          0.0,
           0.0,
           1.0
         ],
         "blue": [
-          3.12,
-          2.07,
+          1.63,
+          1.08,
           0.0,
           0.0
         ],
@@ -840,8 +840,8 @@
         "blue_streak": 0,
         "red_finish": 100.0,
         "blue_finish": 33.3,
-        "red_sos": 1400.0,
-        "blue_sos": 1400.0
+        "red_sos": 1411.0,
+        "blue_sos": 1399.0
       }
     },
     {
@@ -849,16 +849,16 @@
       "red_name": "Farid Basharat",
       "blue_name": "Ethyn Ewing",
       "winner": "Ethyn Ewing",
-      "red_prob": 36.6,
-      "blue_prob": 63.4,
+      "red_prob": 32.6,
+      "blue_prob": 67.4,
       "elo_red": 1554.0,
       "elo_blue": 1524.0,
       "finish": [
-        0.48103711009025574,
-        0.27165067195892334,
-        0.24731221795082092
+        0.5069555640220642,
+        0.2685605585575104,
+        0.22448387742042542
       ],
-      "finish_str": "Decision (48%) / KO/TKO (27%)",
+      "finish_str": "Decision (51%) / KO/TKO (27%)",
       "radar": {
         "axes": [
           "Str acc",
@@ -901,15 +901,15 @@
           "Win streak"
         ],
         "red": [
-          3.6,
-          3.09,
-          3.41,
+          1.57,
+          1.35,
+          1.48,
           6.0
         ],
         "blue": [
-          7.44,
-          4.53,
-          1.68,
+          13.27,
+          8.07,
+          3.0,
           2.0
         ],
         "units": [
@@ -924,25 +924,25 @@
         "blue_streak": 2,
         "red_finish": 0.0,
         "blue_finish": 50.0,
-        "red_sos": 1400.0,
-        "blue_sos": 1400.0
+        "red_sos": 1445.0,
+        "blue_sos": 1449.0
       }
     },
     {
       "label": "Ryan Gandra vs Zach Reese",
       "red_name": "Ryan Gandra",
       "blue_name": "Zach Reese",
-      "winner": "Ryan Gandra",
-      "red_prob": 67.3,
-      "blue_prob": 32.7,
+      "winner": "Zach Reese",
+      "red_prob": 33.8,
+      "blue_prob": 66.2,
       "elo_red": 1418.0,
       "elo_blue": 1433.0,
       "finish": [
-        0.5131382942199707,
-        0.32079795002937317,
-        0.16606374084949493
+        0.43226179480552673,
+        0.41538676619529724,
+        0.1523514688014984
       ],
-      "finish_str": "Decision (51%) / KO/TKO (32%)",
+      "finish_str": "Decision (43%) / KO/TKO (42%)",
       "radar": {
         "axes": [
           "Str acc",
@@ -985,15 +985,15 @@
           "Win streak"
         ],
         "red": [
-          20.49,
+          0.0,
           0.0,
           0.0,
           1.0
         ],
         "blue": [
-          4.44,
-          3.81,
-          2.86,
+          1.65,
+          1.42,
+          1.06,
           0.0
         ],
         "units": [
@@ -1008,25 +1008,25 @@
         "blue_streak": 0,
         "red_finish": 100.0,
         "blue_finish": 33.3,
-        "red_sos": 1400.0,
-        "blue_sos": 1400.0
+        "red_sos": 1274.0,
+        "blue_sos": 1399.0
       }
     },
     {
       "label": "Alessandro Costa vs Cody Durden",
       "red_name": "Alessandro Costa",
       "blue_name": "Cody Durden",
-      "winner": "Alessandro Costa",
-      "red_prob": 52.2,
-      "blue_prob": 47.8,
+      "winner": "Cody Durden",
+      "red_prob": 37.8,
+      "blue_prob": 62.2,
       "elo_red": 1415.0,
       "elo_blue": 1400.0,
       "finish": [
-        0.44568854570388794,
-        0.3989112079143524,
-        0.15540023148059845
+        0.543253481388092,
+        0.3415301442146301,
+        0.11521637439727783
       ],
-      "finish_str": "Decision (45%) / KO/TKO (40%)",
+      "finish_str": "Decision (54%) / KO/TKO (34%)",
       "radar": {
         "axes": [
           "Str acc",
@@ -1069,15 +1069,15 @@
           "Win streak"
         ],
         "red": [
-          4.06,
-          3.81,
-          0.95,
+          1.19,
+          1.12,
+          0.28,
           2.0
         ],
         "blue": [
-          3.24,
-          3.94,
-          3.99,
+          0.46,
+          0.56,
+          0.56,
           1.0
         ],
         "units": [
@@ -1092,8 +1092,8 @@
         "blue_streak": 1,
         "red_finish": 100.0,
         "blue_finish": 33.3,
-        "red_sos": 1400.0,
-        "blue_sos": 1400.0
+        "red_sos": 1410.0,
+        "blue_sos": 1466.0
       }
     }
   ]
