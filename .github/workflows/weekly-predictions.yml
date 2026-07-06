@@ -33,7 +33,7 @@ jobs:
         run: gh release download data-artifacts-latest --dir db/ --pattern "*.db"
 
       - name: Run event predictions
-        run: python scripts/predict_event.py --model ensemble
+        run: python scripts/predict_event.py --model ensemble --skip-existing
 
       - name: Commit predictions
         run: |
