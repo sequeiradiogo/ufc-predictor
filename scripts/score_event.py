@@ -49,10 +49,16 @@ def scrape_results(event_url: str) -> list[dict]:
                     continue
                 winner_name = fighter_links[0].get_text(strip=True)
                 loser_name  = fighter_links[1].get_text(strip=True)
-                tds    = row.find_all("td", class_="b-fight-details__table-col")
-                method = _normalize_method(_col_ps_text(tds, 7, 0)) if len(tds) > 7 else "Decision"
+                tds = row.find_all("td", class_="b-fight-details__table-col")
+                method_text = _col_ps_text(tds, 7, 0) if len(tds) > 7 else ""
+                round_text  = _col_ps_text(tds, 8, 0) if len(tds) > 8 else ""
+                if not method_text.strip() or not round_text.strip():
+                    # Upcoming events list fighters but have no method/round yet --
+                    # fighter_links[0] is NOT a winner in that case, just listing order.
+                    continue
+                method = _normalize_method(method_text)
                 try:
-                    round_num = int(_col_ps_text(tds, 8, 0) or "0")
+                    round_num = int(round_text)
                 except ValueError:
                     round_num = 0
                 results.append({
@@ -378,7 +384,7 @@ def find_unscored_prediction() -> Path | None:
             event_date = date.fromisoformat(meta.get("date", "1970-01-01"))
         except Exception:
             continue
-        if event_date < cutoff:
+        if event_date < cutoff or event_date > date.today():
             continue
         md_path = json_path.with_suffix(".md")
         if not md_path.exists():
@@ -407,6 +413,11 @@ def main() -> None:
     meta = json.loads(json_path.read_text(encoding="utf-8"))
     log.info("Scoring: %s  (%s)", meta["event"], meta["date"])
     print(f"\nEvent:     {meta['event']}  ({meta['date']})")
+
+    event_date = date.fromisoformat(meta.get("date", "1970-01-01"))
+    if event_date > date.today():
+        print(f"[ERROR] Event date {event_date} is in the future -- nothing to score yet.")
+        sys.exit(1)
 
     event_url = meta.get("event_url")
     if not event_url:

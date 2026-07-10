@@ -50,3 +50,6 @@ raw_data/*.csv
 # OS
 .DS_Store
 Thumbs.db
+
+# Analytics scratch output
+analytics/output/

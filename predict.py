@@ -1128,7 +1128,6 @@ def compute_prediction(
         div_lower = (division or "").lower().strip()
 
         _excluded    = set(EXCLUDED_FEATURES)
-        _need_sos    = "sos_diff"       not in _excluded
         _need_glicko = ("glicko_diff" not in _excluded or "glicko_rd_diff" not in _excluded)
         _def_glicko_t = (GLICKO_START_R, GLICKO_START_RD, 0.06)
 
@@ -1168,6 +1167,8 @@ def compute_prediction(
 
         # ── ELO ───────────────────────────────────────────────────────────────
         # Computed once from the freshest available DB; result reused for SOS.
+        # SOS itself is always computed (for display) even though sos_diff is
+        # excluded from the trained models -- it's cheap and reuses elo_ratings.
         _elo_conn = conn_v2 if conn_v2 else conn
         _elo_r_id = r_fid_v2 if r_fid_v2 else r_id
         _elo_b_id = b_fid_v2 if b_fid_v2 else b_id
@@ -1175,7 +1176,7 @@ def compute_prediction(
         elo_ratings = compute_current_elo(_elo_conn)
         elo_r = elo_ratings.get(_elo_r_id, STARTING_ELO)
         elo_b = elo_ratings.get(_elo_b_id, STARTING_ELO)
-        div_elo = elo_ratings if _need_sos else {}
+        div_elo = elo_ratings
 
         # ── Glicko-2 ──────────────────────────────────────────────────────────
         glicko_r_tuple = glicko_b_tuple = _def_glicko_t
@@ -1202,8 +1203,8 @@ def compute_prediction(
         finish_b = compute_finish_rates_single(_b_conn, _b_fid)
         inact_r  = compute_inactivity_single(_r_conn, _r_fid)
         inact_b  = compute_inactivity_single(_b_conn, _b_fid)
-        sos_r    = compute_sos_single(_r_conn, _r_fid, div_elo) if _need_sos else {"sos": float(STARTING_ELO)}
-        sos_b    = compute_sos_single(_b_conn, _b_fid, div_elo) if _need_sos else {"sos": float(STARTING_ELO)}
+        sos_r    = compute_sos_single(_r_conn, _r_fid, div_elo)
+        sos_b    = compute_sos_single(_b_conn, _b_fid, div_elo)
         kovuln_r = compute_ko_vulnerability_single(_r_conn, _r_fid)
         kovuln_b = compute_ko_vulnerability_single(_b_conn, _b_fid)
         ewma_r   = compute_ewma_stats_single(_r_conn, _r_fid)
@@ -1393,7 +1394,7 @@ def compute_prediction(
         "win_streak": float(form_r.get("win_streak", 0.0)),
         "ko_rate":    _fv(red_stats,  extra_r, "win_by_ko") / max(
             _fv(red_stats, extra_r, "wins") + _fv(red_stats, extra_r, "losses"), 1),
-        "sos":        _fv(red_stats,  red_stats,  "sos", float(STARTING_ELO)),
+        "sos":        _fv(red_stats,  extra_r,    "sos", float(STARTING_ELO)),
     }
     stats_blue = {
         "str_acc":    _pct(blue_stats, extra_b, "avg_sig_str_pct"),
@@ -1407,7 +1408,7 @@ def compute_prediction(
         "win_streak": float(form_b.get("win_streak", 0.0)),
         "ko_rate":    _fv(blue_stats, extra_b, "win_by_ko") / max(
             _fv(blue_stats, extra_b, "wins") + _fv(blue_stats, extra_b, "losses"), 1),
-        "sos":        _fv(blue_stats, blue_stats, "sos", float(STARTING_ELO)),
+        "sos":        _fv(blue_stats, extra_b,    "sos", float(STARTING_ELO)),
     }
 
     return {
