@@ -25,7 +25,7 @@ try:
         STARTING_ELO, K_FACTOR_NORMAL, K_FACTOR_PROVISIONAL, PROVISIONAL_LIMIT,
         GLICKO_START_R, GLICKO_START_RD, GLICKO_START_SIGMA, GLICKO_TAU,
     )
-    from logger import get_logger
+    from utils.logger import get_logger
 except ImportError:
     DB_PATH              = Path(__file__).parent.parent / "db" / "ufc_v2.db"
     STARTING_ELO         = 1400
@@ -203,7 +203,7 @@ def build_elo_features(conn: sqlite3.Connection | None = None) -> pd.DataFrame:
     if own_conn:
         conn.close()
 
-    log.info("Calculating global ELO ratings for %d fights…", len(df))
+    log.info("Calculating global ELO ratings for %d fights...", len(df))
     _, _, red_elo_pre, blue_elo_pre = _replay_fights(df)
 
     df["elo_red"]  = red_elo_pre
@@ -233,7 +233,7 @@ def get_current_ratings(conn: sqlite3.Connection | None = None) -> dict[str, flo
     if own_conn:
         conn.close()
 
-    log.info("Computing global ELO ratings for %d fights…", len(df))
+    log.info("Computing global ELO ratings for %d fights...", len(df))
     fighter_ratings, _, _, _ = _replay_fights(df)
     log.info("Global ratings computed for %d fighters.", len(fighter_ratings))
     return fighter_ratings
@@ -263,7 +263,7 @@ def get_current_ratings_by_division(
     if own_conn:
         conn.close()
 
-    log.info("Computing per-division ELO ratings for %d fights…", len(df))
+    log.info("Computing per-division ELO ratings for %d fights...", len(df))
     div_ratings, _, _, _ = _replay_fights_by_division(df)
     log.info("Per-division ratings computed for %d (fighter, division) pairs.", len(div_ratings))
     return div_ratings
@@ -580,7 +580,7 @@ def build_glicko_features(conn: sqlite3.Connection | None = None) -> pd.DataFram
     if own_conn:
         conn.close()
 
-    log.info("Calculating Glicko-2 ratings for %d fights…", len(df))
+    log.info("Calculating Glicko-2 ratings for %d fights...", len(df))
     _, red_r, blue_r, red_rd, blue_rd = _replay_fights_glicko_by_division(df)
 
     df["glicko_red"]    = red_r
@@ -616,7 +616,7 @@ def get_current_glicko_by_division(
     if own_conn:
         conn.close()
 
-    log.info("Computing current Glicko-2 ratings for %d fights…", len(df))
+    log.info("Computing current Glicko-2 ratings for %d fights...", len(df))
     current_ratings, _, _, _, _ = _replay_fights_glicko_by_division(df)
     log.info("Glicko-2 ratings computed for %d (fighter, division) pairs.", len(current_ratings))
     return current_ratings
