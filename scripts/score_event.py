@@ -26,9 +26,10 @@ from utils.logger import get_logger
 
 log = get_logger("score_event")
 
-PREDICTIONS_DIR = ROOT / "predictions"
-SCORED_MARKER   = "Actual Result"
-LOOKBACK_DAYS   = 10
+PREDICTIONS_DIR   = ROOT / "predictions"
+SCORED_MARKER     = "Actual Result"
+LOOKBACK_DAYS     = 10
+MIN_CONFIDENCE    = 0.55  # default threshold for the high-confidence breakout + P/L gating
 
 
 # -- UFCStats result scraping -------------------------------------------------
@@ -181,6 +182,7 @@ def score_markdown(
     predictions: list[dict],
     results: list[dict],
     odds_map: dict[str, tuple[int | None, int | None]],
+    min_confidence: float = MIN_CONFIDENCE,
 ) -> str:
     """
     Update *md_path* with actual results and P/L.
@@ -232,7 +234,9 @@ def score_markdown(
             "fight_key":   fight_key,
             "pred_winner": pred_winner,
             "conf":        f"{conf:.1%}",
+            "conf_val":    conf,
             "is_fifty":    is_fifty,
+            "is_high_conf": conf >= min_confidence,
             "result_str":  result_str,
             "correct":     correct,
             "actual":      actual,
@@ -297,9 +301,17 @@ def score_markdown(
         s = "s" if n_excluded > 1 else ""
         result_line += f" *({n_excluded} fight{s} excluded: 50/50 pick{s})*"
 
+    # High-confidence breakout (supplementary -- does not affect the overall accuracy line above)
+    n_correct_hc = sum(1 for s in fight_rows if s["correct"] == "YES" and s["is_high_conf"])
+    n_scored_hc  = sum(1 for s in fight_rows if s["correct"] in ("YES", "NO") and s["is_high_conf"])
+    hc_line = ""
+    if n_scored_hc:
+        hc_acc_str = f"{n_correct_hc}/{n_scored_hc} ({n_correct_hc/n_scored_hc:.1%})"
+        hc_line = f"*High-confidence (>={min_confidence:.0%}) picks: {hc_acc_str}*\n"
+
     md = re.sub(
         r"(Fighters making their UFC debut were excluded.*?\n)",
-        rf"\1\n{result_line}\n",
+        rf"\1\n{result_line}\n{hc_line}",
         md,
         count=1,
     )
@@ -310,7 +322,7 @@ def score_markdown(
     staked = 0.0
 
     for s in fight_rows:
-        if s["is_fifty"] or s["actual"] is None or s["correct"] == "?":
+        if s["is_fifty"] or s["actual"] is None or s["correct"] == "?" or not s["is_high_conf"]:
             continue
         staked += 1.0
 
@@ -342,13 +354,15 @@ def score_markdown(
         + (f" ({n_excluded} excluded: 50/50 pick{'s' if n_excluded > 1 else ''})" if n_excluded else ""),
         f"- Correct: {acc_str}",
     ]
+    if n_scored_hc:
+        summary.append(f"- High-confidence (>={min_confidence:.0%}) picks: {n_correct_hc}/{n_scored_hc} ({n_correct_hc/n_scored_hc:.1%})")
 
     if pl_rows:
         roi     = net_pl / staked * 100 if staked else 0.0
         net_str = f"+EUR {net_pl:.2f}" if net_pl >= 0 else f"-EUR {abs(net_pl):.2f}"
         summary += [
             "",
-            "### P/L (EUR 1 flat on each predicted winner)",
+            f"### P/L (EUR 1 flat on picks >={min_confidence:.0%} confidence)",
             "",
             "| Fight | Model Pick | Odds (dec) | Result | P/L |",
             "|---|---|---|---|---|",
@@ -403,6 +417,10 @@ def find_unscored_prediction() -> Path | None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Score the most recent event prediction.")
     parser.add_argument("--json", default=None, help="Prediction JSON path (default: auto-detect)")
+    parser.add_argument(
+        "--min-confidence", type=float, default=MIN_CONFIDENCE,
+        help=f"Confidence threshold (0-1) for the high-confidence breakout and P/L gating (default: {MIN_CONFIDENCE})",
+    )
     args = parser.parse_args()
 
     json_path = Path(args.json) if args.json else find_unscored_prediction()
@@ -438,7 +456,7 @@ def main() -> None:
     odds_map = scrape_bfo_odds(meta["event"], fighter_pairs)
 
     md_path = json_path.with_suffix(".md")
-    acc_str = score_markdown(md_path, predictions, results, odds_map)
+    acc_str = score_markdown(md_path, predictions, results, odds_map, min_confidence=args.min_confidence)
 
     print(f"\nScored:    {md_path}")
     print(f"Accuracy:  {acc_str}")
