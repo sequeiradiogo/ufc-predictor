@@ -34,9 +34,9 @@ jobs:
       - name: Score event predictions
         run: |
           if [ -n "${{ inputs.json_path }}" ]; then
-            python scripts/score_event.py --json "${{ inputs.json_path }}"
+            python scripts/score_event.py --json "${{ inputs.json_path }}" --min-confidence 0.55
           else
-            python scripts/score_event.py
+            python scripts/score_event.py --min-confidence 0.55
           fi
 
       - name: Commit scored predictions
