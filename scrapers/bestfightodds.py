@@ -13,6 +13,7 @@ import difflib
 import re
 import sys
 import time
+from datetime import date, datetime
 from pathlib import Path
 
 import requests
@@ -61,26 +62,79 @@ def _best_match(target: str, candidates: list[str], cutoff: float = 0.80) -> str
     return candidates[keys.index(matches[0])]
 
 
+_ORDINAL_RE = re.compile(r"(\d+)(st|nd|rd|th)\b", re.IGNORECASE)
+
+
+def _parse_bfo_date(text: str, ref_year: int | None = None) -> date | None:
+    """
+    Parse a BFO date string into a date.
+
+    Homepage dates omit the year (e.g. 'July 25th'); archive dates include it
+    (e.g. 'Jul 18th 2026'). When the year is missing, *ref_year* is used
+    (defaults to the current year).
+    """
+    if not text:
+        return None
+    cleaned = _ORDINAL_RE.sub(r"\1", text).strip()
+    for fmt in ("%b %d %Y", "%B %d %Y", "%b %d", "%B %d"):
+        try:
+            parsed = datetime.strptime(cleaned, fmt)
+        except ValueError:
+            continue
+        year = parsed.year if "%Y" in fmt else (ref_year or date.today().year)
+        return date(year, parsed.month, parsed.day)
+    return None
+
+
 # ── BFO event list ────────────────────────────────────────────────────────────
 
+def _parse_bfo_event_divs(soup: BeautifulSoup) -> list[dict]:
+    """Parse the `div.table-div` event blocks shared by the homepage and event pages."""
+    events = []
+    for div in soup.select("div.table-div"):
+        header = div.select_one("div.table-header")
+        if header is None:
+            continue
+        a = header.select_one("a[href*='/events/']")
+        if a is None:
+            continue
+        href = a["href"].strip()
+        url  = BASE + href if href.startswith("/") else href
+        name_tag = a.select_one("h1")
+        name = name_tag.get_text(strip=True) if name_tag else a.get_text(strip=True)
+        name = re.sub(r"\s+Odds$", "", name).strip()
+        date_span = header.select_one("span.table-header-date")
+        date_text = date_span.get_text(strip=True) if date_span else ""
+        events.append({"name": name, "url": url, "date_text": date_text})
+    return events
+
+
 def _fetch_bfo_events() -> list[dict]:
-    """Return list of {name, url, date_text} from the BFO homepage."""
+    """Return list of {name, url, date_text} for upcoming events from the BFO homepage."""
     soup = _get(f"{BASE}/")
     if soup is None:
         return []
+    return _parse_bfo_event_divs(soup)
+
+
+def _fetch_bfo_archive_events() -> list[dict]:
+    """Return list of {name, url, date_text} for recently completed events from the BFO archive."""
+    soup = _get(f"{BASE}/archive")
+    if soup is None:
+        return []
     events = []
-    for a in soup.select("table.event-table a[href*='/events/']"):
-        href = a["href"].strip()
-        if not href.startswith("/events/"):
+    for row in soup.select("table.content-list tr"):
+        a = row.select_one("td.content-list-title a")
+        if a is None:
             continue
-        name = a.get_text(strip=True)
+        href = a["href"].strip()
         url  = BASE + href if href.startswith("/") else href
-        # Date is often a nearby sibling <td>
-        td   = a.find_parent("td")
-        row  = td.find_parent("tr") if td else None
-        date_td = row.find("td", class_=re.compile(r"date")) if row else None
-        date_text = date_td.get_text(strip=True) if date_td else ""
-        events.append({"name": name, "url": url, "date_text": date_text})
+        date_td = row.select_one("td.content-list-date")
+        events.append({
+            "name":      a.get_text(strip=True),
+            "url":       url,
+            "date_text": date_td.get_text(strip=True) if date_td else "",
+        })
     return events
 
 
@@ -90,36 +144,53 @@ def _scrape_event_odds(event_url: str) -> list[dict]:
     """
     Scrape one BFO event page.
 
-    Returns list of {r_name, b_name, odds_red, odds_blue} dicts.
-    Uses the closing moneyline (last column) if available, else opening.
+    Returns list of {r_name, b_name, odds_red, odds_blue} dicts. For each
+    fighter, uses the 'bestbet' (best available) moneyline across sportsbooks.
     """
     soup = _get(event_url)
     if soup is None:
         return []
-    matchups = []
-    for row in soup.select("tr.table-header + tr, tr.odd, tr.even"):
-        fighter_cells = row.select("td.fighter-name a")
-        if len(fighter_cells) < 2:
+
+    matchups: list[dict] = []
+    for scroller in soup.select("div.table-scroller"):
+        table = scroller.select_one("table.odds-table")
+        if table is None:
             continue
-        r_name = fighter_cells[0].get_text(strip=True)
-        b_name = fighter_cells[1].get_text(strip=True)
 
-        # Odds cells — grab all odds values, take the last pair (closing line)
-        odds_cells = row.select("td.moneyline span.best-odds-td, td.moneyline")
-        raw_vals = [c.get_text(strip=True) for c in odds_cells if c.get_text(strip=True)]
-        if len(raw_vals) >= 2:
-            odds_red  = _parse_american_odds(raw_vals[0])
-            odds_blue = _parse_american_odds(raw_vals[1])
-        else:
+        # (name, [odds per sportsbook column, in table order]) per fighter row.
+        # "Best" odds per side come from whichever book happens to be most
+        # favorable for that side -- taking that independently per fighter
+        # mixes books (e.g. a mainstream sportsbook for the favorite and a
+        # thin prediction-market exchange for the underdog) and produces
+        # incoherent pairs. Use the same book -- the first one both fighters
+        # have a price at -- for both sides instead.
+        fighter_rows: list[tuple[str, list[int | None]]] = []
+        for row in table.select("tbody tr"):
+            name_span = row.select_one("th span.t-b-fcc")
+            if name_span is None:
+                continue  # prop-bet row, not a fighter row
+            name = name_span.get_text(strip=True)
+            book_odds = [
+                _parse_american_odds(span.get_text(strip=True))
+                for span in row.select("td.but-sg span[id]")
+            ]
+            fighter_rows.append((name, book_odds))
+
+        for i in range(0, len(fighter_rows) - 1, 2):
+            r_name, r_odds = fighter_rows[i]
+            b_name, b_odds = fighter_rows[i + 1]
             odds_red = odds_blue = None
-
-        if r_name or b_name:
-            matchups.append({
-                "r_name":    r_name,
-                "b_name":    b_name,
-                "odds_red":  odds_red,
-                "odds_blue": odds_blue,
-            })
+            for r_val, b_val in zip(r_odds, b_odds):
+                if r_val is not None and b_val is not None:
+                    odds_red, odds_blue = r_val, b_val
+                    break
+            if r_name or b_name:
+                matchups.append({
+                    "r_name":    r_name,
+                    "b_name":    b_name,
+                    "odds_red":  odds_red,
+                    "odds_blue": odds_blue,
+                })
     return matchups
 
 
@@ -147,9 +218,16 @@ def scrape_odds(fights: list[dict]) -> dict[str, tuple[int | None, int | None]]:
         bfo_events = _fetch_bfo_events()
     except Exception as exc:
         log.warning("Could not fetch BFO event list: %s", exc)
-        return result
+        bfo_events = []
 
-    if not bfo_events:
+    try:
+        archive_events = _fetch_bfo_archive_events()
+    except Exception as exc:
+        log.warning("Could not fetch BFO archive events: %s", exc)
+        archive_events = []
+
+    all_events = bfo_events + archive_events
+    if not all_events:
         log.warning("BFO event list was empty — skipping odds scrape")
         return result
 
@@ -162,21 +240,22 @@ def scrape_odds(fights: list[dict]) -> dict[str, tuple[int | None, int | None]]:
                 name_to_fight[_name_key(f[key])] = f["fight_id"]
 
     # Group fights by event date so we only scrape relevant BFO event pages
-    dates_needed: set[str] = {f.get("date", "")[:10] for f in fights}
-    bfo_event_names = [e["name"] for e in bfo_events]
+    dates_needed: set[str] = {f.get("date", "")[:10] for f in fights if f.get("date")}
 
-    for event_date in dates_needed:
-        # Try to find the BFO event matching this date
-        # BFO event names contain "UFC NNN" or "UFC Fight Night" style strings
-        # Match any BFO event whose date_text contains the same date fragment
-        matching = [
-            e for e in bfo_events
-            if event_date.replace("-", "/") in e["date_text"]
-            or event_date.replace("-", " ") in e["date_text"]
-        ]
+    for event_date_str in dates_needed:
+        try:
+            target_date = date.fromisoformat(event_date_str)
+        except ValueError:
+            continue
+
+        # Match BFO events whose parsed date is within a day of the fight date
+        # (BFO sometimes lists events under the local venue date).
+        matching = []
+        for e in all_events:
+            parsed = _parse_bfo_date(e["date_text"], ref_year=target_date.year)
+            if parsed and abs((parsed - target_date).days) <= 1:
+                matching.append(e)
         if not matching:
-            # Fallback: match by UFC event name pattern
-            ufc_fights = [f for f in fights if f.get("date", "")[:10] == event_date]
             continue
 
         for bfo_event in matching:
