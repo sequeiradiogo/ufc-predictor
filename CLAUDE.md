@@ -27,10 +27,12 @@ python ml/lightgbm_model.py
 python ml/soft_vote_ensemble.py
 
 # Train v1 models (mdabbert career-aggregate DB) -- PRIMARY PREDICTION MODELS
-python ml/train_v1_models.py                          # all models + ensemble
-python ml/train_v1_models.py --model xgb              # single model
+python ml/train_v1_models.py                          # all models (xgb/lr/rf/lgbm/mlp/ensemble) -- eval tier, models_v1/
+python ml/train_v1_models.py --model xgb              # single model (choices: xgb, lr, rf, lgbm, mlp, ensemble, stacking)
 python ml/train_v1_models.py --tune --trials 100      # with Optuna tuning (base models)
 python ml/train_v1_models.py --model ensemble         # ensemble weights only (fast)
+python ml/train_v1_models.py --model stacking         # stacking meta-model (not included in the default "all" run)
+python ml/train_v1_models.py --prod                   # train production tier on 100% of data -- models_v1_prod/
 
 # Rebuild v1 feature CSV
 python ml/ML_data_preparation_v1.py
@@ -63,6 +65,15 @@ python scripts/backfill_rounds.py --limit 50        # test first 50 fights
 # Sync v1 career-average DB from UFCStats DB after each event (replaces manual CSV update)
 python scripts/sync_v1_from_v2.py
 python scripts/sync_v1_from_v2.py --dry-run   # preview without writing
+
+# Incremental data refresh (scrape + enrich + ingest + rebuild CSV in one step; used by monthly-refresh.yml)
+python scripts/refresh_data.py --auto
+python scripts/refresh_data.py --auto --dry-run       # preview scrape, no writes
+
+# Score a completed event's predictions against actual results + odds (used by monday-results.yml)
+python scripts/score_event.py                          # auto-detect most recent unscored prediction
+python scripts/score_event.py --json path/to/f.json
+python scripts/score_event.py --min-confidence 0.55    # threshold for high-confidence breakout + P/L gating
 
 # Predict a fight (uses v1 DB + models by default)
 python predict.py "Islam Makhachev" "Charles Oliveira"
@@ -123,6 +134,20 @@ The v2 pipeline has 10 numbered steps (defined in `run_pipeline.py`):
 | 5-9 | Training | Feature CSV -> five saved `.joblib` model groups |
 | 10 | Ensemble | Optuna-tuned soft-vote weights saved to `ensemble.joblib` |
 
+### Automation (GitHub Actions)
+
+Three scheduled workflows in `.github/workflows/` automate the weekly/monthly cycle:
+
+| Workflow | Schedule | What it does |
+|----------|----------|---------------|
+| `weekly-predictions.yml` | Fridays 12:00 UTC | Downloads DB artifacts, runs `scripts/predict_event.py --model ensemble --skip-existing`, commits new `predictions/*.md` |
+| `monday-results.yml` | Mondays 12:00 UTC | Runs `scripts/score_event.py --min-confidence 0.55` to score the weekend's event against actual results + BFO odds, commits the updated markdown |
+| `monthly-refresh.yml` | 1st of month, 06:00 UTC | Full refresh: `scripts/refresh_data.py --auto` -> three CSV enrichment scripts -> `db/ingest_mdabbert.py` -> `ml/ML_data_preparation_v1.py` -> `ml/train_v1_models.py`, commits `raw_data/ufc-master.csv` + retrained `models_v1/`/`models_v1_prod/` artifacts, then re-uploads the DBs to the release below |
+
+All three also support `workflow_dispatch` for manual runs. **Scheduled GitHub Actions runs can be delayed by minutes to hours** (a shared-runner queueing behavior, not a repo bug) -- if a manual run and a delayed scheduled run overlap, whichever pushes second will fail with a non-fast-forward git error even though the underlying job succeeded; check the job output, not just the workflow conclusion, before assuming something didn't run.
+
+**DB distribution**: `db/ufc_ufcstats.db` and `db/ufc_v2.db` are gitignored (too large to track) but CI needs them every run. They're stored in the `data-artifacts-latest` GitHub Release and downloaded at the start of each workflow (`gh release download data-artifacts-latest --dir db/ --pattern "*.db"`), then re-uploaded by `monthly-refresh.yml` after retraining (`gh release upload data-artifacts-latest ... --clobber`). Locally, keep your `db/` in sync by downloading the same release if you don't already have current copies.
+
 ### Databases
 
 | DB | Path | Schema | Status |
@@ -132,7 +157,7 @@ The v2 pipeline has 10 numbered steps (defined in `run_pipeline.py`):
 
 `DB_PATH` in `config.py` points to `DB_UFCSTATS_PATH` (UFCStats). `DB_V1_PATH` points to `ufc_v2.db` (mdabbert).
 
-**Important**: The mdabbert DB (`ufc_v2.db`) does not auto-update from the scraper. After each event: (1) run `scripts/scrape_history.py` to update UFCStats DB, (2) run the three CSV enrichment scripts, (3) run `db/ingest_mdabbert.py`, (4) run `ml/ML_data_preparation_v1.py`.
+**Important**: The mdabbert DB (`ufc_v2.db`) does not auto-update from the scraper on every event -- `monthly-refresh.yml` runs the full chain once a month, but there's no per-event trigger. To update sooner: (1) run `scripts/scrape_history.py` to update UFCStats DB, (2) run the three CSV enrichment scripts, (3) run `db/ingest_mdabbert.py`, (4) run `ml/ML_data_preparation_v1.py`. `scripts/refresh_data.py --auto` automates steps 1-2 (scrape + rankings) but the CSV enrichment / ingest / feature-rebuild steps still need to be run separately, same as `monthly-refresh.yml` does.
 
 #### UFCStats DB schema (`db/ufc_ufcstats.db`)
 
@@ -230,7 +255,7 @@ Pre-computed features (stored in CSV/DB, diffed at build time):
 
 ### v1 Models
 
-All v1 models are saved to `models_v1/` as `.joblib` files and tracked in git. These are the **active prediction models**.
+All v1 models are saved to `models_v1/` as `.joblib` files and tracked in git. These are the **active prediction models**, used for backtesting and hyperparameter tuning.
 
 | Model | Artifacts | 2025+ Acc | Notes |
 |-------|-----------|-----------|-------|
@@ -238,13 +263,17 @@ All v1 models are saved to `models_v1/` as `.joblib` files and tracked in git. T
 | Logistic Regression | `logistic_regression.joblib`, `lr_scaler.joblib`, `lr_features.joblib` | 65.3% | Platt-calibrated |
 | Random Forest | `random_forest.joblib`, `rf_features.joblib` | 67.0% | Default params in `config.RF_PARAMS` |
 | LightGBM | `lightgbm.joblib`, `lgbm_features.joblib` | 67.0% | Default params in `config.LGBM_PARAMS` |
-| Ensemble | `ensemble.joblib` | **69.2%** | Calibrated soft-vote; XGB+MLP-weighted (~40% XGB, ~44% MLP) |
+| MLP | `mlp.joblib`, `mlp_scaler.joblib`, `mlp_features.joblib` | -- | PyTorch MLP (`ml/pytorch_mlp.py`); heavily weighted in the ensemble (~44%) despite not having its own published backtest row |
+| Stacking | `stacking.joblib` | -- | Meta-model over base model predictions; trained separately via `--model stacking`, not part of the default "train all" run. Selectable in `predict.py`/`api.py` (`--model stacking`) but not in `predict_event.py`, which only supports `xgb`/`lr`/`rf`/`lgbm`/`ensemble` |
+| Ensemble | `ensemble.joblib` | **69.2%** | Calibrated soft-vote; XGB+MLP-weighted (~40% XGB, ~44% MLP) -- **this is the model actually used for predictions** |
 
-Honest out-of-sample backtest (2025-2026, 678 fights): **69.2%** accuracy (ensemble). Naive Red baseline ~55%.
+Honest out-of-sample backtest (2025-2026, 678 fights): **69.2%** accuracy (ensemble) as of the 2026-06-16 retrain; a later retrain on 2026-06-30 (7,323 fights) measured 69.6%. Monthly automated retrains (`monthly-refresh.yml`) may have moved this further -- check `git log --oneline | grep retrain` for the actual latest figure rather than trusting a pinned number here. Naive Red baseline ~55%.
 
 Note: `--from-year 2022` backtest numbers (82-90%) are inflated because 2022-2024 fights fall inside the training window with the 80/20 split. Always use `--from-year 2025` for honest evaluation.
 
-**Ensemble weight stability**: After the 2026-06-16 retrain (91 features), XGB and MLP dominate ensemble weight (~40%/44%); LR dropped to ~15%. Params in `config.py` are the default values for this 91-feature set. Using `--tune` re-tunes base model hyperparameters via Optuna -- this has consistently hurt 2025+ accuracy (overfits to CV folds). Tested on the 86-feature set: tuning gave 68.6% vs 69.0% untuned. Use default params.
+**Ensemble weight stability**: As of the 2026-06-16 retrain (91 features), XGB and MLP dominate ensemble weight (~40%/44%); LR dropped to ~15%. Params in `config.py` are the default values for this 91-feature set. Using `--tune` re-tunes base model hyperparameters via Optuna -- this has consistently hurt 2025+ accuracy (overfits to CV folds). Tested on the 86-feature set: tuning gave 68.6% vs 69.0% untuned. Use default params.
+
+**Production tier (`models_v1_prod/`)**: A second, parallel set of the same model artifacts (including `finish_type.joblib`), trained on **100% of the data** (no train/test split) via `train_v1_models.py --prod`. This is what `predict.py` and `predict_event.py` actually load for live predictions -- the `models_v1/` eval tier exists solely for honest backtesting/tuning, since a model trained on all data can't be honestly evaluated on a held-out set. The prod ensemble borrows its per-model weights from the eval ensemble (to avoid in-sample leakage) and its calibrators are fit on eval-model predictions on the last 20% of data. `predict.py`/`predict_event.py` auto-select `models_v1_prod/` when it exists and is non-empty, falling back to `models_v1/` otherwise.
 
 ### v2 Models (reference)
 
@@ -271,15 +300,20 @@ Training uses `TimeSeriesSplit(5)` with chronological ordering. The train/test s
 
 ### Prediction (`predict.py` and `api.py`)
 
-`predict.py` is the CLI; `api.py` is the FastAPI wrapper around the same logic. Both default to the v1 DB (`DB_V1_PATH`) and v1 models (`MODELS_V1_DIR`).
+`predict.py` is the CLI; `api.py` is the FastAPI wrapper around the same logic. Both default to v1 (`DB_V1_PATH` for name resolution) and auto-select `MODELS_V1_PROD_DIR` over `MODELS_V1_DIR` when the prod tier exists (see "Production tier" above).
+
+Career stats are **not** read from a stale mdabbert snapshot row -- they're recomputed live from the UFCStats DB at prediction time, closing the "one-fight-behind" staleness gap the mdabbert DB otherwise has for a fighter's most recent bout:
 
 1. Resolve fighter names (fuzzy LIKE search against `fighters` table)
-2. Pull latest career-aggregate stats from `fight_stats` (most recent fight row -- includes pre-computed ELO, Glicko, form, SOS, slopes, etc.)
-3. Compute current ELO by replaying fight history (`get_current_ratings_by_division`)
+2. Recompute career-aggregate stats live from the UFCStats DB (`total_rounds_fought`, `longest_win_streak`, `win_by_dec_split`/`win_by_dec_unanimous` as exclusive buckets matching training, etc.)
+3. Compute current ELO and Glicko-2 by replaying fight history from the UFCStats DB (`get_current_ratings_by_division`, `get_current_glicko_by_division`) -- both rating systems live in the UFCStats DB now, independent of the training-time computation frozen in `ufc-master.csv`
 4. Compute recent form
-5. Fetch `sapm`/`str_def`/`td_def` from the UFCStats DB (`_get_v2_defensive_stats`) -- these are pre-stored in the DB for historical fights but still looked up live at prediction time
-6. Build the feature vector via `build_feature_vector()` -- must match the feature names the model was trained on
-7. Optionally compute value bets via `odds.py` if American moneyline odds are supplied
+5. Fetch `sapm`/`str_def`/`td_def` from the UFCStats DB (`_get_v2_defensive_stats`) -- live lookup, same as training-time enrichment
+6. Read `weightclass_rank` live from `rankings_history.csv` instead of a stale mdabbert value
+7. Build the feature vector via `build_feature_vector()` -- must match the feature names the model was trained on
+8. Optionally compute value bets via `odds.py` if American moneyline odds are supplied
+
+No Contest fights (`winner_id IS NULL`) are excluded from win/loss/streak calculations but still count toward stat averages.
 
 Note: shrinkage is applied during v2 training but NOT at inference time. v1 uses career averages which are not shrunk.
 
@@ -292,13 +326,24 @@ Scrapes the next upcoming UFC event from UFCStats (requires Playwright), runs v1
 - Output format: single-model table (no v2 comparison column)
 - Predictions are stored in `predictions/<slug>.md` and tracked in git
 
+### Scoring & odds (`scripts/score_event.py`, `scrapers/bestfightodds.py`)
+
+Run by `monday-results.yml` after a weekend event to grade the prior week's predictions against actual UFCStats results and bestfightodds.com (BFO) closing odds, then updates the prediction markdown in place (adds an Odds column, an Actual Result / Correct? column, and a Post-Event Summary + P/L section).
+
+- `MIN_CONFIDENCE` (default `0.55`, override with `--min-confidence`) gates which fights count toward the "high-confidence" accuracy breakout and the P/L simulation (EUR 1 flat per pick); fights below the threshold still get a result recorded but aren't staked.
+- **BFO event matching is date-based, not title-based**: BFO names events by location (e.g. `"UFC Oklahoma"`) while this repo names them by main-card fighters (e.g. `"UFC Fight Night: Du Plessis vs. Usman"`), so fuzzy-matching titles doesn't work. `scrape_bfo_odds()` matches BFO events to the prediction's `event_date` (+/-1 day) instead, searching both `_fetch_bfo_events()` (BFO homepage -- upcoming events only) and `_fetch_bfo_archive_events()` (BFO `/archive` -- completed events, what `score_event.py` actually needs since it always runs after the event). When a date has multiple candidate events (other orgs fight the same weekend), it disambiguates by scraping each candidate and keeping the one whose card actually contains the predicted fighters, not by fuzzy-matching event names.
+- **Per-fighter odds come from a single consistent sportsbook column**, not independently "best price" per side -- BFO's per-book columns include prediction-market exchanges (Polymarket, Kalshi) alongside traditional sportsbooks, and picking each side's individually-best price mixes books, producing incoherent pairs (e.g. -194 / +1460 instead of a normal-vig -194 / +186).
+- Fighter-name lookups fall back to fuzzy matching (`_fuzzy_odds_lookup`, floor 0.75/side) when the exact `_name_key` match fails -- BFO and UFCStats disagree on hyphenation (`Saint-Denis` vs `Saint Denis`), suffixes (`Kai Kamaka III`), and nicknames (`Zach` vs `Zachary`).
+- BFO's HTML has changed at least once without notice (a `table.event-table` selector silently returned zero rows for months); if odds start coming back empty again, re-inspect the live page structure before assuming the matching logic is at fault.
+
 ### Central config (`config.py`)
 
 Single source of truth for all paths, constants, and hyperparameters. Always import from here -- never hardcode paths. Key constants:
 
 - `DB_PATH` / `DB_UFCSTATS_PATH` -- UFCStats rolling DB (raw per-fight data)
 - `DB_V1_PATH` -- mdabbert career-aggregate DB (primary prediction source)
-- `MODELS_V1_DIR` -- v1 model artifacts directory
+- `MODELS_V1_DIR` -- v1 eval-tier model artifacts directory (backtesting/tuning)
+- `MODELS_V1_PROD_DIR` -- v1 production-tier model artifacts directory (trained on 100% of data; what `predict.py`/`predict_event.py` actually load)
 - `CSV_V1_WITH_ELO` -- v1 feature CSV (`ml/ufc_ml_data_v1.csv`)
 - `XGB_PARAMS`, `LR_PARAMS`, `RF_PARAMS`, `LGBM_PARAMS` -- hyperparameters (shared between v1 and v2 training; do not re-tune without a solid reason)
 - `MIN_FIGHT_DATE` -- training data cutoff (currently `"2018-01-01"`; see issue #47)
@@ -321,8 +366,8 @@ All Python source files must use ASCII-safe characters only. The Windows cp1252 
 Files that must never be committed:
 
 - `**/__pycache__/` and `*.pyc` -- Python bytecode
-- `db/ufc_ufcstats.db` -- UFCStats SQLite DB (regenerate with `scripts/scrape_history.py`)
-- `db/ufc_v2.db` -- mdabbert SQLite DB (regenerate from mdabbert CSV)
+- `db/ufc_ufcstats.db` -- UFCStats SQLite DB (regenerate with `scripts/scrape_history.py`, or download the `data-artifacts-latest` GitHub Release for a current copy)
+- `db/ufc_v2.db` -- mdabbert SQLite DB (regenerate from mdabbert CSV, or download the same release)
 - `db/*_backup_*.db` -- rolling.py backup files
 - `logs/` -- runtime logs
 - `ml/*.csv` -- intermediate ML datasets (except `ufc_ml_data_with_debuts_and_elo.csv` which is explicitly un-ignored)
@@ -332,7 +377,8 @@ Files that ARE tracked:
 
 - `raw_data/ufc-master.csv` -- source of truth for v1 pipeline; now 230 columns including all pre-computed features
 - `models/*.joblib` -- v2 trained model artifacts
-- `models_v1/*.joblib` -- v1 trained model artifacts; tracked so predictions work immediately after cloning
+- `models_v1/*.joblib` -- v1 eval-tier model artifacts; tracked so predictions work immediately after cloning
+- `models_v1_prod/*.joblib` -- v1 production-tier model artifacts (trained on 100% of data); what `predict.py`/`predict_event.py` actually load
 - `predictions/*.md` -- event prediction files
 
 If any excluded files were previously committed, untrack them with `git rm --cached <file>` (without deleting the local copy), then verify `.gitignore` covers them before staging the commit.
@@ -348,9 +394,11 @@ If any excluded files were previously committed, untrack them with `git rm --cac
 - **Ensemble weights**: Optuna uses 5 independent restarts (100 trials each) on the first half of the test set; the reported hold-out accuracy is on the second half. XGB and MLP dominate on the 91-feature set (~40%/44%); weights shift between retrains -- do not hardcode them. Do not force balanced weights -- that hurts accuracy.
 - **Do not use --tune for routine retraining**: `--tune` re-optimises base model hyperparameters via Optuna. This has consistently produced worse 2025+ accuracy than the default params in `config.py` (overfits to CV folds). Only use `--tune` if deliberately re-tuning after a major feature change, and always backtest before committing.
 - **Backtest year for v1**: Use `--from-year 2025` for honest evaluation. The 80/20 split puts 2022-2024 fights inside the training window; `--from-year 2022` numbers are inflated.
-- **v1 DB does not auto-update**: After each event, run the scraper, then the three CSV enrichment scripts, then `db/ingest_mdabbert.py`, then `ml/ML_data_preparation_v1.py`. Always backtest before committing retrained models.
+- **v1 DB does not auto-update per event**: `monthly-refresh.yml` runs the full chain once a month; there's no per-event trigger. To update sooner, run the scraper, then the three CSV enrichment scripts, then `db/ingest_mdabbert.py`, then `ml/ML_data_preparation_v1.py`. Always backtest before committing retrained models. After retraining, also run `train_v1_models.py --prod` to update `models_v1_prod/` -- `predict.py`/`predict_event.py` load the prod tier, not the eval tier, so an eval-only retrain doesn't change live predictions.
+- **BFO odds matching is date-based, not title-based**: bestfightodds.com names events by location (`"UFC Oklahoma"`), not by fighters like this repo does -- fuzzy-matching event titles silently fails every time. Match on event date (checking both the BFO homepage and `/archive`, since `score_event.py` always runs after the event has already dropped off the homepage) and disambiguate same-day collisions by checking which candidate's card actually contains the fighters, not by title similarity. See "Scoring & odds" above.
+- **Scheduled GitHub Actions runs can be delayed hours, not minutes**: if a manual `workflow_dispatch` run and a delayed `schedule` run overlap, the second one to `git push` fails with a non-fast-forward error even though its job otherwise succeeded. A red X on a scheduled run doesn't necessarily mean the automation is broken -- check the job log before assuming so.
 - **Sync script accuracy caveat**: `sync_v1_from_v2.py` produces correct per-minute `splm` from UFCStats rolling stats, while the Kaggle-sourced `ufc-master.csv` has a different `splm` scale for early-career fighters that happens to be more discriminative. After running sync, always backtest with `--from-year 2025` before committing. The current `ufc_v2.db` and `models_v1/` artifacts use the Kaggle-sourced pipeline (69.2% accuracy).
-- **Model performance ceiling**: v1 career-average models achieve 69.2% on the 2025+ backtest (678 fights) as of 2026-06-16 (91 features, default params). The naive "always pick Red" baseline is ~55% on recent data. Update `MODEL_RESULTS.md` after any significant retrain.
+- **Model performance ceiling**: v1 career-average models are in the high-60s%/low-70s% range on the 2025+ backtest (91 features, default params) -- see "v1 Models" above for the last-known figure and how to check the current one. The naive "always pick Red" baseline is ~55% on recent data. Update `MODEL_RESULTS.md` after any significant retrain (note: it hasn't been kept current through the most recent v1 retrains -- verify against actual backtest output rather than trusting the file).
 - **Shrinkage is v2 training-only**: `apply_shrinkage()` in `ML_data_preparation.py` modifies the training CSV. It is NOT applied in `predict.py` at inference time. v1 uses raw career averages with no shrinkage.
 - **Global ELO for training**: `build_elo_features()` uses a single universal ELO per fighter (not per division) to avoid cold-start when fighters change weight class. Prediction inference (`predict.py`) still calls `get_current_ratings_by_division()` for per-division ratings, which is a minor inconsistency to be aware of.
 - **CSV is the source of truth**: `raw_data/ufc-master.csv` is enriched with all features before ingestion. Never compute ELO, Glicko, SOS, slopes, style matchup, or division one-hots inside `ML_data_preparation_v1.py` -- those must come from the CSV/DB. `ML_data_preparation_v1.py` is a pure diff-builder.
