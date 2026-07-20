@@ -1,8 +1,11 @@
 # UFC Fight Night: Du Plessis vs. Usman -- July 18, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-07-17
+Model: Ensemble (Soft Vote) | Generated: 2026-07-17 | Scored: 2026-07-20
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
+
+**Result: 6/8 (75.0%)**
+*High-confidence (>=55%) picks: 6/6 (100.0%)*
 
 > Interactive fighter comparison: [ufc-fight-night-du-plessis-vs-usman-2026-07-18.html](./ufc-fight-night-du-plessis-vs-usman-2026-07-18.html)
 
@@ -10,18 +13,37 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 
 ## Predictions
 
-| Fight | Predicted Winner | Confidence | Likely Method |
-|---|---|---|---|
-| Dricus Du Plessis vs Kamaru Usman | Kamaru Usman | 50.9% | Decision (80%) / KO/TKO (16%) |
-| Jared Cannonier vs Christian Leroy Duncan | Christian Leroy Duncan | 77.2% | Decision (57%) / KO/TKO (35%) |
-| Chase Hooper vs Mitch Ramirez | Chase Hooper | 97.9% | Decision (39%) / Submission (34%) |
-| Tabatha Ricci vs Fatima Kline | Fatima Kline | 77.4% | Decision (79%) / Submission (11%) |
-| Tommy McMillen vs Alberto Montes | Tommy McMillen | 57.2% | Decision (45%) / KO/TKO (40%) |
-| Austin Bashi vs Jose Delgado | Jose Delgado | 63.7% | Submission (36%) / Decision (35%) |
-| Jean-Paul Lebosnoyani vs Seokhyeon Ko | Seokhyeon Ko | 50.1% | Submission (43%) / Decision (33%) |
-| Alden Coria vs Stewart Nicoll | Alden Coria | 79.1% | Decision (68%) / KO/TKO (25%) |
+| Fight | Predicted Winner | Confidence | Likely Method | Actual Result | Correct? |
+|---|---|---|---|---|---|
+| Dricus Du Plessis vs Kamaru Usman | Kamaru Usman | 50.9% | Decision (80%) / KO/TKO (16%) | Dricus Du Plessis (Dec) | NO |
+| Jared Cannonier vs Christian Leroy Duncan | Christian Leroy Duncan | 77.2% | Decision (57%) / KO/TKO (35%) | Christian Leroy Duncan (Dec) | YES |
+| Chase Hooper vs Mitch Ramirez | Chase Hooper | 97.9% | Decision (39%) / Submission (34%) | Chase Hooper (Sub R1) | YES |
+| Tabatha Ricci vs Fatima Kline | Fatima Kline | 77.4% | Decision (79%) / Submission (11%) | Fatima Kline (Dec) | YES |
+| Tommy McMillen vs Alberto Montes | Tommy McMillen | 57.2% | Decision (45%) / KO/TKO (40%) | Tommy McMillen (KO R3) | YES |
+| Austin Bashi vs Jose Delgado | Jose Delgado | 63.7% | Submission (36%) / Decision (35%) | Jose Delgado (Dec) | YES |
+| Jean-Paul Lebosnoyani vs Seokhyeon Ko | Seokhyeon Ko | 50.1% | Submission (43%) / Decision (33%) | Jean-Paul Lebosnoyani (Dec) | NO |
+| Alden Coria vs Stewart Nicoll | Alden Coria | 79.1% | Decision (68%) / KO/TKO (25%) | Alden Coria (Dec) | YES |
 
 ---
+
+## Post-Event Summary
+
+- Fights predicted: 8
+- Correct: 6/8 (75.0%)
+- High-confidence (>=55%) picks: 6/6 (100.0%)
+
+### P/L (EUR 1 flat on picks >=55% confidence)
+
+| Fight | Model Pick | Odds (dec) | Result | P/L |
+|---|---|---|---|---|
+| Jared Cannonier vs Christian Leroy Duncan | Christian Leroy Duncan | -- | Win | +EUR 0.00 |
+| Chase Hooper vs Mitch Ramirez | Chase Hooper | -- | Win | +EUR 0.00 |
+| Tabatha Ricci vs Fatima Kline | Fatima Kline | -- | Win | +EUR 0.00 |
+| Tommy McMillen vs Alberto Montes | Tommy McMillen | -- | Win | +EUR 0.00 |
+| Austin Bashi vs Jose Delgado | Jose Delgado | -- | Win | +EUR 0.00 |
+| Alden Coria vs Stewart Nicoll | Alden Coria | -- | Win | +EUR 0.00 |
+
+**Net P/L: +EUR 0.00 on EUR 6 staked (+0.0% ROI)**
 
 ## Raw Model Output
 
