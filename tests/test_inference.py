@@ -11,6 +11,9 @@ Tests for the live-inference pipeline introduced in the production-models PR:
   6. _get_current_rank reads from rankings_history.csv correctly
   7. End-to-end prediction runs without error and returns valid probability
   8. Known fighter (Topuria vs Gaethje) picks the correct winner
+  9. compute_ewma_stats_single: zone accuracy + output-rate extras (2026-07-24 fix)
+  10. compute_r1_ewma_stats: round-1 EWMA features, guarded on fight_stats_rounds
+  11. compute_opp_adjusted_stats: opponent-quality-normalized output stats
 """
 
 import sqlite3
@@ -218,7 +221,7 @@ def nc_db():
             fight_id TEXT PRIMARY KEY, event_id TEXT, date TEXT,
             division TEXT, r_fighter_id TEXT, b_fighter_id TEXT,
             winner_id TEXT, method TEXT, title_fight INTEGER,
-            finish_round INTEGER
+            finish_round INTEGER, match_time_sec REAL
         );
         CREATE TABLE fight_stats (
             fight_id TEXT, fighter_id TEXT, corner TEXT,
@@ -233,18 +236,22 @@ def nc_db():
         INSERT INTO fighters VALUES ('ccc','Opponent Two',177,182,'Southpaw','1992-01-01');
         INSERT INTO fighters VALUES ('ddd','Opponent Three',178,181,'Orthodox','1993-01-01');
 
+        -- match_time_sec/finish_round give own-fight durations of 300s, 900s, 900s
+        -- (matching this fixture's pre-a33e19e total_fight_time values). fight_stats
+        -- .total_fight_time is now the CUMULATIVE seconds fought BEFORE each fight:
+        -- f1=0 (debut), f2=300 (after f1), f3=1200 (after f1+f2, NC still counts).
         INSERT INTO fights VALUES
-            ('f1','e1','2023-01-01','lightweight','aaa','bbb','aaa','KO/TKO',0,2),
-            ('f2','e2','2023-06-01','lightweight','aaa','ccc',NULL,'CNC',0,3),
-            ('f3','e3','2024-01-01','lightweight','aaa','ddd','aaa','Decision - Unanimous',0,3);
+            ('f1','e1','2023-01-01','lightweight','aaa','bbb','aaa','KO/TKO',0,2,0),
+            ('f2','e2','2023-06-01','lightweight','aaa','ccc',NULL,'CNC',0,3,300),
+            ('f3','e3','2024-01-01','lightweight','aaa','ddd','aaa','Decision - Unanimous',0,3,300);
 
         INSERT INTO fight_stats VALUES
-            ('f1','aaa','r',40,80,2,4,0,300),
-            ('f1','bbb','b',20,60,0,2,0,300),
-            ('f2','aaa','r',30,70,1,3,0,900),
-            ('f2','ccc','b',25,65,0,1,0,900),
-            ('f3','aaa','r',50,90,3,5,0,900),
-            ('f3','ddd','b',35,75,1,4,0,900);
+            ('f1','aaa','r',40,80,2,4,0,0),
+            ('f1','bbb','b',20,60,0,2,0,0),
+            ('f2','aaa','r',30,70,1,3,0,300),
+            ('f2','ccc','b',25,65,0,1,0,300),
+            ('f3','aaa','r',50,90,3,5,0,1200),
+            ('f3','ddd','b',35,75,1,4,0,1200);
     """)
     yield conn
     conn.close()
@@ -287,6 +294,244 @@ class TestNoContestHandling:
         from predict import compute_live_career_stats
         stats = compute_live_career_stats(nc_db, "Test Fighter")
         assert stats["losses"] == 0
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 9. compute_ewma_stats_single: zone accuracy + output-rate extras
+# ══════════════════════════════════════════════════════════════════════════════
+
+@pytest.fixture
+def ewma_db():
+    """
+    In-memory DB with a single fight for fighter 'aaa' vs 'bbb'.
+    match_time_sec=300, finish_round=1 -> own fight duration = 300s = 5 min,
+    so every per-fight rate below has a clean, hand-computable denominator.
+    """
+    conn = sqlite3.connect(":memory:")
+    conn.executescript("""
+        CREATE TABLE fights (
+            fight_id TEXT PRIMARY KEY, date TEXT,
+            finish_round INTEGER, match_time_sec REAL
+        );
+        CREATE TABLE fight_stats (
+            fight_id TEXT, fighter_id TEXT,
+            sig_str_landed REAL, sig_str_atmpted REAL,
+            td_landed REAL, td_atmpted REAL,
+            head_landed REAL, head_atmpted REAL,
+            body_landed REAL, body_atmpted REAL,
+            dist_landed REAL, dist_atmpted REAL,
+            clinch_landed REAL, sub_att REAL, reversals REAL, kd REAL,
+            PRIMARY KEY (fight_id, fighter_id)
+        );
+
+        INSERT INTO fights VALUES ('f1', '2023-01-01', 1, 300);
+
+        -- aaa: 30/60 str, 2/4 td, 15/30 head, 10/20 body, 5/10 dist,
+        --      6 clinch landed, 1 sub attempt, 1 reversal
+        -- bbb (opponent): 10 sig strikes landed against aaa, 1 kd against aaa
+        INSERT INTO fight_stats VALUES
+            ('f1', 'aaa', 30, 60, 2, 4, 15, 30, 10, 20, 5, 10, 6, 1, 1, 0),
+            ('f1', 'bbb', 10, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+    """)
+    yield conn
+    conn.close()
+
+
+class TestEwmaStatsExtras:
+    def test_zone_accuracy(self, ewma_db):
+        from predict import compute_ewma_stats_single
+        stats = compute_ewma_stats_single(ewma_db, "aaa")
+        assert stats["ewma_head_acc"] == pytest.approx(15 / 30)
+        assert stats["ewma_body_acc"] == pytest.approx(10 / 20)
+        assert stats["ewma_dist_acc"] == pytest.approx(5 / 10)
+
+    def test_output_rate_extras(self, ewma_db):
+        from predict import compute_ewma_stats_single
+        stats = compute_ewma_stats_single(ewma_db, "aaa")
+        # fight_min = 300s / 60 = 5.0
+        assert stats["ewma_clinch_per"]   == pytest.approx(6 / 5.0)
+        assert stats["ewma_sub_att"]      == pytest.approx(1 * 900.0 / 300)
+        assert stats["ewma_kd_received"]  == pytest.approx(1 / 5.0)
+        assert stats["ewma_reversals"]    == pytest.approx(1 * 900.0 / 300)
+        assert stats["career_reversals"]  == pytest.approx(1.0)
+
+    def test_missing_reversals_column_returns_zero(self, ewma_db):
+        """Pre-backfill DBs lack the reversals column entirely -- must not crash."""
+        from predict import compute_ewma_stats_single
+        conn = sqlite3.connect(":memory:")
+        conn.executescript("""
+            CREATE TABLE fights (fight_id TEXT PRIMARY KEY, date TEXT,
+                                  finish_round INTEGER, match_time_sec REAL);
+            CREATE TABLE fight_stats (
+                fight_id TEXT, fighter_id TEXT,
+                sig_str_landed REAL, sig_str_atmpted REAL,
+                td_landed REAL, td_atmpted REAL,
+                head_landed REAL, head_atmpted REAL,
+                body_landed REAL, body_atmpted REAL,
+                dist_landed REAL, dist_atmpted REAL,
+                clinch_landed REAL, sub_att REAL, kd REAL,
+                PRIMARY KEY (fight_id, fighter_id)
+            );
+            INSERT INTO fights VALUES ('f1', '2023-01-01', 1, 300);
+            INSERT INTO fight_stats VALUES
+                ('f1', 'aaa', 30, 60, 2, 4, 15, 30, 10, 20, 5, 10, 6, 1, 0),
+                ('f1', 'bbb', 10, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1);
+        """)
+        stats = compute_ewma_stats_single(conn, "aaa")
+        assert stats["ewma_reversals"] == 0.0
+        assert stats["career_reversals"] == 0.0
+        # Non-reversals stats should still compute normally
+        assert stats["ewma_head_acc"] == pytest.approx(15 / 30)
+        conn.close()
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 10. compute_r1_ewma_stats
+# ══════════════════════════════════════════════════════════════════════════════
+
+@pytest.fixture
+def r1_db():
+    """
+    In-memory DB with fight_stats_rounds present. Fight goes to round 3
+    (finish_round=3 > 1), so round-1 duration = flat 300s per the formula,
+    regardless of match_time_sec.
+    """
+    conn = sqlite3.connect(":memory:")
+    conn.executescript("""
+        CREATE TABLE fights (
+            fight_id TEXT PRIMARY KEY, date TEXT,
+            finish_round INTEGER, match_time_sec REAL
+        );
+        CREATE TABLE fight_stats_rounds (
+            fight_id TEXT, fighter_id TEXT, round INTEGER,
+            ctrl REAL, sig_str_landed REAL, reversals REAL,
+            PRIMARY KEY (fight_id, fighter_id, round)
+        );
+
+        INSERT INTO fights VALUES ('f1', '2023-01-01', 3, 900);
+        -- round 1 only: 60s control, 10 sig strikes landed, 1 reversal
+        INSERT INTO fight_stats_rounds VALUES ('f1', 'aaa', 1, 60, 10, 1);
+        INSERT INTO fight_stats_rounds VALUES ('f1', 'aaa', 2, 999, 999, 999);
+    """)
+    yield conn
+    conn.close()
+
+
+class TestR1EwmaStats:
+    def test_r1_features_computed_from_round_1_only(self, r1_db):
+        from predict import compute_r1_ewma_stats
+        stats = compute_r1_ewma_stats(r1_db, "aaa")
+        # R1 duration = 300s (flat, since finish_round=3 > 1) = 5.0 min
+        assert stats["ewma_ctrl_r1"]      == pytest.approx(60 / 300)
+        assert stats["ewma_splm_r1"]      == pytest.approx(10 / 5.0)
+        assert stats["ewma_reversals_r1"] == pytest.approx(1 / 5.0)
+
+    def test_missing_table_returns_zero(self):
+        """DBs before backfill_rounds.py has run lack fight_stats_rounds entirely."""
+        from predict import compute_r1_ewma_stats
+        conn = sqlite3.connect(":memory:")
+        conn.executescript("""
+            CREATE TABLE fights (fight_id TEXT PRIMARY KEY, date TEXT,
+                                  finish_round INTEGER, match_time_sec REAL);
+        """)
+        stats = compute_r1_ewma_stats(conn, "aaa")
+        assert stats == {"ewma_ctrl_r1": 0.0, "ewma_splm_r1": 0.0, "ewma_reversals_r1": 0.0}
+        conn.close()
+
+    def test_fighter_with_no_round1_rows_returns_zero(self, r1_db):
+        from predict import compute_r1_ewma_stats
+        stats = compute_r1_ewma_stats(r1_db, "nonexistent_fighter")
+        assert stats == {"ewma_ctrl_r1": 0.0, "ewma_splm_r1": 0.0, "ewma_reversals_r1": 0.0}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 11. compute_opp_adjusted_stats
+# ══════════════════════════════════════════════════════════════════════════════
+
+@pytest.fixture
+def opp_adj_db():
+    """
+    In-memory DB: fighter 'aaa' fought 'bbb' (f1) and 'ccc' (f2). Each row's
+    str_def/td_def/head_def/body_def/dist_def is a hardcoded pre-fight
+    snapshot value (no rolling computation needed for this test).
+
+    League average (over all 4 rows) and aaa's opponent average (bbb, ccc
+    only) are chosen so every field's expected opp_adj_* value is a clean
+    hand-computable number -- see the assertions below for the math.
+    """
+    conn = sqlite3.connect(":memory:")
+    conn.executescript("""
+        CREATE TABLE fights (fight_id TEXT PRIMARY KEY, date TEXT);
+        CREATE TABLE fight_stats (
+            fight_id TEXT, fighter_id TEXT,
+            str_def REAL, td_def REAL, head_def REAL, body_def REAL, dist_def REAL,
+            PRIMARY KEY (fight_id, fighter_id)
+        );
+        INSERT INTO fights VALUES ('f1', '2023-01-01'), ('f2', '2023-06-01');
+        INSERT INTO fight_stats VALUES
+            ('f1', 'aaa', 20, 30, 40, 50, 60),
+            ('f1', 'bbb', 40, 50, 60, 70, 80),
+            ('f2', 'aaa', 20, 30, 40, 50, 60),
+            ('f2', 'ccc', 60, 70, 80, 90, 40);
+    """)
+    yield conn
+    conn.close()
+
+
+class TestOppAdjustedStats:
+    @pytest.fixture(autouse=True)
+    def _reset_league_cache(self):
+        # _get_league_avg_defense caches its result at module level keyed by
+        # nothing (not per-connection) -- must reset it before each test or
+        # an earlier test's DB (e.g. the real production DB via
+        # TestEndToEndPrediction) leaks its league averages into this fixture.
+        import predict
+        predict._league_def_cache = None
+        yield
+        predict._league_def_cache = None
+
+    def test_opp_adjusted_formula(self, opp_adj_db):
+        from predict import compute_opp_adjusted_stats
+        result = compute_opp_adjusted_stats(
+            opp_adj_db, "aaa",
+            own_splm=10.0, own_td_avg=4.0,
+            own_head_acc=0.5, own_body_acc=0.6, own_dist_acc=0.7,
+        )
+        # League avg str_def = mean(20,40,20,60) = 35 -> league allowed = 0.65
+        # aaa's opponents' (bbb, ccc) avg str_def = mean(40,60) = 50 -> allowed = 0.50
+        # opp_adj_splm = 10 * (0.65 / 0.50) = 13.0
+        assert result["opp_adj_splm"] == pytest.approx(13.0)
+        # League avg td_def = mean(30,50,30,70) = 45 -> allowed = 0.55
+        # opponents' avg td_def = mean(50,70) = 60 -> allowed = 0.40
+        # opp_adj_td_avg = 4 * (0.55 / 0.40) = 5.5
+        assert result["opp_adj_td_avg"] == pytest.approx(5.5)
+        # League avg head_def = mean(40,60,40,80) = 55 -> allowed = 0.45
+        # opponents' avg head_def = mean(60,80) = 70 -> allowed = 0.30
+        # opp_adj_head_acc = 0.5 * (0.45 / 0.30) = 0.75
+        assert result["opp_adj_head_acc"] == pytest.approx(0.75)
+        # League avg body_def = mean(50,70,50,90) = 65 -> allowed = 0.35
+        # opponents' avg body_def = mean(70,90) = 80 -> allowed = 0.20
+        # opp_adj_body_acc = 0.6 * (0.35 / 0.20) = 1.05
+        assert result["opp_adj_body_acc"] == pytest.approx(1.05)
+        # League avg dist_def = mean(60,80,60,40) = 60 -> allowed = 0.40
+        # opponents' avg dist_def = mean(80,40) = 60 -> allowed = 0.40
+        # opp_adj_dist_acc = 0.7 * (0.40 / 0.40) = 0.7
+        assert result["opp_adj_dist_acc"] == pytest.approx(0.7)
+
+    def test_fighter_with_no_history_falls_back_to_league_average(self, opp_adj_db):
+        """A debutant has no career opponents -- opp_adj should reduce to own_stat
+        unchanged (league_allowed / league_allowed = 1.0)."""
+        from predict import compute_opp_adjusted_stats
+        result = compute_opp_adjusted_stats(
+            opp_adj_db, "nonexistent_fighter",
+            own_splm=10.0, own_td_avg=4.0,
+            own_head_acc=0.5, own_body_acc=0.6, own_dist_acc=0.7,
+        )
+        assert result["opp_adj_splm"] == pytest.approx(10.0)
+        assert result["opp_adj_td_avg"] == pytest.approx(4.0)
+        assert result["opp_adj_head_acc"] == pytest.approx(0.5)
+        assert result["opp_adj_body_acc"] == pytest.approx(0.6)
+        assert result["opp_adj_dist_acc"] == pytest.approx(0.7)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

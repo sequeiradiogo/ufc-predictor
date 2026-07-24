@@ -32,6 +32,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release download data-artifacts-latest --dir db/ --pattern "*.db"
 
+      - name: Download rankings
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release download data-artifacts-latest --dir raw_data/ --pattern "rankings_history.csv"
+
       - name: Run event predictions
         run: python scripts/predict_event.py --model ensemble --skip-existing
 

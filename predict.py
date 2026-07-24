@@ -27,6 +27,7 @@ Notes
 import argparse
 import sqlite3
 import sys
+from datetime import date
 from pathlib import Path
 
 import joblib
@@ -77,9 +78,16 @@ _EPS = 1e-6
 
 # ── v2 defensive stats lookup (for v1 inference) ─────────────────────────────
 
+_DEFENSIVE_STAT_ZEROS = {
+    "sapm": 0.0, "str_def": 0.0, "td_def": 0.0,
+    "head_acc": 0.0, "body_acc": 0.0, "leg_acc": 0.0, "dist_acc": 0.0,
+    "head_def": 0.0, "body_def": 0.0, "dist_def": 0.0, "ground_def": 0.0,
+}
+
+
 def _get_v2_defensive_stats(conn_v2: sqlite3.Connection, fighter_name: str) -> dict:
     """
-    Return the most recent pre-fight sapm/str_def/td_def/head_acc/body_acc/leg_acc
+    Return the most recent pre-fight sapm/str_def/td_def/zone-accuracy/zone-defense
     for a fighter from the UFCStats DB, matched by exact name.
     Returns zeros on no match.
     """
@@ -88,13 +96,15 @@ def _get_v2_defensive_stats(conn_v2: sqlite3.Connection, fighter_name: str) -> d
         (fighter_name,),
     ).fetchone()
     if not row:
-        return {"sapm": 0.0, "str_def": 0.0, "td_def": 0.0,
-                "head_acc": 0.0, "body_acc": 0.0, "leg_acc": 0.0}
+        return dict(_DEFENSIVE_STAT_ZEROS)
     fid = row[0]
     stats = conn_v2.execute(
         """
         SELECT CAST(fs.sapm     AS REAL), CAST(fs.str_def  AS REAL), CAST(fs.td_def   AS REAL),
-               CAST(fs.head_acc AS REAL), CAST(fs.body_acc AS REAL), CAST(fs.leg_acc  AS REAL)
+               CAST(fs.head_acc AS REAL), CAST(fs.body_acc AS REAL), CAST(fs.leg_acc  AS REAL),
+               CAST(fs.dist_acc AS REAL),
+               CAST(fs.head_def AS REAL), CAST(fs.body_def AS REAL),
+               CAST(fs.dist_def AS REAL), CAST(fs.ground_def AS REAL)
         FROM fight_stats fs
         JOIN fights f ON fs.fight_id = f.fight_id
         WHERE fs.fighter_id = ?
@@ -104,23 +114,31 @@ def _get_v2_defensive_stats(conn_v2: sqlite3.Connection, fighter_name: str) -> d
         (fid,),
     ).fetchone()
     if not stats:
-        return {"sapm": 0.0, "str_def": 0.0, "td_def": 0.0,
-                "head_acc": 0.0, "body_acc": 0.0, "leg_acc": 0.0}
-    return {
-        "sapm":     float(stats[0] or 0),
-        "str_def":  float(stats[1] or 0),
-        "td_def":   float(stats[2] or 0),
-        "head_acc": float(stats[3] or 0),
-        "body_acc": float(stats[4] or 0),
-        "leg_acc":  float(stats[5] or 0),
-    }
+        return dict(_DEFENSIVE_STAT_ZEROS)
+    keys = ["sapm", "str_def", "td_def", "head_acc", "body_acc", "leg_acc",
+            "dist_acc", "head_def", "body_def", "dist_def", "ground_def"]
+    return {k: float(v or 0) for k, v in zip(keys, stats)}
+
+
+_ZONE_STAT_ZEROS = {
+    "head_acc": 0.0, "body_acc": 0.0, "leg_acc": 0.0, "dist_acc": 0.0,
+    "head_def": 0.0, "body_def": 0.0, "dist_def": 0.0, "ground_def": 0.0,
+}
 
 
 def _get_strike_zone_accs(conn_v2: sqlite3.Connection, fighter_id: str) -> dict:
-    """Return most recent rolling head/body/leg accuracy from UFCStats fight_stats."""
+    """
+    Return most recent rolling zone accuracy (head/body/leg/dist) and zone
+    defense (head/body/dist/ground) from UFCStats fight_stats. Both are
+    pre-fight rolling snapshots written by rolling.py -- same pattern as
+    sapm/str_def/td_def.
+    """
     row = conn_v2.execute(
         """
-        SELECT CAST(fs.head_acc AS REAL), CAST(fs.body_acc AS REAL), CAST(fs.leg_acc AS REAL)
+        SELECT CAST(fs.head_acc   AS REAL), CAST(fs.body_acc   AS REAL),
+               CAST(fs.leg_acc    AS REAL), CAST(fs.dist_acc   AS REAL),
+               CAST(fs.head_def   AS REAL), CAST(fs.body_def   AS REAL),
+               CAST(fs.dist_def   AS REAL), CAST(fs.ground_def AS REAL)
         FROM fight_stats fs
         JOIN fights f ON fs.fight_id = f.fight_id
         WHERE fs.fighter_id = ?
@@ -130,12 +148,9 @@ def _get_strike_zone_accs(conn_v2: sqlite3.Connection, fighter_id: str) -> dict:
         (fighter_id,),
     ).fetchone()
     if not row:
-        return {"head_acc": 0.0, "body_acc": 0.0, "leg_acc": 0.0}
-    return {
-        "head_acc": float(row[0] or 0),
-        "body_acc": float(row[1] or 0),
-        "leg_acc":  float(row[2] or 0),
-    }
+        return dict(_ZONE_STAT_ZEROS)
+    keys = ["head_acc", "body_acc", "leg_acc", "dist_acc", "head_def", "body_def", "dist_def", "ground_def"]
+    return {k: float(v or 0) for k, v in zip(keys, row)}
 
 
 # ── Live career stat refresh from UFCStats DB ─────────────────────────────────
@@ -177,12 +192,13 @@ def compute_live_career_stats(
         SELECT f.date, f.method, f.winner_id,
                CAST(f.title_fight    AS INTEGER) AS title_fight,
                CAST(f.finish_round   AS INTEGER) AS finish_round,
+               CAST(f.match_time_sec AS REAL)    AS match_time_sec,
                CAST(p.sig_str_landed  AS REAL)   AS p_sig_landed,
                CAST(p.sig_str_atmpted AS REAL)   AS p_sig_atmpted,
                CAST(p.td_landed       AS REAL)   AS p_td_landed,
                CAST(p.td_atmpted      AS REAL)   AS p_td_atmpted,
                CAST(p.sub_att         AS REAL)   AS p_sub_att,
-               CAST(p.total_fight_time AS REAL)  AS fight_time,
+               CAST(p.total_fight_time AS REAL)  AS pre_fight_time,
                CAST(o.sig_str_landed  AS REAL)   AS o_sig_landed,
                CAST(o.sig_str_atmpted AS REAL)   AS o_sig_atmpted,
                CAST(o.td_landed       AS REAL)   AS o_td_landed,
@@ -199,14 +215,22 @@ def compute_live_career_stats(
         return None
 
     df["won"] = (df["winner_id"] == fid).astype(int)
-    df["fight_time_min"] = df["fight_time"] / 60.0
+
+    # `pre_fight_time` (fight_stats.total_fight_time) is the CUMULATIVE seconds
+    # fought BEFORE this fight (0 on debut) -- rolling.py writes it that way as
+    # of commit a33e19e. It must NOT be re-summed across rows (each value already
+    # contains every prior fight). To get the running total THROUGH each fight,
+    # add that fight's own duration, computed the same way rolling.py does.
+    df["own_fight_time"] = df["match_time_sec"] + (df["finish_round"] - 1) * 300
+    df["cum_fight_time_sec"] = df["pre_fight_time"] + df["own_fight_time"]
+    df["fight_time_min"] = df["cum_fight_time_sec"] / 60.0
 
     # Running cumulative sums for career average computation
     df["cum_sig_landed"]  = df["p_sig_landed"].cumsum()
     df["cum_sig_atmpted"] = df["p_sig_atmpted"].cumsum()
     df["cum_td_landed"]   = df["p_td_landed"].cumsum()
     df["cum_td_atmpted"]  = df["p_td_atmpted"].cumsum()
-    df["cum_fight_time"]  = df["fight_time_min"].cumsum()
+    df["cum_fight_time"]  = df["fight_time_min"]
 
     # Career average after each fight (matches mdabbert snapshot format)
     df["career_str_acc"] = np.where(
@@ -239,8 +263,10 @@ def compute_live_career_stats(
     splm_slope    = _slope(window_df["career_splm"])
     td_acc_slope  = _slope(window_df["career_td_acc"])
 
-    # Final career averages (after all fights)
-    total_time = df["fight_time_min"].sum()
+    # Final career averages (after all fights) -- total career minutes is the
+    # cumulative time THROUGH the most recent fight, not a sum of per-row values
+    # (each row's fight_time_min is already a running total, see above).
+    total_time = float(df["cum_fight_time"].iloc[-1])
     avg_sig_str_pct = float(df["career_str_acc"].iloc[-1])
     avg_td_pct      = float(df["career_td_acc"].iloc[-1])
     splm            = float(df["career_splm"].iloc[-1])
@@ -298,7 +324,32 @@ def compute_live_career_stats(
     total_rounds_fought = int(df["finish_round"].fillna(0).sum())
     total_title_bouts   = int(df["title_fight"].fillna(0).astype(int).sum())
 
+    # height/reach/dob are static per-fighter attributes (fighters table), not
+    # per-fight history -- training reads height/reach the same way from the
+    # fighters table (via the CSV/mdabbert snapshot). Without this, height_diff/
+    # reach_diff/age_ratio_diff silently default to 0 for every prediction
+    # (build_feature_vector falls back to red_stats.get(...), which was never
+    # populated).
+    phys_row = conn_v2.execute(
+        "SELECT height, reach, dob FROM fighters WHERE fighter_id = ?", (fid,)
+    ).fetchone()
+    height = float(phys_row[0]) if phys_row and phys_row[0] is not None else 0.0
+    reach  = float(phys_row[1]) if phys_row and phys_row[1] is not None else 0.0
+    # 30.0 fallback matches training's fillna(30.0) for unknown DOB
+    # (ML_data_preparation_v1.py) -- keeps age_ratio_diff at 0 for unknowns
+    # instead of distorting it with an artificial extreme age.
+    age = 30.0
+    if phys_row and phys_row[2]:
+        try:
+            dob = date.fromisoformat(str(phys_row[2])[:10])
+            age = (date.today() - dob).days / 365.25
+        except ValueError:
+            age = 30.0
+
     return {
+        "height":               height,
+        "reach":                reach,
+        "age":                  age,
         "wins":                 wins,
         "losses":               losses,
         "win_by_ko":            win_by_ko,
@@ -701,26 +752,48 @@ def compute_ko_vulnerability_single(
         return {"ko_vuln": float(row[0] or 0), "kd_received": float(row[1] or 0)}
 
 
+_EWMA_STATS_ZERO = {
+    "ewma_str_acc": 0.0, "ewma_td_acc": 0.0, "str_acc_var": 0.0,
+    "ewma_splm": 0.0, "ewma_td_avg": 0.0, "ewma_sapm": 0.0,
+    "ewma_head_acc": 0.0, "ewma_body_acc": 0.0, "ewma_dist_acc": 0.0,
+    "ewma_clinch_per": 0.0, "ewma_sub_att": 0.0, "ewma_kd_received": 0.0,
+    "ewma_reversals": 0.0, "career_reversals": 0.0,
+}
+
+
 def compute_ewma_stats_single(
     conn: sqlite3.Connection,
     fighter_id: str,
     span: int = EWMA_SPAN,
 ) -> dict[str, float]:
-    """Return EWMA striking/TD accuracy, accuracy variance, and per-fight output rates.
-    Returns zeros on schema mismatch (e.g. v1 career-aggregate DB)."""
-    _zero = {
-        "ewma_str_acc": 0.0, "ewma_td_acc": 0.0, "str_acc_var": 0.0,
-        "ewma_splm": 0.0, "ewma_td_avg": 0.0, "ewma_sapm": 0.0,
-    }
+    """Return EWMA striking/TD/zone accuracy, accuracy variance, per-fight output
+    rates, and career reversal counts. Returns zeros on schema mismatch (e.g. v1
+    career-aggregate DB) or missing columns (e.g. reversals pre-backfill)."""
+    _zero = dict(_EWMA_STATS_ZERO)
+    _has_reversals = False
     try:
+        _cols = {row[1] for row in conn.execute("PRAGMA table_info(fight_stats)").fetchall()}
+        _has_reversals = "reversals" in _cols
+        _rev_sel = "CAST(fs.reversals AS REAL)" if _has_reversals else "0"
         df = pd.read_sql_query(
-            """
+            f"""
             SELECT CAST(fs.sig_str_landed  AS REAL) AS str_land,
                    CAST(fs.sig_str_atmpted AS REAL) AS str_att,
                    CAST(fs.td_landed       AS REAL) AS td_land,
                    CAST(fs.td_atmpted      AS REAL) AS td_att,
-                   CAST(fs.total_fight_time AS REAL) AS fight_time,
-                   CAST(opp.sig_str_landed  AS REAL) AS opp_str_land
+                   CAST(fs.head_landed     AS REAL) AS head_land,
+                   CAST(fs.head_atmpted    AS REAL) AS head_att,
+                   CAST(fs.body_landed     AS REAL) AS body_land,
+                   CAST(fs.body_atmpted    AS REAL) AS body_att,
+                   CAST(fs.dist_landed     AS REAL) AS dist_land,
+                   CAST(fs.dist_atmpted    AS REAL) AS dist_att,
+                   CAST(fs.clinch_landed   AS REAL) AS clinch_land,
+                   CAST(fs.sub_att         AS REAL) AS sub_att,
+                   {_rev_sel}                        AS reversals,
+                   CAST(f.match_time_sec   AS REAL) AS match_time_sec,
+                   CAST(f.finish_round     AS INTEGER) AS finish_round,
+                   CAST(opp.sig_str_landed  AS REAL) AS opp_str_land,
+                   CAST(opp.kd              AS REAL) AS opp_kd
             FROM fight_stats fs
             JOIN fights f ON fs.fight_id = f.fight_id
             JOIN fight_stats opp
@@ -741,24 +814,184 @@ def compute_ewma_stats_single(
     df.loc[df["str_att"] == 0, "pf_str_acc"] = 0.0
     df["pf_td_acc"]  = df["td_land"]  / (df["td_att"]  + _eps)
     df.loc[df["td_att"]  == 0, "pf_td_acc"]  = 0.0
+    df["pf_head_acc"] = df["head_land"] / (df["head_att"] + _eps)
+    df.loc[df["head_att"] == 0, "pf_head_acc"] = 0.0
+    df["pf_body_acc"] = df["body_land"] / (df["body_att"] + _eps)
+    df.loc[df["body_att"] == 0, "pf_body_acc"] = 0.0
+    df["pf_dist_acc"] = df["dist_land"] / (df["dist_att"] + _eps)
+    df.loc[df["dist_att"] == 0, "pf_dist_acc"] = 0.0
 
+    # This fight's own duration -- NOT read from fight_stats.total_fight_time,
+    # which stores the CUMULATIVE seconds fought BEFORE this fight (see
+    # compute_live_career_stats). Computed the same way rolling.py does.
+    df["fight_time"] = df["match_time_sec"] + (df["finish_round"] - 1) * 300
     fight_min = df["fight_time"] / 60.0
-    df["pf_splm"]   = df["str_land"]     / fight_min.clip(lower=_eps)
-    df["pf_td_avg"] = df["td_land"] * 900.0 / df["fight_time"].clip(lower=_eps)
-    df["pf_sapm"]   = df["opp_str_land"] / fight_min.clip(lower=_eps)
-    for col in ("pf_splm", "pf_td_avg", "pf_sapm"):
+    df["pf_splm"]        = df["str_land"]      / fight_min.clip(lower=_eps)
+    df["pf_td_avg"]      = df["td_land"] * 900.0 / df["fight_time"].clip(lower=_eps)
+    df["pf_sapm"]        = df["opp_str_land"]  / fight_min.clip(lower=_eps)
+    df["pf_clinch_per"]  = df["clinch_land"]   / fight_min.clip(lower=_eps)
+    df["pf_sub_att"]     = df["sub_att"] * 900.0 / df["fight_time"].clip(lower=_eps)
+    df["pf_kd_received"] = df["opp_kd"].fillna(0) / fight_min.clip(lower=_eps)
+    df["pf_reversals"]   = df["reversals"].fillna(0) * 900.0 / df["fight_time"].clip(lower=_eps)
+    for col in ("pf_splm", "pf_td_avg", "pf_sapm", "pf_clinch_per", "pf_sub_att",
+                "pf_kd_received", "pf_reversals"):
         df.loc[df["fight_time"] <= 0, col] = 0.0
 
-    ewma_str    = float(df["pf_str_acc"].ewm(span=span, min_periods=1).mean().iloc[-1])
-    ewma_td     = float(df["pf_td_acc"].ewm(span=span, min_periods=1).mean().iloc[-1])
-    var_str     = float(df["pf_str_acc"].rolling(span, min_periods=2).std().fillna(0).iloc[-1])
-    ewma_splm   = float(df["pf_splm"].ewm(span=span, min_periods=1).mean().iloc[-1])
-    ewma_td_avg = float(df["pf_td_avg"].ewm(span=span, min_periods=1).mean().iloc[-1])
-    ewma_sapm   = float(df["pf_sapm"].ewm(span=span, min_periods=1).mean().iloc[-1])
+    def _ewma(col: str) -> float:
+        return float(df[col].ewm(span=span, min_periods=1).mean().iloc[-1])
+
+    result = {
+        "ewma_str_acc": _ewma("pf_str_acc"), "ewma_td_acc": _ewma("pf_td_acc"),
+        "str_acc_var": float(df["pf_str_acc"].rolling(span, min_periods=2).std().fillna(0).iloc[-1]),
+        "ewma_splm": _ewma("pf_splm"), "ewma_td_avg": _ewma("pf_td_avg"), "ewma_sapm": _ewma("pf_sapm"),
+        "ewma_head_acc": _ewma("pf_head_acc"), "ewma_body_acc": _ewma("pf_body_acc"),
+        "ewma_dist_acc": _ewma("pf_dist_acc"),
+        "ewma_clinch_per": _ewma("pf_clinch_per"), "ewma_sub_att": _ewma("pf_sub_att"),
+        "ewma_kd_received": _ewma("pf_kd_received"),
+        "ewma_reversals": _ewma("pf_reversals") if _has_reversals else 0.0,
+        "career_reversals": float(df["reversals"].fillna(0).sum()) if _has_reversals else 0.0,
+    }
+    return result
+
+
+_R1_STATS_ZERO = {"ewma_ctrl_r1": 0.0, "ewma_splm_r1": 0.0, "ewma_reversals_r1": 0.0}
+
+
+def compute_r1_ewma_stats(
+    conn: sqlite3.Connection,
+    fighter_id: str,
+    span: int = EWMA_SPAN,
+) -> dict[str, float]:
+    """
+    Return EWMA of round-1-only control time, striking output, and reversals.
+    Mirrors add_computed_features_to_csv.py's Group F. Requires the
+    fight_stats_rounds table (populated by scripts/backfill_rounds.py) --
+    returns zeros if it doesn't exist or the fighter has no round-1 rows.
+    """
+    _zero = dict(_R1_STATS_ZERO)
+    has_table = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='fight_stats_rounds'"
+    ).fetchone()
+    if not has_table:
+        return _zero
+    try:
+        df = pd.read_sql_query(
+            """
+            SELECT CAST(fsr.ctrl           AS REAL) AS ctrl_r1,
+                   CAST(fsr.sig_str_landed AS REAL) AS sig_land_r1,
+                   CAST(fsr.reversals      AS REAL) AS reversals_r1,
+                   CAST(f.match_time_sec   AS REAL) AS match_time_sec,
+                   CAST(f.finish_round     AS REAL) AS finish_round
+            FROM fight_stats_rounds fsr
+            JOIN fights f ON fsr.fight_id = f.fight_id
+            WHERE fsr.fighter_id = ? AND fsr.round = 1
+            ORDER BY f.date ASC, f.fight_id ASC
+            """,
+            conn,
+            params=(fighter_id,),
+        )
+    except Exception:
+        return _zero
+    if df.empty:
+        return _zero
+
+    # R1 duration: 300s if the fight went past round 1, else match_time_sec
+    # (fight ended in round 1) -- same as add_computed_features_to_csv.py.
+    r1_dur_sec = df["match_time_sec"].fillna(0).where(
+        df["finish_round"].fillna(0) <= 1, 300.0
+    ).clip(lower=1.0)
+    r1_dur_min = r1_dur_sec / 60.0
+
+    df["pf_ctrl_r1"]      = df["ctrl_r1"].fillna(0) / r1_dur_sec
+    df["pf_splm_r1"]      = df["sig_land_r1"].fillna(0) / r1_dur_min.clip(lower=1e-6)
+    df["pf_reversals_r1"] = df["reversals_r1"].fillna(0) / r1_dur_min.clip(lower=1e-6)
 
     return {
-        "ewma_str_acc": ewma_str, "ewma_td_acc": ewma_td, "str_acc_var": var_str,
-        "ewma_splm": ewma_splm, "ewma_td_avg": ewma_td_avg, "ewma_sapm": ewma_sapm,
+        "ewma_ctrl_r1":      float(df["pf_ctrl_r1"].ewm(span=span, min_periods=1).mean().iloc[-1]),
+        "ewma_splm_r1":      float(df["pf_splm_r1"].ewm(span=span, min_periods=1).mean().iloc[-1]),
+        "ewma_reversals_r1": float(df["pf_reversals_r1"].ewm(span=span, min_periods=1).mean().iloc[-1]),
+    }
+
+
+# ── Opponent-adjusted stats ────────────────────────────────────────────────────
+
+_league_def_cache: dict[str, float] | None = None
+
+
+def _get_league_avg_defense(conn: sqlite3.Connection) -> dict[str, float]:
+    """
+    Return league-wide average str_def/td_def/head_def/body_def/dist_def across
+    all fight_stats rows (zero/no-data rows excluded), cached at module level
+    since it's an expensive full-table scan and doesn't change within a run.
+    Mirrors the league-average computation in add_computed_features_to_csv.py.
+    """
+    global _league_def_cache
+    if _league_def_cache is not None:
+        return _league_def_cache
+    row = conn.execute(
+        """
+        SELECT AVG(NULLIF(CAST(str_def  AS REAL), 0)),
+               AVG(NULLIF(CAST(td_def   AS REAL), 0)),
+               AVG(NULLIF(CAST(head_def AS REAL), 0)),
+               AVG(NULLIF(CAST(body_def AS REAL), 0)),
+               AVG(NULLIF(CAST(dist_def AS REAL), 0))
+        FROM fight_stats
+        """
+    ).fetchone()
+    keys = ["str_def", "td_def", "head_def", "body_def", "dist_def"]
+    _league_def_cache = {k: float(v or 0) for k, v in zip(keys, row)}
+    return _league_def_cache
+
+
+def compute_opp_adjusted_stats(
+    conn: sqlite3.Connection,
+    fighter_id: str,
+    own_splm: float,
+    own_td_avg: float,
+    own_head_acc: float,
+    own_body_acc: float,
+    own_dist_acc: float,
+) -> dict[str, float]:
+    """
+    Normalize offensive output by the defensive quality of career opponents
+    (mirrors add_computed_features_to_csv.py). own stats are multiplied by
+    (league-average-allowed / this-fighter's-average-opponent-allowed) --
+    facing weaker defenses inflates the adjustment down, tougher defenses
+    inflate it up, relative to the league baseline.
+    """
+    league = _get_league_avg_defense(conn)
+    row = conn.execute(
+        """
+        SELECT AVG(NULLIF(CAST(opp.str_def  AS REAL), 0)),
+               AVG(NULLIF(CAST(opp.td_def   AS REAL), 0)),
+               AVG(NULLIF(CAST(opp.head_def AS REAL), 0)),
+               AVG(NULLIF(CAST(opp.body_def AS REAL), 0)),
+               AVG(NULLIF(CAST(opp.dist_def AS REAL), 0))
+        FROM fight_stats fs
+        JOIN fights f ON fs.fight_id = f.fight_id
+        JOIN fight_stats opp ON opp.fight_id = f.fight_id AND opp.fighter_id != fs.fighter_id
+        WHERE fs.fighter_id = ?
+        """,
+        (fighter_id,),
+    ).fetchone()
+    keys = ["str_def", "td_def", "head_def", "body_def", "dist_def"]
+    avg_opp = {k: (float(v) if v is not None else league[k]) for k, v in zip(keys, row)}
+
+    def _allowed(def_pct: float) -> float:
+        return max(1.0 - def_pct / 100.0, 0.05)
+
+    league_str_allowed  = 1.0 - league["str_def"]  / 100.0
+    league_td_allowed   = 1.0 - league["td_def"]   / 100.0
+    league_head_allowed = 1.0 - league["head_def"] / 100.0
+    league_body_allowed = 1.0 - league["body_def"] / 100.0
+    league_dist_allowed = 1.0 - league["dist_def"] / 100.0
+
+    return {
+        "opp_adj_splm":     own_splm     * (league_str_allowed  / _allowed(avg_opp["str_def"])),
+        "opp_adj_td_avg":   own_td_avg   * (league_td_allowed   / _allowed(avg_opp["td_def"])),
+        "opp_adj_head_acc": own_head_acc * (league_head_allowed / _allowed(avg_opp["head_def"])),
+        "opp_adj_body_acc": own_body_acc * (league_body_allowed / _allowed(avg_opp["body_def"])),
+        "opp_adj_dist_acc": own_dist_acc * (league_dist_allowed / _allowed(avg_opp["dist_def"])),
     }
 
 
@@ -918,6 +1151,42 @@ def build_feature_vector(
             row[feat] = _er.get("ewma_td_avg", 0.0) - _eb.get("ewma_td_avg", 0.0)
         elif feat == "ewma_sapm_diff":
             row[feat] = _er.get("ewma_sapm", 0.0) - _eb.get("ewma_sapm", 0.0)
+        elif feat == "ewma_head_acc_diff":
+            row[feat] = _er.get("ewma_head_acc", 0.0) - _eb.get("ewma_head_acc", 0.0)
+        elif feat == "ewma_body_acc_diff":
+            row[feat] = _er.get("ewma_body_acc", 0.0) - _eb.get("ewma_body_acc", 0.0)
+        elif feat == "ewma_dist_acc_diff":
+            row[feat] = _er.get("ewma_dist_acc", 0.0) - _eb.get("ewma_dist_acc", 0.0)
+        elif feat == "ewma_clinch_per_diff":
+            row[feat] = _er.get("ewma_clinch_per", 0.0) - _eb.get("ewma_clinch_per", 0.0)
+        elif feat == "ewma_sub_att_diff":
+            row[feat] = _er.get("ewma_sub_att", 0.0) - _eb.get("ewma_sub_att", 0.0)
+        elif feat == "ewma_kd_received_diff":
+            row[feat] = _er.get("ewma_kd_received", 0.0) - _eb.get("ewma_kd_received", 0.0)
+        elif feat == "ewma_reversals_diff":
+            row[feat] = _er.get("ewma_reversals", 0.0) - _eb.get("ewma_reversals", 0.0)
+        elif feat == "career_reversals_diff":
+            row[feat] = _er.get("career_reversals", 0.0) - _eb.get("career_reversals", 0.0)
+
+        # ── Round-1 EWMA ───────────────────────────────────────────────────────
+        elif feat == "ewma_ctrl_r1_diff":
+            row[feat] = _er.get("ewma_ctrl_r1", 0.0) - _eb.get("ewma_ctrl_r1", 0.0)
+        elif feat == "ewma_splm_r1_diff":
+            row[feat] = _er.get("ewma_splm_r1", 0.0) - _eb.get("ewma_splm_r1", 0.0)
+        elif feat == "ewma_reversals_r1_diff":
+            row[feat] = _er.get("ewma_reversals_r1", 0.0) - _eb.get("ewma_reversals_r1", 0.0)
+
+        # ── Opponent-adjusted stats ────────────────────────────────────────────
+        elif feat == "opp_adj_splm_diff":
+            row[feat] = _er.get("opp_adj_splm", 0.0) - _eb.get("opp_adj_splm", 0.0)
+        elif feat == "opp_adj_td_avg_diff":
+            row[feat] = _er.get("opp_adj_td_avg", 0.0) - _eb.get("opp_adj_td_avg", 0.0)
+        elif feat == "opp_adj_head_acc_diff":
+            row[feat] = _er.get("opp_adj_head_acc", 0.0) - _eb.get("opp_adj_head_acc", 0.0)
+        elif feat == "opp_adj_body_acc_diff":
+            row[feat] = _er.get("opp_adj_body_acc", 0.0) - _eb.get("opp_adj_body_acc", 0.0)
+        elif feat == "opp_adj_dist_acc_diff":
+            row[feat] = _er.get("opp_adj_dist_acc", 0.0) - _eb.get("opp_adj_dist_acc", 0.0)
 
         # ── v2 defensive metrics (extra_r/extra_b for v1; red_stats for v2) ──
         elif feat == "sapm_diff":
@@ -978,6 +1247,33 @@ def build_feature_vector(
             r_days = _er.get("days_since_last", 365.0)
             b_days = _eb.get("days_since_last", 365.0)
             row[feat] = r_age * r_days - b_age * b_days
+
+        # ── Age ratio (relative age advantage; 0 when either age unknown) ────
+        elif feat == "age_ratio_diff":
+            r_age = float(pd.to_numeric(red_stats.get("age",  30.0), errors="coerce") or 30.0)
+            b_age = float(pd.to_numeric(blue_stats.get("age", 30.0), errors="coerce") or 30.0)
+            if r_age > 0 and b_age > 0:
+                row[feat] = (r_age / max(b_age, 1.0)) - 1.0
+            else:
+                row[feat] = 0.0
+
+        # ── UFC experience (total UFC fights as a proxy) ──────────────────────
+        elif feat == "ufc_experience_diff":
+            r_exp = float(pd.to_numeric(red_stats.get("wins", 0),  errors="coerce") or 0) + \
+                    float(pd.to_numeric(red_stats.get("losses", 0), errors="coerce") or 0)
+            b_exp = float(pd.to_numeric(blue_stats.get("wins", 0),  errors="coerce") or 0) + \
+                    float(pd.to_numeric(blue_stats.get("losses", 0), errors="coerce") or 0)
+            row[feat] = r_exp - b_exp
+
+        # ── Zone defense (head/body/dist/ground) ──────────────────────────────
+        elif feat == "head_def_diff":
+            row[feat] = _er.get("head_def", 0.0) - _eb.get("head_def", 0.0)
+        elif feat == "body_def_diff":
+            row[feat] = _er.get("body_def", 0.0) - _eb.get("body_def", 0.0)
+        elif feat == "dist_def_diff":
+            row[feat] = _er.get("dist_def", 0.0) - _eb.get("dist_def", 0.0)
+        elif feat == "ground_def_diff":
+            row[feat] = _er.get("ground_def", 0.0) - _eb.get("ground_def", 0.0)
 
         # ── Division-normalized reach diff ────────────────────────────────────
         elif feat == "reach_div_norm_diff":
@@ -1209,11 +1505,13 @@ def compute_prediction(
         kovuln_b = compute_ko_vulnerability_single(_b_conn, _b_fid)
         ewma_r   = compute_ewma_stats_single(_r_conn, _r_fid)
         ewma_b   = compute_ewma_stats_single(_b_conn, _b_fid)
+        r1_r     = compute_r1_ewma_stats(_r_conn, _r_fid)
+        r1_b     = compute_r1_ewma_stats(_b_conn, _b_fid)
 
         glicko_extra_r = {"glicko": glicko_r_tuple[0], "glicko_rd": glicko_r_tuple[1]}
         glicko_extra_b = {"glicko": glicko_b_tuple[0], "glicko_rd": glicko_b_tuple[1]}
-        extra_r = {**finish_r, **inact_r, **sos_r, **kovuln_r, **ewma_r, **glicko_extra_r}
-        extra_b = {**finish_b, **inact_b, **sos_b, **kovuln_b, **ewma_b, **glicko_extra_b}
+        extra_r = {**finish_r, **inact_r, **sos_r, **kovuln_r, **ewma_r, **r1_r, **glicko_extra_r}
+        extra_b = {**finish_b, **inact_b, **sos_b, **kovuln_b, **ewma_b, **r1_b, **glicko_extra_b}
 
         # ── Defensive / strike-zone stats ─────────────────────────────────────
         if _live_r:
@@ -1224,7 +1522,7 @@ def compute_prediction(
                 extra_r.update(_get_strike_zone_accs(conn_v2, r_fid_v2))
             elif conn_v2:
                 zone_r = _get_v2_defensive_stats(conn_v2, r_name)
-                extra_r.update({k: zone_r[k] for k in ("head_acc", "body_acc", "leg_acc") if k in zone_r})
+                extra_r.update({k: zone_r[k] for k in _ZONE_STAT_ZEROS if k in zone_r})
         elif conn_v2:
             extra_r.update(_get_v2_defensive_stats(conn_v2, r_name))
 
@@ -1236,9 +1534,29 @@ def compute_prediction(
                 extra_b.update(_get_strike_zone_accs(conn_v2, b_fid_v2))
             elif conn_v2:
                 zone_b = _get_v2_defensive_stats(conn_v2, b_name)
-                extra_b.update({k: zone_b[k] for k in ("head_acc", "body_acc", "leg_acc") if k in zone_b})
+                extra_b.update({k: zone_b[k] for k in _ZONE_STAT_ZEROS if k in zone_b})
         elif conn_v2:
             extra_b.update(_get_v2_defensive_stats(conn_v2, b_name))
+
+        # ── Opponent-adjusted stats (needs own splm/td_avg/zone accs above) ────
+        if conn_v2 and r_fid_v2:
+            extra_r.update(compute_opp_adjusted_stats(
+                conn_v2, r_fid_v2,
+                own_splm=float(pd.to_numeric(red_stats.get("splm", 0), errors="coerce") or 0),
+                own_td_avg=float(pd.to_numeric(red_stats.get("td_avg", 0), errors="coerce") or 0),
+                own_head_acc=extra_r.get("head_acc", 0.0),
+                own_body_acc=extra_r.get("body_acc", 0.0),
+                own_dist_acc=extra_r.get("dist_acc", 0.0),
+            ))
+        if conn_v2 and b_fid_v2:
+            extra_b.update(compute_opp_adjusted_stats(
+                conn_v2, b_fid_v2,
+                own_splm=float(pd.to_numeric(blue_stats.get("splm", 0), errors="coerce") or 0),
+                own_td_avg=float(pd.to_numeric(blue_stats.get("td_avg", 0), errors="coerce") or 0),
+                own_head_acc=extra_b.get("head_acc", 0.0),
+                own_body_acc=extra_b.get("body_acc", 0.0),
+                own_dist_acc=extra_b.get("dist_acc", 0.0),
+            ))
 
     finally:
         conn.close()
