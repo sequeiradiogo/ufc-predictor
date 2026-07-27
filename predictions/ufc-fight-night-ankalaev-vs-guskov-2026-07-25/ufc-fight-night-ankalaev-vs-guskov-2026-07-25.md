@@ -1,8 +1,11 @@
 # UFC Fight Night: Ankalaev vs. Guskov -- July 25, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-07-24
+Model: Ensemble (Soft Vote) | Generated: 2026-07-24 | Scored: 2026-07-27
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
+
+**Result: 4/7 (57.1%)**
+*High-confidence (>=55%) picks: 3/6 (50.0%)*
 
 > Interactive fighter comparison: [ufc-fight-night-ankalaev-vs-guskov-2026-07-25.html](./ufc-fight-night-ankalaev-vs-guskov-2026-07-25.html)
 
@@ -10,18 +13,37 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 
 ## Predictions
 
-| Fight | Predicted Winner | Confidence | Likely Method |
-|---|---|---|---|
-| Magomed Ankalaev vs Bogdan Guskov | Magomed Ankalaev | 63.1% | Decision (50%) / KO/TKO (45%) |
-| Steve Erceg vs Ramazan Temirov | Steve Erceg | 76.6% | Decision (72%) / KO/TKO (17%) |
-| Islam Dulatov vs Wellington Turman | Islam Dulatov | 66.8% | Decision (42%) / KO/TKO (42%) |
-| Rizvan Kuniev vs Tyrell Fortune | Tyrell Fortune | 65.6% | KO/TKO (52%) / Decision (40%) |
-| Valter Walker vs Thomas Petersen | Valter Walker | 73.3% | Decision (63%) / Submission (24%) |
-| Santiago Ponzinibbio vs Sam Patterson | Sam Patterson | 64.4% | Decision (63%) / KO/TKO (25%) |
-| Ismael Bonfim vs Axel Sola | Ismael Bonfim | 75.1% | Decision (57%) / KO/TKO (32%) |
-| Nurullo Aliev vs Mike Davis | Nurullo Aliev | 52.2% | Decision (52%) / KO/TKO (29%) |
+| Fight | Predicted Winner | Confidence | Likely Method | Odds (Red / Blue) | Actual Result | Correct? |
+|---|---|---|---|---|---|---|
+| Magomed Ankalaev vs Bogdan Guskov | Magomed Ankalaev | 63.1% | Decision (50%) / KO/TKO (45%) | -456 / +426 | Magomed Ankalaev (KO R5) | YES |
+| Steve Erceg vs Ramazan Temirov | Steve Erceg | 76.6% | Decision (72%) / KO/TKO (17%) | -100 / -104 | Ramazan Temirov (KO R1) | NO |
+| Islam Dulatov vs Wellington Turman | Islam Dulatov | 66.8% | Decision (42%) / KO/TKO (42%) | -733 / +669 | ? | ? |
+| Rizvan Kuniev vs Tyrell Fortune | Tyrell Fortune | 65.6% | KO/TKO (52%) / Decision (40%) | -300 / +285 | Rizvan Kuniev (KO R3) | NO |
+| Valter Walker vs Thomas Petersen | Valter Walker | 73.3% | Decision (63%) / Submission (24%) | -170 / +163 | Valter Walker (Sub R1) | YES |
+| Santiago Ponzinibbio vs Sam Patterson | Sam Patterson | 64.4% | Decision (63%) / KO/TKO (25%) | +400 / -426 | Sam Patterson (KO R2) | YES |
+| Ismael Bonfim vs Axel Sola | Ismael Bonfim | 75.1% | Decision (57%) / KO/TKO (32%) | +178 / -186 | Axel Sola (Sub R1) | NO |
+| Nurullo Aliev vs Mike Davis | Nurullo Aliev | 52.2% | Decision (52%) / KO/TKO (29%) | -213 / +203 | Nurullo Aliev (Dec) | YES |
 
 ---
+
+## Post-Event Summary
+
+- Fights predicted: 8
+- Correct: 4/7 (57.1%)
+- High-confidence (>=55%) picks: 3/6 (50.0%)
+
+### P/L (EUR 1 flat on picks >=55% confidence)
+
+| Fight | Model Pick | Odds (dec) | Result | P/L |
+|---|---|---|---|---|
+| Magomed Ankalaev vs Bogdan Guskov | Magomed Ankalaev | 1.22 | Win | +EUR 0.22 |
+| Steve Erceg vs Ramazan Temirov | Steve Erceg | 2.00 | Loss | -EUR 1.00 |
+| Rizvan Kuniev vs Tyrell Fortune | Tyrell Fortune | 3.85 | Loss | -EUR 1.00 |
+| Valter Walker vs Thomas Petersen | Valter Walker | 1.59 | Win | +EUR 0.59 |
+| Santiago Ponzinibbio vs Sam Patterson | Sam Patterson | 1.24 | Win | +EUR 0.24 |
+| Ismael Bonfim vs Axel Sola | Ismael Bonfim | 2.78 | Loss | -EUR 1.00 |
+
+**Net P/L: -EUR 1.95 on EUR 6 staked (-32.5% ROI)**
 
 ## Raw Model Output
 
