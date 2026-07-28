@@ -48,9 +48,6 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release upload data-artifacts-latest raw_data/rankings_history.csv --clobber
 
-      - name: TEMP debug feature dump
-        run: python _debug_feat_dump.py
-
       - name: Run event predictions
         run: python scripts/predict_event.py --model ensemble --skip-existing
 
