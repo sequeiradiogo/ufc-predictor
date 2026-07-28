@@ -34,7 +34,7 @@ sys.path.insert(0, str(ROOT_DIR))
 
 import pandas as pd
 
-from config import DB_PATH, RAW_DIR
+from config import DB_PATH, DB_V1_PATH, RAW_DIR
 from utils.logger import get_logger
 import run_pipeline
 
@@ -286,7 +286,7 @@ def refresh_auto(dry_run: bool = False) -> None:
     # ---- Build career-snapshot CSV rows ----
     log.info("Converting scraped stats to career-snapshot format for CSV...")
     from scrapers.csv_builder import build_csv_rows
-    new_rows_df = build_csv_rows(data, DB_PATH)
+    new_rows_df = build_csv_rows(data, DB_PATH, DB_V1_PATH)
 
     if new_rows_df.empty:
         log.warning("No CSV rows could be built from scraped data. Aborting.")

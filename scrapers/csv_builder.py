@@ -12,6 +12,7 @@ The returned DataFrame matches the exact column schema expected by
 db/ingest_mdabbert.py so the full pipeline can be re-run without modification.
 """
 
+import hashlib
 import sqlite3
 import sys
 from copy import deepcopy
@@ -24,9 +25,26 @@ import pandas as pd
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
+from config import NAME_ALIASES
 from utils.logger import get_logger
 
 log = get_logger(__name__)
+
+
+def _mdabbert_fid(name: str) -> str:
+    """
+    Translate a fighter name into the mdabbert DB's fighter_id space.
+
+    Must match db/ingest_mdabbert.py's _fid() exactly (MD5 of the lowercased,
+    stripped name, truncated to 16 hex chars) -- the mdabbert DB has no
+    concept of the UFCStats hex fighter_id, so any code reading it needs to
+    key its lookups by this same name-derived hash. NAME_ALIASES is applied
+    first since UFCStats and the Kaggle-sourced mdabbert data occasionally
+    disagree on which name is canonical for the same real fighter.
+    """
+    key = (name or "").lower().strip()
+    key = NAME_ALIASES.get(key, key)
+    return hashlib.md5(key.encode()).hexdigest()[:16]
 
 # Reverse-map: DB method -> CSV finish code (used by ingest_mdabbert)
 _METHOD_TO_FINISH = {
@@ -375,12 +393,20 @@ def _make_row(
 
 # ── Public API ────────────────────────────────���───────────────────────────────
 
-def build_csv_rows(data: dict, db_path: Path) -> pd.DataFrame:
+def build_csv_rows(data: dict, ufcstats_db_path: Path, mdabbert_db_path: Path) -> pd.DataFrame:
     """
     Convert scraped ufcstats data into ufc-master.csv format rows.
 
     *data* is the dict returned by scrapers.ufcstats.scrape_new_data().
-    *db_path* is the existing DB used to initialise career stats.
+    *ufcstats_db_path* is the UFCStats per-fight DB (config.DB_PATH) -- used
+    only to resolve names for fighters in this batch who weren't newly bio-
+    scraped (scrape_new_data skips bio scraping for already-known fighters).
+    *mdabbert_db_path* is the career-aggregate DB (config.DB_V1_PATH) that
+    actually holds the prior career-state columns this function reads
+    (career_win_streak, avg_sig_str_pct, weightclass_rank, etc.) -- its
+    fighter_id is an MD5 hash of the fighter's name, an entirely different ID
+    space from the UFCStats hex IDs used everywhere else in *data*, so every
+    lookup against it must go through _mdabbert_fid() first.
 
     Returns a DataFrame ready to pd.concat onto ufc-master.csv.
     """
@@ -402,11 +428,25 @@ def build_csv_rows(data: dict, db_path: Path) -> pd.DataFrame:
 
     # Load career states from DB for all fighters in the batch
     all_fighter_ids = {f["r_fighter_id"] for f in fights} | {f["b_fighter_id"] for f in fights}
-    conn = sqlite3.connect(str(db_path))
+    ufcstats_conn = sqlite3.connect(str(ufcstats_db_path))
+    conn = sqlite3.connect(str(mdabbert_db_path))
 
     states: dict[str, _CareerState] = {}
     for fid in all_fighter_ids:
-        state = _load_state_from_db(fid, conn)
+        # Resolve this fighter's name so it can be hashed into the mdabbert
+        # DB's fighter_id space -- scrape_new_data only returns bio info
+        # (data["fighters"]) for fighters it hadn't seen before, so existing
+        # fighters need a direct name lookup against the UFCStats DB.
+        if fid in scraped_fighters:
+            name_for_lookup = scraped_fighters[fid].get("name") or ""
+        else:
+            row = ufcstats_conn.execute(
+                "SELECT name FROM fighters WHERE fighter_id = ?", (fid,)
+            ).fetchone()
+            name_for_lookup = row[0] if row else ""
+
+        state = _load_state_from_db(_mdabbert_fid(name_for_lookup), conn) if name_for_lookup \
+            else _CareerState(fighter_id=fid)
         # Fill bio from scraped data if DB has nothing
         if fid in scraped_fighters:
             bio = scraped_fighters[fid]
@@ -423,6 +463,7 @@ def build_csv_rows(data: dict, db_path: Path) -> pd.DataFrame:
         states[fid] = state
 
     conn.close()
+    ufcstats_conn.close()
 
     rows = []
     for fight in fights_sorted:
