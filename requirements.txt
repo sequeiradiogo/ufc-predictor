@@ -9,7 +9,7 @@ pandas>=2.0
 numpy>=1.26
 
 # Machine learning
-scikit-learn>=1.4
+scikit-learn==1.8.0 # pinned -- models_v1(_prod)/*.joblib were pickled with 1.8.0; unpinned installs drift to newer minors and silently corrupt calibrated probabilities (InconsistentVersionWarning)
 xgboost>=2.0
 lightgbm>=4.0
 torch>=2.0
