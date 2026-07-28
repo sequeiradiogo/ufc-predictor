@@ -37,6 +37,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release download data-artifacts-latest --dir raw_data/ --pattern "rankings_history.csv"
 
+      - name: Refresh live rankings snapshot
+        id: refresh_rankings
+        continue-on-error: true
+        run: python scrapers/ufc_rankings_web.py
+
+      - name: Upload updated rankings to release
+        if: steps.refresh_rankings.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload data-artifacts-latest raw_data/rankings_history.csv --clobber
+
       - name: Run event predictions
         run: python scripts/predict_event.py --model ensemble --skip-existing
 
