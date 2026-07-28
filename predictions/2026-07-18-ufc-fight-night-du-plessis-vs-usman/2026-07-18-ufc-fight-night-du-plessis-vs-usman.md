@@ -7,7 +7,7 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 **Result: 6/8 (75.0%)**
 *High-confidence (>=55%) picks: 6/6 (100.0%)*
 
-> Interactive fighter comparison: [ufc-fight-night-du-plessis-vs-usman-2026-07-18.html](./ufc-fight-night-du-plessis-vs-usman-2026-07-18.html)
+> Interactive fighter comparison: [2026-07-18-ufc-fight-night-du-plessis-vs-usman.html](./2026-07-18-ufc-fight-night-du-plessis-vs-usman.html)
 
 ---
 

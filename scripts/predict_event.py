@@ -411,7 +411,7 @@ def generate_html(
 
 def _event_slug(name: str, event_date: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
-    return f"{slug}-{event_date}"
+    return f"{event_date}-{slug}"
 
 
 def _format_finish(finish_proba: list[float] | None) -> str:

@@ -6,7 +6,7 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 
 **Result: 6/9 correct (66.7%)**
 
-> Interactive fighter comparison: [ufc-fight-night-kape-vs-horiguchi-2026-06-20.html](./ufc-fight-night-kape-vs-horiguchi-2026-06-20.html)
+> Interactive fighter comparison: [2026-06-20-ufc-fight-night-kape-vs-horiguchi.html](./2026-06-20-ufc-fight-night-kape-vs-horiguchi.html)
 
 ---
 

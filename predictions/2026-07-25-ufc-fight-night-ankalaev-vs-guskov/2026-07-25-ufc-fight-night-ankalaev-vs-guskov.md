@@ -7,7 +7,7 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 **Result: 4/7 (57.1%)** *(Islam Dulatov vs Wellington Turman was cancelled hours before the event and excluded from scoring)*
 *High-confidence (>=55%) picks: 3/6 (50.0%)*
 
-> Interactive fighter comparison: [ufc-fight-night-ankalaev-vs-guskov-2026-07-25.html](./ufc-fight-night-ankalaev-vs-guskov-2026-07-25.html)
+> Interactive fighter comparison: [2026-07-25-ufc-fight-night-ankalaev-vs-guskov.html](./2026-07-25-ufc-fight-night-ankalaev-vs-guskov.html)
 
 ---
 

@@ -6,7 +6,7 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 
 **Result: 4/12 (33.3%)**
 
-> Interactive fighter comparison: [ufc-329-mcgregor-vs-holloway-2-2026-07-11.html](./ufc-329-mcgregor-vs-holloway-2-2026-07-11.html)
+> Interactive fighter comparison: [2026-07-11-ufc-329-mcgregor-vs-holloway-2.html](./2026-07-11-ufc-329-mcgregor-vs-holloway-2.html)
 
 ---
 
