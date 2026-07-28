@@ -4,7 +4,7 @@ Model: Ensemble (Soft Vote) | Generated: 2026-07-24 | Scored: 2026-07-27
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
 
-**Result: 4/7 (57.1%)**
+**Result: 4/7 (57.1%)** *(Islam Dulatov vs Wellington Turman was cancelled hours before the event and excluded from scoring)*
 *High-confidence (>=55%) picks: 3/6 (50.0%)*
 
 > Interactive fighter comparison: [ufc-fight-night-ankalaev-vs-guskov-2026-07-25.html](./ufc-fight-night-ankalaev-vs-guskov-2026-07-25.html)
@@ -17,7 +17,7 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 |---|---|---|---|---|---|---|
 | Magomed Ankalaev vs Bogdan Guskov | Magomed Ankalaev | 63.1% | Decision (50%) / KO/TKO (45%) | -456 / +426 | Magomed Ankalaev (KO R5) | YES |
 | Steve Erceg vs Ramazan Temirov | Steve Erceg | 76.6% | Decision (72%) / KO/TKO (17%) | -100 / -104 | Ramazan Temirov (KO R1) | NO |
-| Islam Dulatov vs Wellington Turman | Islam Dulatov | 66.8% | Decision (42%) / KO/TKO (42%) | -733 / +669 | ? | ? |
+| Islam Dulatov vs Wellington Turman | Islam Dulatov | 66.8% | Decision (42%) / KO/TKO (42%) | -733 / +669 | Cancelled (fight pulled hours before event) | N/A |
 | Rizvan Kuniev vs Tyrell Fortune | Tyrell Fortune | 65.6% | KO/TKO (52%) / Decision (40%) | -300 / +285 | Rizvan Kuniev (KO R3) | NO |
 | Valter Walker vs Thomas Petersen | Valter Walker | 73.3% | Decision (63%) / Submission (24%) | -170 / +163 | Valter Walker (Sub R1) | YES |
 | Santiago Ponzinibbio vs Sam Patterson | Sam Patterson | 64.4% | Decision (63%) / KO/TKO (25%) | +400 / -426 | Sam Patterson (KO R2) | YES |
@@ -28,7 +28,7 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 
 ## Post-Event Summary
 
-- Fights predicted: 8
+- Fights predicted: 8 (1 cancelled pre-event -- excluded from scoring: Islam Dulatov vs Wellington Turman)
 - Correct: 4/7 (57.1%)
 - High-confidence (>=55%) picks: 3/6 (50.0%)
 
