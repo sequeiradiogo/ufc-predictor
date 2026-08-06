@@ -299,6 +299,17 @@ def refresh_auto(dry_run: bool = False) -> None:
         )
         return
 
+    # ---- Persist scraped data into the UFCStats DB ----
+    # Without this, get_last_event_date() never advances and every future
+    # run re-scrapes the same "new" events indefinitely.
+    conn = sqlite3.connect(str(DB_PATH))
+    try:
+        _insert_new_data(data, conn)
+        conn.commit()
+    finally:
+        conn.close()
+    log.info("Persisted scraped fights into %s", DB_PATH)
+
     # ---- Append to ufc-master.csv ----
     existing_df = pd.read_csv(_MASTER_CSV, low_memory=False)
     # Align columns: new_rows_df may be missing some CSV columns -- fill with NaN
@@ -312,7 +323,7 @@ def refresh_auto(dry_run: bool = False) -> None:
     # ---- Rebuild DB from updated CSV ----
     log.info("Rebuilding DB from updated CSV via ingest_mdabbert...")
     from db.ingest_mdabbert import ingest
-    ingest(_MASTER_CSV, DB_PATH)
+    ingest(_MASTER_CSV, DB_V1_PATH)
 
     # ---- Rankings snapshot (optional -- non-blocking) ----
     log.info("Refreshing UFC rankings from Kaggle...")

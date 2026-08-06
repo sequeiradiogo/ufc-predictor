@@ -321,9 +321,9 @@ def _make_row(
 
     total_secs = fight.get("total_fight_time_secs") or 0
 
-    def _stats(s: _CareerState, prefix: str) -> dict:
+    def _stats(s: _CareerState, prefix: str, name: str) -> dict:
         return {
-            f"{prefix}fighter":                 s.name,
+            f"{prefix}fighter":                 name,
             f"{prefix}wins":                    s.wins,
             f"{prefix}losses":                  s.losses,
             f"{prefix}current_win_streak":      s.win_streak,
@@ -365,8 +365,8 @@ def _make_row(
         "B_odds":              fight.get("odds_blue"),
         "location":            None,
     }
-    row.update(_stats(r_state, "R_"))
-    row.update(_stats(b_state, "B_"))
+    row.update(_stats(r_state, "R_", r_name))
+    row.update(_stats(b_state, "B_", b_name))
 
     # Pre-computed diff columns (ingest_mdabbert doesn't use these for fight_stats
     # but they exist in the CSV for completeness)
