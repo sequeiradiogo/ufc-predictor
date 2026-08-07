@@ -1,0 +1,764 @@
+{
+  "event": "UFC Fight Night: Gamrot vs. Salkilld",
+  "date": "2026-08-08",
+  "event_url": "http://www.ufcstats.com/event-details/495add4fbede0a44",
+  "model_type": "ensemble",
+  "fights": [
+    {
+      "label": "Mateusz Gamrot vs Quillan Salkilld",
+      "red_name": "Mateusz Gamrot",
+      "blue_name": "Quillan Salkilld",
+      "winner": "Quillan Salkilld",
+      "red_prob": 7.8,
+      "blue_prob": 92.2,
+      "elo_red": 1541.0,
+      "elo_blue": 1559.0,
+      "finish": [
+        0.6409881711006165,
+        0.14500634372234344,
+        0.2140054851770401
+      ],
+      "finish_str": "Decision (64%) / Submission (21%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          51.6,
+          60.1,
+          38.6,
+          83.3,
+          23.1,
+          66.7
+        ],
+        "blue": [
+          59.8,
+          47.6,
+          31.2,
+          75.0,
+          60.0,
+          100.0
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          3.21,
+          2.81,
+          5.22,
+          1.0
+        ],
+        "blue": [
+          4.77,
+          2.26,
+          6.16,
+          5.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 1,
+        "blue_streak": 5,
+        "red_finish": 66.7,
+        "blue_finish": 100.0,
+        "red_sos": 1514.0,
+        "blue_sos": 1437.0
+      }
+    },
+    {
+      "label": "Diego Ferreira vs Billy Quarantillo",
+      "red_name": "Diego Ferreira",
+      "blue_name": "Billy Quarantillo",
+      "winner": "Billy Quarantillo",
+      "red_prob": 26.9,
+      "blue_prob": 73.1,
+      "elo_red": 1481.0,
+      "elo_blue": 1458.0,
+      "finish": [
+        0.4469658136367798,
+        0.30230259895324707,
+        0.25073158740997314
+      ],
+      "finish_str": "Decision (45%) / KO/TKO (30%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          39.8,
+          55.9,
+          30.0,
+          57.9,
+          29.4,
+          33.3
+        ],
+        "blue": [
+          52.2,
+          43.0,
+          25.5,
+          61.4,
+          27.3,
+          33.3
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          4.7,
+          3.46,
+          0.82,
+          0.0
+        ],
+        "blue": [
+          7.04,
+          5.87,
+          1.59,
+          0.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 0,
+        "blue_streak": 0,
+        "red_finish": 66.7,
+        "blue_finish": 66.7,
+        "red_sos": 1497.0,
+        "blue_sos": 1479.0
+      }
+    },
+    {
+      "label": "Darren Elkins vs Yadier del Valle",
+      "red_name": "Darren Elkins",
+      "blue_name": "Yadier del Valle",
+      "winner": "Yadier del Valle",
+      "red_prob": 23.7,
+      "blue_prob": 76.3,
+      "elo_red": 1467.0,
+      "elo_blue": 1420.0,
+      "finish": [
+        0.5632569789886475,
+        0.1781654804944992,
+        0.2585775554180145
+      ],
+      "finish_str": "Decision (56%) / Submission (26%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          38.4,
+          51.2,
+          34.0,
+          56.1,
+          13.3,
+          66.7
+        ],
+        "blue": [
+          41.8,
+          64.3,
+          100.0,
+          55.6,
+          0.0,
+          66.7
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          3.4,
+          3.34,
+          2.87,
+          0.0
+        ],
+        "blue": [
+          1.07,
+          0.93,
+          0.69,
+          0.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 0,
+        "blue_streak": 0,
+        "red_finish": 66.7,
+        "blue_finish": 66.7,
+        "red_sos": 1403.0,
+        "blue_sos": 1385.0
+      }
+    },
+    {
+      "label": "Amanda Lemos vs Alexia Thainara",
+      "red_name": "Amanda Lemos",
+      "blue_name": "Alexia Thainara",
+      "winner": "Alexia Thainara",
+      "red_prob": 22.6,
+      "blue_prob": 77.4,
+      "elo_red": 1486.0,
+      "elo_blue": 1514.0,
+      "finish": [
+        0.5087013840675354,
+        0.1711791455745697,
+        0.3201194703578949
+      ],
+      "finish_str": "Decision (51%) / Submission (32%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          55.3,
+          45.3,
+          64.7,
+          63.0,
+          20.0,
+          33.3
+        ],
+        "blue": [
+          46.0,
+          44.9,
+          52.2,
+          100.0,
+          0.0,
+          100.0
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          2.75,
+          3.01,
+          1.02,
+          0.0
+        ],
+        "blue": [
+          3.71,
+          2.2,
+          5.21,
+          3.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 0,
+        "blue_streak": 3,
+        "red_finish": 0.0,
+        "blue_finish": 33.3,
+        "red_sos": 1520.0,
+        "blue_sos": 1397.0
+      }
+    },
+    {
+      "label": "Billy Ray Goff vs Ty Miller",
+      "red_name": "Billy Ray Goff",
+      "blue_name": "Ty Miller",
+      "winner": "Ty Miller",
+      "red_prob": 50.0,
+      "blue_prob": 50.0,
+      "elo_red": 1347.0,
+      "elo_blue": 1442.0,
+      "finish": [
+        0.4576609134674072,
+        0.43309107422828674,
+        0.10924800485372543
+      ],
+      "finish_str": "Decision (46%) / KO/TKO (43%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          46.6,
+          59.1,
+          7.1,
+          50.0,
+          33.3,
+          33.3
+        ],
+        "blue": [
+          48.8,
+          50.7,
+          0.0,
+          100.0,
+          100.0,
+          100.0
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          7.11,
+          5.16,
+          0.68,
+          0.0
+        ],
+        "blue": [
+          11.84,
+          7.22,
+          0.0,
+          1.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 0,
+        "blue_streak": 1,
+        "red_finish": 66.7,
+        "blue_finish": 100.0,
+        "red_sos": 1389.0,
+        "blue_sos": 1374.0
+      }
+    },
+    {
+      "label": "Steven Asplund vs Guilherme Pat",
+      "red_name": "Steven Asplund",
+      "blue_name": "Guilherme Pat",
+      "winner": "Guilherme Pat",
+      "red_prob": 34.2,
+      "blue_prob": 65.8,
+      "elo_red": 1399.0,
+      "elo_blue": 1387.0,
+      "finish": [
+        0.2917761206626892,
+        0.6499119997024536,
+        0.058311816304922104
+      ],
+      "finish_str": "KO/TKO (65%) / Decision (29%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          51.3,
+          49.7,
+          0.0,
+          100.0,
+          50.0,
+          50.0
+        ],
+        "blue": [
+          61.8,
+          52.0,
+          0.0,
+          100.0,
+          0.0,
+          50.0
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          9.7,
+          6.63,
+          0.0,
+          0.0
+        ],
+        "blue": [
+          2.7,
+          2.03,
+          0.0,
+          0.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 0,
+        "blue_streak": 0,
+        "red_finish": 50.0,
+        "blue_finish": 0.0,
+        "red_sos": 1404.0,
+        "blue_sos": 1385.0
+      }
+    },
+    {
+      "label": "Diyar Nurgozhay vs Bruno Lopes",
+      "red_name": "Diyar Nurgozhay",
+      "blue_name": "Bruno Lopes",
+      "winner": "Diyar Nurgozhay",
+      "red_prob": 97.2,
+      "blue_prob": 2.8,
+      "elo_red": 1376.0,
+      "elo_blue": 1386.0,
+      "finish": [
+        0.5084334015846252,
+        0.37659192085266113,
+        0.11497467011213303
+      ],
+      "finish_str": "Decision (51%) / KO/TKO (38%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          61.1,
+          58.9,
+          75.0,
+          77.8,
+          0.0,
+          33.3
+        ],
+        "blue": [
+          45.1,
+          48.4,
+          22.7,
+          100.0,
+          0.0,
+          33.3
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          4.87,
+          2.85,
+          1.86,
+          1.0
+        ],
+        "blue": [
+          2.47,
+          4.28,
+          2.89,
+          0.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 1,
+        "blue_streak": 0,
+        "red_finish": 66.7,
+        "blue_finish": 66.7,
+        "red_sos": 1369.0,
+        "blue_sos": 1460.0
+      }
+    },
+    {
+      "label": "Miles Johns vs Gianni Vazquez",
+      "red_name": "Miles Johns",
+      "blue_name": "Gianni Vazquez",
+      "winner": "Miles Johns",
+      "red_prob": 85.4,
+      "blue_prob": 14.6,
+      "elo_red": 1428.0,
+      "elo_blue": 1373.0,
+      "finish": [
+        0.5378665328025818,
+        0.3773692846298218,
+        0.08476417511701584
+      ],
+      "finish_str": "Decision (54%) / KO/TKO (38%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          43.4,
+          67.1,
+          22.4,
+          76.9,
+          18.2,
+          0.0
+        ],
+        "blue": [
+          22.2,
+          39.2,
+          0.0,
+          62.5,
+          0.0,
+          0.0
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          3.21,
+          2.9,
+          1.05,
+          0.0
+        ],
+        "blue": [
+          1.6,
+          3.93,
+          0.0,
+          0.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 0,
+        "blue_streak": 0,
+        "red_finish": 33.3,
+        "blue_finish": 0.0,
+        "red_sos": 1441.0,
+        "blue_sos": 1484.0
+      }
+    },
+    {
+      "label": "Juliana Miller vs Ravena Oliveira",
+      "red_name": "Juliana Miller",
+      "blue_name": "Ravena Oliveira",
+      "winner": "Juliana Miller",
+      "red_prob": 78.7,
+      "blue_prob": 21.3,
+      "elo_red": 1341.0,
+      "elo_blue": 1301.0,
+      "finish": [
+        0.44719815254211426,
+        0.12221410125494003,
+        0.4305877387523651
+      ],
+      "finish_str": "Decision (45%) / Submission (43%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          39.9,
+          44.7,
+          29.0,
+          44.4,
+          20.0,
+          33.3
+        ],
+        "blue": [
+          30.4,
+          46.4,
+          50.0,
+          46.2,
+          0.0,
+          0.0
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          2.65,
+          4.14,
+          2.16,
+          0.0
+        ],
+        "blue": [
+          1.91,
+          3.72,
+          0.88,
+          0.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 0,
+        "blue_streak": 0,
+        "red_finish": 33.3,
+        "blue_finish": 66.7,
+        "red_sos": 1390.0,
+        "blue_sos": 1425.0
+      }
+    }
+  ]
+}
