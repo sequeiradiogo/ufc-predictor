@@ -43,7 +43,7 @@ def _mdabbert_fid(name: str) -> str:
     disagree on which name is canonical for the same real fighter.
     """
     key = (name or "").lower().strip()
-    key = NAME_ALIASES.get(key, key)
+    key = NAME_ALIASES.get(key, key).lower()
     return hashlib.md5(key.encode()).hexdigest()[:16]
 
 # Reverse-map: DB method -> CSV finish code (used by ingest_mdabbert)
@@ -447,6 +447,12 @@ def build_csv_rows(data: dict, ufcstats_db_path: Path, mdabbert_db_path: Path) -
 
         state = _load_state_from_db(_mdabbert_fid(name_for_lookup), conn) if name_for_lookup \
             else _CareerState(fighter_id=fid)
+        # _load_state_from_db returns a blank state (name="") when the fighter
+        # has no row in the mdabbert DB yet -- name_for_lookup is still the
+        # correct name (from the scrape batch or the UFCStats DB), so use it
+        # rather than falling through to build_csv_rows()'s raw-fid fallback.
+        if not state.name:
+            state.name = name_for_lookup
         # Fill bio from scraped data if DB has nothing
         if fid in scraped_fighters:
             bio = scraped_fighters[fid]
