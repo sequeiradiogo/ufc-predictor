@@ -1,0 +1,848 @@
+{
+  "event": "UFC Fight Night: Hernandez vs. Rodrigues",
+  "date": "2026-08-22",
+  "event_url": "http://www.ufcstats.com/event-details/a0a69dc9914ef6e1",
+  "model_type": "ensemble",
+  "fights": [
+    {
+      "label": "Anthony Hernandez vs Gregory Rodrigues",
+      "red_name": "Anthony Hernandez",
+      "blue_name": "Gregory Rodrigues",
+      "winner": "Anthony Hernandez",
+      "red_prob": 96.8,
+      "blue_prob": 3.2,
+      "elo_red": 1509.0,
+      "elo_blue": 1514.0,
+      "finish": [
+        0.4743967056274414,
+        0.2274826467037201,
+        0.2981205880641937
+      ],
+      "finish_str": "Decision (47%) / Submission (30%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          60.7,
+          50.9,
+          48.2,
+          68.2,
+          16.7,
+          66.7
+        ],
+        "blue": [
+          51.5,
+          50.9,
+          35.7,
+          75.0,
+          53.8,
+          100.0
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          4.52,
+          3.1,
+          5.91,
+          0.0
+        ],
+        "blue": [
+          5.52,
+          4.72,
+          1.93,
+          3.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 0,
+        "blue_streak": 3,
+        "red_finish": 66.7,
+        "blue_finish": 66.7,
+        "red_sos": 1513.0,
+        "blue_sos": 1481.0
+      }
+    },
+    {
+      "label": "Serghei Spivac vs Vitor Petrino",
+      "red_name": "Serghei Spivac",
+      "blue_name": "Vitor Petrino",
+      "winner": "Vitor Petrino",
+      "red_prob": 33.5,
+      "blue_prob": 66.5,
+      "elo_red": 1481.0,
+      "elo_blue": 1492.0,
+      "finish": [
+        0.4016638398170471,
+        0.31199607253074646,
+        0.28634002804756165
+      ],
+      "finish_str": "Decision (40%) / KO/TKO (31%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          47.8,
+          52.2,
+          59.3,
+          63.6,
+          20.0,
+          33.3
+        ],
+        "blue": [
+          48.8,
+          50.9,
+          46.2,
+          80.8,
+          22.2,
+          100.0
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          3.57,
+          4.23,
+          3.82,
+          1.0
+        ],
+        "blue": [
+          3.09,
+          2.76,
+          2.84,
+          3.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 1,
+        "blue_streak": 3,
+        "red_finish": 33.3,
+        "blue_finish": 66.7,
+        "red_sos": 1504.0,
+        "blue_sos": 1408.0
+      }
+    },
+    {
+      "label": "Reinier de Ridder vs Roman Dolidze",
+      "red_name": "Reinier de Ridder",
+      "blue_name": "Roman Dolidze",
+      "winner": "Reinier de Ridder",
+      "red_prob": 91.5,
+      "blue_prob": 8.5,
+      "elo_red": 1543.0,
+      "elo_blue": 1482.0,
+      "finish": [
+        0.6315298676490784,
+        0.2148628532886505,
+        0.15360726416110992
+      ],
+      "finish_str": "Decision (63%) / KO/TKO (21%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          48.6,
+          46.8,
+          29.2,
+          40.0,
+          16.7,
+          33.3
+        ],
+        "blue": [
+          41.6,
+          48.5,
+          43.8,
+          32.0,
+          35.7,
+          33.3
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          2.47,
+          2.36,
+          2.56,
+          0.0
+        ],
+        "blue": [
+          3.19,
+          3.71,
+          1.16,
+          0.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 0,
+        "blue_streak": 0,
+        "red_finish": 33.3,
+        "blue_finish": 33.3,
+        "red_sos": 1551.0,
+        "blue_sos": 1490.0
+      }
+    },
+    {
+      "label": "MarQuel Mederos vs Mason Jones",
+      "red_name": "MarQuel Mederos",
+      "blue_name": "Mason Jones",
+      "winner": "Mason Jones",
+      "red_prob": 33.9,
+      "blue_prob": 66.1,
+      "elo_red": 1497.0,
+      "elo_blue": 1460.0,
+      "finish": [
+        0.6174432039260864,
+        0.2510787844657898,
+        0.13147799670696259
+      ],
+      "finish_str": "Decision (62%) / KO/TKO (25%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          58.3,
+          52.3,
+          8.3,
+          77.8,
+          0.0,
+          100.0
+        ],
+        "blue": [
+          42.8,
+          50.9,
+          55.3,
+          73.9,
+          16.7,
+          100.0
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          5.43,
+          4.77,
+          0.25,
+          3.0
+        ],
+        "blue": [
+          5.98,
+          4.45,
+          3.48,
+          3.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 3,
+        "blue_streak": 3,
+        "red_finish": 0.0,
+        "blue_finish": 33.3,
+        "red_sos": 1392.0,
+        "blue_sos": 1440.0
+      }
+    },
+    {
+      "label": "Carli Judice vs Jeisla Chaves",
+      "red_name": "Carli Judice",
+      "blue_name": "Jeisla Chaves",
+      "winner": "Carli Judice",
+      "red_prob": 63.2,
+      "blue_prob": 36.8,
+      "elo_red": 1436.0,
+      "elo_blue": 1430.0,
+      "finish": [
+        0.5759287476539612,
+        0.18417562544345856,
+        0.23989564180374146
+      ],
+      "finish_str": "Decision (58%) / Submission (24%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          48.2,
+          59.6,
+          50.0,
+          82.8,
+          50.0,
+          100.0
+        ],
+        "blue": [
+          64.6,
+          44.6,
+          50.0,
+          50.0,
+          0.0,
+          100.0
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          8.66,
+          4.66,
+          0.69,
+          3.0
+        ],
+        "blue": [
+          4.27,
+          4.13,
+          3.0,
+          1.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 3,
+        "blue_streak": 1,
+        "red_finish": 66.7,
+        "blue_finish": 0.0,
+        "red_sos": 1358.0,
+        "blue_sos": 1309.0
+      }
+    },
+    {
+      "label": "Jamall Emmers vs Lerryan Douglas",
+      "red_name": "Jamall Emmers",
+      "blue_name": "Lerryan Douglas",
+      "winner": "Lerryan Douglas",
+      "red_prob": 36.9,
+      "blue_prob": 63.1,
+      "elo_red": 1427.0,
+      "elo_blue": 1455.0,
+      "finish": [
+        0.6731930375099182,
+        0.261968195438385,
+        0.06483878940343857
+      ],
+      "finish_str": "Decision (67%) / KO/TKO (26%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          47.5,
+          59.3,
+          53.3,
+          80.0,
+          22.2,
+          66.7
+        ],
+        "blue": [
+          60.4,
+          63.0,
+          0.0,
+          0.0,
+          100.0,
+          100.0
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          4.88,
+          3.57,
+          2.77,
+          2.0
+        ],
+        "blue": [
+          8.17,
+          4.79,
+          0.0,
+          1.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 2,
+        "blue_streak": 1,
+        "red_finish": 66.7,
+        "blue_finish": 100.0,
+        "red_sos": 1398.0,
+        "blue_sos": 1420.0
+      }
+    },
+    {
+      "label": "Kennedy Nzechukwu vs Shamil Gaziev",
+      "red_name": "Kennedy Nzechukwu",
+      "blue_name": "Shamil Gaziev",
+      "winner": "Kennedy Nzechukwu",
+      "red_prob": 91.5,
+      "blue_prob": 8.5,
+      "elo_red": 1433.0,
+      "elo_blue": 1453.0,
+      "finish": [
+        0.35293278098106384,
+        0.5473004579544067,
+        0.09976675361394882
+      ],
+      "finish_str": "KO/TKO (55%) / Decision (35%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          49.6,
+          51.2,
+          45.5,
+          80.8,
+          42.9,
+          66.7
+        ],
+        "blue": [
+          45.4,
+          45.2,
+          33.3,
+          83.3,
+          33.3,
+          33.3
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          4.68,
+          4.52,
+          0.56,
+          0.0
+        ],
+        "blue": [
+          3.01,
+          5.16,
+          1.11,
+          0.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 0,
+        "blue_streak": 0,
+        "red_finish": 100.0,
+        "blue_finish": 100.0,
+        "red_sos": 1392.0,
+        "blue_sos": 1463.0
+      }
+    },
+    {
+      "label": "Chris Padilla vs Nasrat Haqparast",
+      "red_name": "Chris Padilla",
+      "blue_name": "Nasrat Haqparast",
+      "winner": "Chris Padilla",
+      "red_prob": 79.5,
+      "blue_prob": 20.5,
+      "elo_red": 1513.0,
+      "elo_blue": 1492.0,
+      "finish": [
+        0.603949785232544,
+        0.32549527287483215,
+        0.0705549493432045
+      ],
+      "finish_str": "Decision (60%) / KO/TKO (33%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          54.2,
+          49.4,
+          28.6,
+          80.0,
+          50.0,
+          100.0
+        ],
+        "blue": [
+          45.7,
+          63.4,
+          20.0,
+          86.0,
+          13.3,
+          66.7
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          6.19,
+          4.88,
+          1.13,
+          4.0
+        ],
+        "blue": [
+          6.36,
+          6.0,
+          0.34,
+          0.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 4,
+        "blue_streak": 0,
+        "red_finish": 66.7,
+        "blue_finish": 33.3,
+        "red_sos": 1407.0,
+        "blue_sos": 1443.0
+      }
+    },
+    {
+      "label": "Wes Schultz vs Jackson McVey",
+      "red_name": "Wes Schultz",
+      "blue_name": "Jackson McVey",
+      "winner": "Jackson McVey",
+      "red_prob": 32.9,
+      "blue_prob": 67.1,
+      "elo_red": 1411.0,
+      "elo_blue": 1402.0,
+      "finish": [
+        0.18249565362930298,
+        0.6029974818229675,
+        0.2145068496465683
+      ],
+      "finish_str": "KO/TKO (60%) / Submission (21%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          50.0,
+          30.8,
+          0.0,
+          0.0,
+          0.0,
+          50.0
+        ],
+        "blue": [
+          69.2,
+          23.6,
+          0.0,
+          0.0,
+          0.0,
+          33.3
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          1.05,
+          1.88,
+          0.0,
+          1.0
+        ],
+        "blue": [
+          6.51,
+          3.37,
+          0.0,
+          1.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 1,
+        "blue_streak": 1,
+        "red_finish": 100.0,
+        "blue_finish": 100.0,
+        "red_sos": 1415.0,
+        "blue_sos": 1419.0
+      }
+    },
+    {
+      "label": "Shanelle Dyer vs Elise Reed",
+      "red_name": "Shanelle Dyer",
+      "blue_name": "Elise Reed",
+      "winner": "Shanelle Dyer",
+      "red_prob": 96.9,
+      "blue_prob": 3.1,
+      "elo_red": 1427.0,
+      "elo_blue": 1380.0,
+      "finish": [
+        0.7985500693321228,
+        0.15380969643592834,
+        0.04764023795723915
+      ],
+      "finish_str": "Decision (80%) / KO/TKO (15%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          62.8,
+          67.5,
+          100.0,
+          100.0,
+          100.0,
+          100.0
+        ],
+        "blue": [
+          53.2,
+          51.7,
+          60.0,
+          53.1,
+          0.0,
+          33.3
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          7.8,
+          4.14,
+          2.39,
+          1.0
+        ],
+        "blue": [
+          3.41,
+          3.26,
+          0.46,
+          0.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 1,
+        "blue_streak": 0,
+        "red_finish": 100.0,
+        "blue_finish": 66.7,
+        "red_sos": 1301.0,
+        "blue_sos": 1417.0
+      }
+    }
+  ]
+}
