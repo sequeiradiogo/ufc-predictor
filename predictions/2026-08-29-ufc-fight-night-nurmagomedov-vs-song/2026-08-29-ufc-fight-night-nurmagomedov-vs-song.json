@@ -1,0 +1,596 @@
+{
+  "event": "UFC Fight Night: Nurmagomedov vs. Song",
+  "date": "2026-08-29",
+  "event_url": "http://www.ufcstats.com/event-details/9d61d8cb1c354867",
+  "model_type": "ensemble",
+  "fights": [
+    {
+      "label": "Umar Nurmagomedov vs Song Yadong",
+      "red_name": "Umar Nurmagomedov",
+      "blue_name": "Song Yadong",
+      "winner": "Umar Nurmagomedov",
+      "red_prob": 97.9,
+      "blue_prob": 2.1,
+      "elo_red": 1593.0,
+      "elo_blue": 1560.0,
+      "finish": [
+        0.6647899150848389,
+        0.1883360892534256,
+        0.14687402546405792
+      ],
+      "finish_str": "Decision (66%) / KO/TKO (19%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          56.5,
+          61.2,
+          46.6,
+          79.4,
+          11.1,
+          66.7
+        ],
+        "blue": [
+          43.7,
+          55.0,
+          41.4,
+          73.8,
+          31.2,
+          66.7
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          3.86,
+          1.86,
+          4.03,
+          2.0
+        ],
+        "blue": [
+          4.34,
+          3.81,
+          0.81,
+          1.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 2,
+        "blue_streak": 1,
+        "red_finish": 0.0,
+        "blue_finish": 33.3,
+        "red_sos": 1528.0,
+        "blue_sos": 1549.0
+      }
+    },
+    {
+      "label": "Yan Xiaonan vs Denise Gomes",
+      "red_name": "Yan Xiaonan",
+      "blue_name": "Denise Gomes",
+      "winner": "Denise Gomes",
+      "red_prob": 30.0,
+      "blue_prob": 70.0,
+      "elo_red": 1513.0,
+      "elo_blue": 1503.0,
+      "finish": [
+        0.8924432992935181,
+        0.06763646006584167,
+        0.03992031514644623
+      ],
+      "finish_str": "Decision (89%) / KO/TKO (7%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          45.1,
+          60.3,
+          73.3,
+          64.9,
+          7.7,
+          33.3
+        ],
+        "blue": [
+          51.4,
+          45.7,
+          34.5,
+          65.9,
+          37.5,
+          100.0
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          4.69,
+          3.23,
+          0.84,
+          0.0
+        ],
+        "blue": [
+          4.02,
+          3.07,
+          1.69,
+          4.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 0,
+        "blue_streak": 4,
+        "red_finish": 0.0,
+        "blue_finish": 33.3,
+        "red_sos": 1510.0,
+        "blue_sos": 1430.0
+      }
+    },
+    {
+      "label": "Aoriqileng vs Kai Asakura",
+      "red_name": "Aoriqileng",
+      "blue_name": "Kai Asakura",
+      "winner": "Aoriqileng",
+      "red_prob": 77.8,
+      "blue_prob": 22.2,
+      "elo_red": 1386.0,
+      "elo_blue": 1409.0,
+      "finish": [
+        0.5011938214302063,
+        0.41048967838287354,
+        0.08831650763750076
+      ],
+      "finish_str": "Decision (50%) / KO/TKO (41%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          49.9,
+          46.6,
+          46.7,
+          59.5,
+          22.2,
+          33.3
+        ],
+        "blue": [
+          34.3,
+          52.3,
+          0.0,
+          50.0,
+          33.3,
+          33.3
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          4.4,
+          5.66,
+          1.11,
+          0.0
+        ],
+        "blue": [
+          2.53,
+          3.34,
+          0.0,
+          1.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 0,
+        "blue_streak": 1,
+        "red_finish": 66.7,
+        "blue_finish": 100.0,
+        "red_sos": 1430.0,
+        "blue_sos": 1455.0
+      }
+    },
+    {
+      "label": "Alex Perez vs Sumudaerji",
+      "red_name": "Alex Perez",
+      "blue_name": "Sumudaerji",
+      "winner": "Sumudaerji",
+      "red_prob": 29.8,
+      "blue_prob": 70.2,
+      "elo_red": 1486.0,
+      "elo_blue": 1453.0,
+      "finish": [
+        0.6236896514892578,
+        0.24246464669704437,
+        0.1338457614183426
+      ],
+      "finish_str": "Decision (62%) / KO/TKO (24%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          45.5,
+          59.1,
+          45.5,
+          73.0,
+          28.6,
+          33.3
+        ],
+        "blue": [
+          50.5,
+          63.3,
+          37.5,
+          73.1,
+          10.0,
+          100.0
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          4.21,
+          3.23,
+          2.13,
+          1.0
+        ],
+        "blue": [
+          4.4,
+          2.29,
+          0.76,
+          3.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 1,
+        "blue_streak": 3,
+        "red_finish": 100.0,
+        "blue_finish": 0.0,
+        "red_sos": 1492.0,
+        "blue_sos": 1435.0
+      }
+    },
+    {
+      "label": "Rei Tsuruya vs Kevin Borjas",
+      "red_name": "Rei Tsuruya",
+      "blue_name": "Kevin Borjas",
+      "winner": "Rei Tsuruya",
+      "red_prob": 79.5,
+      "blue_prob": 20.5,
+      "elo_red": 1440.0,
+      "elo_blue": 1397.0,
+      "finish": [
+        0.5879256725311279,
+        0.19923371076583862,
+        0.21284064650535583
+      ],
+      "finish_str": "Decision (59%) / Submission (21%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          46.2,
+          42.0,
+          25.0,
+          50.0,
+          0.0,
+          66.7
+        ],
+        "blue": [
+          42.3,
+          49.5,
+          0.0,
+          81.0,
+          0.0,
+          33.3
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          1.98,
+          2.28,
+          3.6,
+          1.0
+        ],
+        "blue": [
+          3.49,
+          5.74,
+          0.0,
+          1.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 1,
+        "blue_streak": 1,
+        "red_finish": 33.3,
+        "blue_finish": 33.3,
+        "red_sos": 1430.0,
+        "blue_sos": 1439.0
+      }
+    },
+    {
+      "label": "Jack Jenkins vs Sean Woodson",
+      "red_name": "Jack Jenkins",
+      "blue_name": "Sean Woodson",
+      "winner": "Jack Jenkins",
+      "red_prob": 67.5,
+      "blue_prob": 32.5,
+      "elo_red": 1432.0,
+      "elo_blue": 1479.0,
+      "finish": [
+        0.7805731296539307,
+        0.16353796422481537,
+        0.05588885396718979
+      ],
+      "finish_str": "Decision (78%) / KO/TKO (16%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          59.7,
+          58.0,
+          57.1,
+          70.0,
+          16.7,
+          66.7
+        ],
+        "blue": [
+          46.6,
+          59.0,
+          55.6,
+          86.8,
+          22.2,
+          66.7
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          4.64,
+          3.29,
+          1.57,
+          1.0
+        ],
+        "blue": [
+          5.84,
+          4.34,
+          0.61,
+          0.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 1,
+        "blue_streak": 0,
+        "red_finish": 66.7,
+        "blue_finish": 66.7,
+        "red_sos": 1423.0,
+        "blue_sos": 1430.0
+      }
+    },
+    {
+      "label": "Xiong Jingnan vs Julia Polastri",
+      "red_name": "Xiong Jingnan",
+      "blue_name": "Julia Polastri",
+      "winner": "Julia Polastri",
+      "red_prob": 0.5,
+      "blue_prob": 99.5,
+      "elo_red": 1360.0,
+      "elo_blue": 1391.0,
+      "finish": [
+        0.46070000529289246,
+        0.19106976687908173,
+        0.348230242729187
+      ],
+      "finish_str": "Decision (46%) / Submission (35%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          34.3,
+          38.1,
+          0.0,
+          75.0,
+          0.0,
+          0.0
+        ],
+        "blue": [
+          58.1,
+          58.0,
+          75.0,
+          61.5,
+          20.0,
+          33.3
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          4.53,
+          8.13,
+          0.0,
+          0.0
+        ],
+        "blue": [
+          6.22,
+          5.21,
+          0.62,
+          0.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 0,
+        "blue_streak": 0,
+        "red_finish": 0.0,
+        "blue_finish": 33.3,
+        "red_sos": 1435.0,
+        "blue_sos": 1432.0
+      }
+    }
+  ]
+}
