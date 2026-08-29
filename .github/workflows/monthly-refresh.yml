@@ -65,7 +65,9 @@ jobs:
 
       - name: Retrain v1 models
         if: ${{ inputs.dry_run != true }}
-        run: python ml/train_v1_models.py
+        run: |
+          python ml/train_v1_models.py
+          python ml/train_v1_models.py --prod
 
       - name: Commit updated artifacts
         if: ${{ inputs.dry_run != true }}
