@@ -46,11 +46,11 @@ cd ufc-predictor
 pip install -r requirements.txt
 ```
 
-**Model artifacts are tracked in git**, so predictions work immediately after cloning -- no training required.
-
-**Databases are distributed as GitHub Release assets** (too large to commit). Download them before running predictions:
+**Model artifacts and databases are distributed as GitHub Release assets** (too large to commit -- see [Repo size note](#repo-size-note)). Download and extract them before running predictions:
 ```bash
 gh release download data-artifacts-latest --dir db/ --pattern "*.db"
+gh release download data-artifacts-latest --pattern "models_v1_prod.tar.gz"
+tar -xzf models_v1_prod.tar.gz
 ```
 
 ---
@@ -181,8 +181,8 @@ ufc-predictor/
 │   ├── ufcstats.py               -- Fight results + stats from ufcstats.com
 │   └── bestfightodds.py          -- Closing moneyline odds
 │
-├── models_v1/                    -- v1 model artifacts (tracked in git)
-├── models_v1_prod/               -- Production models (100% training data)
+├── models_v1/                    -- v1 eval-tier model artifacts (gitignored, download from Release)
+├── models_v1_prod/               -- Production models (100% training data; gitignored, download from Release)
 ├── predictions/                  -- Weekly prediction outputs (MD + HTML)
 ├── raw_data/ufc-master.csv       -- Source CSV (2,271 fighters, 7,323 fights)
 │
@@ -221,6 +221,10 @@ The pipeline is fully reproducible -- rebuild the DB from scratch with `scripts/
 - **[UFCStats.com](http://www.ufcstats.com/)** -- primary source for per-fight statistics, scraped to build the UFCStats DB.
 
 ---
+
+## Repo size note
+
+Trained model artifacts (`.joblib`, up to ~27MB each) and SQLite databases are distributed via the `data-artifacts-latest` GitHub Release rather than committed to git -- binary artifacts don't diff, so committing a new copy on every retrain would bloat the repo's history indefinitely. `monthly-refresh.yml` uploads fresh artifacts to the release after each retrain instead of committing them.
 
 ## License
 

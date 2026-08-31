@@ -29,6 +29,13 @@ ml/*.csv
 db/*.db
 db/*_backup_*.db
 
+# Trained model artifacts -- distributed via the data-artifacts-latest GitHub Release
+# (models.tar.gz / models_v1.tar.gz / models_v1_prod.tar.gz), not tracked in git.
+# See README "Setup" for the download step.
+models/*.joblib
+models_v1/*.joblib
+models_v1_prod/*.joblib
+
 # Raw source CSVs -- seed CSVs are tracked, others are not
 raw_data/*.csv
 !raw_data/ufc-master.csv

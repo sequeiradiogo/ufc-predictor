@@ -74,21 +74,25 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add raw_data/ufc-master.csv models_v1/*.joblib models_v1_prod/*.joblib
+          git add raw_data/ufc-master.csv
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else
-            git commit -m "chore: monthly data refresh and model retrain [skip ci]"
+            git commit -m "chore: monthly data refresh [skip ci]"
             git push
           fi
 
-      - name: Upload updated DB artifacts to release
+      - name: Upload updated DB and model artifacts to release
         if: ${{ inputs.dry_run != true }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          tar -czf models_v1.tar.gz models_v1/*.joblib
+          tar -czf models_v1_prod.tar.gz models_v1_prod/*.joblib
           gh release upload data-artifacts-latest \
             db/ufc_ufcstats.db \
             db/ufc_v2.db \
             raw_data/rankings_history.csv \
+            models_v1.tar.gz \
+            models_v1_prod.tar.gz \
             --clobber

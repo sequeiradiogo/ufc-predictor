@@ -146,11 +146,13 @@ Three scheduled workflows in `.github/workflows/` automate the weekly/monthly cy
 |----------|----------|---------------|
 | `weekly-predictions.yml` | Fridays 12:00 UTC | Downloads DB artifacts + `raw_data/rankings_history.csv`, refreshes today's live rankings snapshot via `scrapers/ufc_rankings_web.py` and re-uploads the CSV to the release (both steps `continue-on-error` so a ufc.com markup change degrades to the existing stale CSV instead of blocking the run), runs `scripts/predict_event.py --model ensemble --skip-existing`, commits new `predictions/*.md` |
 | `monday-results.yml` | Mondays 12:00 UTC | Runs `scripts/score_event.py --min-confidence 0.55` to score the weekend's event against actual results + BFO odds, commits the updated markdown |
-| `monthly-refresh.yml` | 1st of month, 06:00 UTC | Full refresh: `scripts/refresh_data.py --auto` -> three CSV enrichment scripts -> `db/ingest_mdabbert.py` -> `ml/ML_data_preparation_v1.py` -> `ml/train_v1_models.py`, commits `raw_data/ufc-master.csv` + retrained `models_v1/`/`models_v1_prod/` artifacts, then re-uploads the DBs to the release below |
+| `monthly-refresh.yml` | 1st of month, 06:00 UTC | Full refresh: `scripts/refresh_data.py --auto` -> three CSV enrichment scripts -> `db/ingest_mdabbert.py` -> `ml/ML_data_preparation_v1.py` -> `ml/train_v1_models.py`, commits `raw_data/ufc-master.csv`, then re-uploads the DBs plus retrained `models_v1.tar.gz`/`models_v1_prod.tar.gz` to the release below (model artifacts are not committed to git -- see "DB distribution") |
 
 All three also support `workflow_dispatch` for manual runs. **Scheduled GitHub Actions runs can be delayed by minutes to hours** (a shared-runner queueing behavior, not a repo bug) -- if a manual run and a delayed scheduled run overlap, whichever pushes second will fail with a non-fast-forward git error even though the underlying job succeeded; check the job output, not just the workflow conclusion, before assuming something didn't run.
 
 **DB distribution**: `db/ufc_ufcstats.db` and `db/ufc_v2.db` are gitignored (too large to track) but CI needs them every run. They're stored in the `data-artifacts-latest` GitHub Release and downloaded at the start of each workflow (`gh release download data-artifacts-latest --dir db/ --pattern "*.db"`), then re-uploaded by `monthly-refresh.yml` after retraining (`gh release upload data-artifacts-latest ... --clobber`). `raw_data/rankings_history.csv` is also gitignored (not in the un-ignore list) and lives in the same release; `weekly-predictions.yml` downloads it separately (`gh release download data-artifacts-latest --dir raw_data/ --pattern "rankings_history.csv"`) since `predict.py`'s `_get_current_rank()` otherwise silently falls back to unranked (16) with no warning. Locally, keep your `db/` and `raw_data/rankings_history.csv` in sync by downloading the same release if you don't already have current copies.
+
+**Model artifact distribution (2026-08-31)**: `models/*.joblib`, `models_v1/*.joblib`, and `models_v1_prod/*.joblib` are gitignored, same rationale as the DBs -- binary joblib files don't diff, so committing a fresh copy on every retrain accumulated ~437MB of dead weight in `.git` history before this change (git history was rewritten with `git filter-repo` to purge it; if you have an old clone, re-clone rather than pull). They're stored in the same `data-artifacts-latest` release as three tarballs (`models.tar.gz`, `models_v1.tar.gz`, `models_v1_prod.tar.gz`, one dir per tarball since filenames collide across dirs e.g. `ensemble.joblib`). `weekly-predictions.yml` downloads and extracts `models_v1_prod.tar.gz` before running `predict_event.py` (that's the only workflow that loads models at runtime -- `monday-results.yml`'s `score_event.py` scores against already-generated predictions and never loads a model). `monthly-refresh.yml` tars and uploads both v1 tiers after retraining instead of `git add`-ing them. Locally, download+extract the tarball(s) you need the same way (see README "Setup"); `models/` (v2) is untouched by any workflow and only needed if you're manually running the v2 reference pipeline.
 
 ### Databases
 
@@ -259,7 +261,7 @@ Pre-computed features (stored in CSV/DB, diffed at build time):
 
 ### v1 Models
 
-All v1 models are saved to `models_v1/` as `.joblib` files and tracked in git. These are the **active prediction models**, used for backtesting and hyperparameter tuning.
+All v1 models are saved to `models_v1/` as `.joblib` files, gitignored and distributed via the `data-artifacts-latest` release (see "Model artifact distribution" above). These are the **active prediction models**, used for backtesting and hyperparameter tuning.
 
 | Model | Artifacts | 2025+ Acc | Notes |
 |-------|-----------|-----------|-------|
@@ -281,7 +283,7 @@ Note: `--from-year 2022` backtest numbers (82-90%) are inflated because 2022-202
 
 ### v2 Models (reference)
 
-All v2 models are saved to `models/` as `.joblib` files and tracked in git.
+All v2 models are saved to `models/` as `.joblib` files, gitignored and distributed via the `data-artifacts-latest` release as `models.tar.gz`.
 
 | Model | Script | Artifacts | Test Acc | Notes |
 |-------|--------|-----------|----------|-------|
@@ -378,13 +380,11 @@ Files that must never be committed:
 - `logs/` -- runtime logs
 - `ml/*.csv` -- intermediate ML datasets (except `ufc_ml_data_with_debuts_and_elo.csv` which is explicitly un-ignored)
 - `raw_data/*.db` -- raw database files
+- `models/*.joblib`, `models_v1/*.joblib`, `models_v1_prod/*.joblib` -- trained model artifacts (distributed via the `data-artifacts-latest` release as tarballs, see "Model artifact distribution" above)
 
 Files that ARE tracked:
 
 - `raw_data/ufc-master.csv` -- source of truth for v1 pipeline; now 230 columns including all pre-computed features
-- `models/*.joblib` -- v2 trained model artifacts
-- `models_v1/*.joblib` -- v1 eval-tier model artifacts; tracked so predictions work immediately after cloning
-- `models_v1_prod/*.joblib` -- v1 production-tier model artifacts (trained on 100% of data); what `predict.py`/`predict_event.py` actually load
 - `predictions/*.md` -- event prediction files
 
 If any excluded files were previously committed, untrack them with `git rm --cached <file>` (without deleting the local copy), then verify `.gitignore` covers them before staging the commit.
