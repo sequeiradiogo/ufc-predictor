@@ -1,8 +1,11 @@
 # UFC Fight Night: Nurmagomedov vs. Song -- August 29, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-08-28
+Model: Ensemble (Soft Vote) | Generated: 2026-08-28 | Scored: 2026-08-31
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
+
+**Result: 4/7 (57.1%)**
+*High-confidence (>=55%) picks: 4/7 (57.1%)*
 
 > Interactive fighter comparison: [2026-08-29-ufc-fight-night-nurmagomedov-vs-song.html](./2026-08-29-ufc-fight-night-nurmagomedov-vs-song.html)
 
@@ -10,17 +13,37 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 
 ## Predictions
 
-| Fight | Predicted Winner | Confidence | Likely Method |
-|---|---|---|---|
-| Umar Nurmagomedov vs Song Yadong | Umar Nurmagomedov | 97.9% | Decision (66%) / KO/TKO (19%) |
-| Yan Xiaonan vs Denise Gomes | Denise Gomes | 70.0% | Decision (89%) / KO/TKO (7%) |
-| Aoriqileng vs Kai Asakura | Aoriqileng | 77.8% | Decision (50%) / KO/TKO (41%) |
-| Alex Perez vs Sumudaerji | Sumudaerji | 70.2% | Decision (62%) / KO/TKO (24%) |
-| Rei Tsuruya vs Kevin Borjas | Rei Tsuruya | 79.5% | Decision (59%) / Submission (21%) |
-| Jack Jenkins vs Sean Woodson | Jack Jenkins | 67.5% | Decision (78%) / KO/TKO (16%) |
-| Xiong Jingnan vs Julia Polastri | Julia Polastri | 99.5% | Decision (46%) / Submission (35%) |
+| Fight | Predicted Winner | Confidence | Likely Method | Odds (Red / Blue) | Actual Result | Correct? |
+|---|---|---|---|---|---|---|
+| Umar Nurmagomedov vs Song Yadong | Umar Nurmagomedov | 97.9% | Decision (66%) / KO/TKO (19%) | -525 / +488 | Song Yadong (KO R2) | NO |
+| Yan Xiaonan vs Denise Gomes | Denise Gomes | 70.0% | Decision (89%) / KO/TKO (7%) | +152 / -183 | Denise Gomes (KO R1) | YES |
+| Aoriqileng vs Kai Asakura | Aoriqileng | 77.8% | Decision (50%) / KO/TKO (41%) | +335 / -376 | Kai Asakura (KO R2) | NO |
+| Alex Perez vs Sumudaerji | Sumudaerji | 70.2% | Decision (62%) / KO/TKO (24%) | N/A / N/A | Sumudaerji (Dec) | YES |
+| Rei Tsuruya vs Kevin Borjas | Rei Tsuruya | 79.5% | Decision (59%) / Submission (21%) | -3487 / +2236 | Rei Tsuruya (Sub R1) | YES |
+| Jack Jenkins vs Sean Woodson | Jack Jenkins | 67.5% | Decision (78%) / KO/TKO (16%) | +198 / -240 | Sean Woodson (Dec (Split)) | NO |
+| Xiong Jingnan vs Julia Polastri | Julia Polastri | 99.5% | Decision (46%) / Submission (35%) | +118 / -149 | Julia Polastri (KO R1) | YES |
 
 ---
+
+## Post-Event Summary
+
+- Fights predicted: 7
+- Correct: 4/7 (57.1%)
+- High-confidence (>=55%) picks: 4/7 (57.1%)
+
+### P/L (EUR 1 flat on picks >=55% confidence)
+
+| Fight | Model Pick | Odds (dec) | Result | P/L |
+|---|---|---|---|---|
+| Umar Nurmagomedov vs Song Yadong | Umar Nurmagomedov | 1.19 | Loss | -EUR 1.00 |
+| Yan Xiaonan vs Denise Gomes | Denise Gomes | 1.55 | Win | +EUR 0.55 |
+| Aoriqileng vs Kai Asakura | Aoriqileng | 4.35 | Loss | -EUR 1.00 |
+| Alex Perez vs Sumudaerji | Sumudaerji | -- | Win | +EUR 0.00 |
+| Rei Tsuruya vs Kevin Borjas | Rei Tsuruya | 1.03 | Win | +EUR 0.03 |
+| Jack Jenkins vs Sean Woodson | Jack Jenkins | 2.98 | Loss | -EUR 1.00 |
+| Xiong Jingnan vs Julia Polastri | Julia Polastri | 1.67 | Win | +EUR 0.67 |
+
+**Net P/L: -EUR 1.75 on EUR 7 staked (-25.0% ROI)**
 
 ## Raw Model Output
 
