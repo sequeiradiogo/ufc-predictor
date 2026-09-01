@@ -139,13 +139,14 @@ Or use the automated GitHub Actions workflow (runs on the 1st of each month).
 
 ## Automation
 
-Three GitHub Actions workflows keep the system running without manual intervention:
+GitHub Actions workflows keep the system running without manual intervention:
 
 | Workflow | Schedule | What it does |
 |----------|----------|--------------|
 | `weekly-predictions.yml` | Every Friday | Scrapes the upcoming event card, generates predictions, commits to `predictions/` |
 | `monday-results.yml` | Every Monday | Scrapes the weekend results, updates the prediction markdown with accuracy + P/L |
 | `monthly-refresh.yml` | 1st of month | Scrapes new fights, retrains all v1 models, updates DB release assets |
+| `tests.yml` | Every PR + push to `main` | Runs the test suite (`pytest tests/ -v`) |
 
 ---
 

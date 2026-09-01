@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with th
 ## Commands
 
 ```bash
-# Run tests (requires DB and trained models to exist)
+# Run tests (DB/model-dependent tests skip gracefully if those artifacts are absent -- see tests.yml)
 python -m pytest tests/ -v
 
 # Run a single test class
@@ -140,15 +140,16 @@ The v2 pipeline has 10 numbered steps (defined in `run_pipeline.py`):
 
 ### Automation (GitHub Actions)
 
-Three scheduled workflows in `.github/workflows/` automate the weekly/monthly cycle:
+Four workflows in `.github/workflows/` automate the weekly/monthly cycle plus PR checks:
 
 | Workflow | Schedule | What it does |
 |----------|----------|---------------|
 | `weekly-predictions.yml` | Fridays 12:00 UTC | Downloads DB artifacts + `raw_data/rankings_history.csv`, refreshes today's live rankings snapshot via `scrapers/ufc_rankings_web.py` and re-uploads the CSV to the release (both steps `continue-on-error` so a ufc.com markup change degrades to the existing stale CSV instead of blocking the run), runs `scripts/predict_event.py --model ensemble --skip-existing`, commits new `predictions/*.md` |
 | `monday-results.yml` | Mondays 12:00 UTC | Runs `scripts/score_event.py --min-confidence 0.55` to score the weekend's event against actual results + BFO odds, commits the updated markdown |
 | `monthly-refresh.yml` | 1st of month, 06:00 UTC | Full refresh: `scripts/refresh_data.py --auto` -> three CSV enrichment scripts -> `db/ingest_mdabbert.py` -> `ml/ML_data_preparation_v1.py` -> `ml/train_v1_models.py`, commits `raw_data/ufc-master.csv`, then re-uploads the DBs plus retrained `models_v1.tar.gz`/`models_v1_prod.tar.gz` to the release below (model artifacts are not committed to git -- see "DB distribution") |
+| `tests.yml` | Every PR + push to `main` | Runs `python -m pytest tests/ -v` with no DB/model artifacts downloaded -- `test_pipeline.py`/`test_inference.py` fixtures `pytest.skip()` when `DB_PATH`/`CSV_WITH_ELO`/model paths don't exist, so CI always exercises the artifact-free unit tests in `test_refresh.py` plus whatever else can run, with no release-asset downloads or secrets needed (works on fork PRs) |
 
-All three also support `workflow_dispatch` for manual runs. **Scheduled GitHub Actions runs can be delayed by minutes to hours** (a shared-runner queueing behavior, not a repo bug) -- if a manual run and a delayed scheduled run overlap, whichever pushes second will fail with a non-fast-forward git error even though the underlying job succeeded; check the job output, not just the workflow conclusion, before assuming something didn't run.
+The three scheduled workflows also support `workflow_dispatch` for manual runs. **Scheduled GitHub Actions runs can be delayed by minutes to hours** (a shared-runner queueing behavior, not a repo bug) -- if a manual run and a delayed scheduled run overlap, whichever pushes second will fail with a non-fast-forward git error even though the underlying job succeeded; check the job output, not just the workflow conclusion, before assuming something didn't run.
 
 **DB distribution**: `db/ufc_ufcstats.db` and `db/ufc_v2.db` are gitignored (too large to track) but CI needs them every run. They're stored in the `data-artifacts-latest` GitHub Release and downloaded at the start of each workflow (`gh release download data-artifacts-latest --dir db/ --pattern "*.db"`), then re-uploaded by `monthly-refresh.yml` after retraining (`gh release upload data-artifacts-latest ... --clobber`). `raw_data/rankings_history.csv` is also gitignored (not in the un-ignore list) and lives in the same release; `weekly-predictions.yml` downloads it separately (`gh release download data-artifacts-latest --dir raw_data/ --pattern "rankings_history.csv"`) since `predict.py`'s `_get_current_rank()` otherwise silently falls back to unranked (16) with no warning. Locally, keep your `db/` and `raw_data/rankings_history.csv` in sync by downloading the same release if you don't already have current copies.
 
