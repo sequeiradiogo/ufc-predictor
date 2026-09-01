@@ -29,6 +29,7 @@ seaborn>=0.13
 # API
 fastapi>=0.110
 uvicorn>=0.29      # ASGI server: uvicorn api:app --reload
+httpx>=0.27        # required by fastapi.testclient.TestClient (tests/test_api.py)
 
 # Scraping (refresh_data.py --auto)
 requests>=2.31
