@@ -1,6 +1,6 @@
 # UFC Fight Predictor
 
-A machine-learning system that predicts UFC fight outcomes with **69.6% accuracy** on honest out-of-sample data (2025-2026, 704 fights). Predictions are generated weekly via GitHub Actions and published to [`predictions/`](./predictions/).
+A machine-learning system that predicts UFC fight outcomes with **69.3% accuracy** on honest out-of-sample data (2025-2026, 736 fights). Predictions are generated weekly via GitHub Actions and published to [`predictions/`](./predictions/).
 
 ---
 
@@ -8,11 +8,11 @@ A machine-learning system that predicts UFC fight outcomes with **69.6% accuracy
 
 | Period | Fights | Accuracy |
 |--------|--------|----------|
-| 2025 | 475 | 70.3% |
-| 2026 | 229 | 68.1% |
-| **Total (out-of-sample)** | **704** | **69.6%** |
+| 2025 | 475 | 69.9% |
+| 2026 | 261 | 68.2% |
+| **Total (out-of-sample)** | **736** | **69.3%** |
 
-Naive "always pick Red corner" baseline: ~55%. Full history in [MODEL_RESULTS.md](./MODEL_RESULTS.md).
+Naive "always pick Red corner" baseline: ~55%. For iteration history, check `git log --oneline | grep retrain`.
 
 ---
 
@@ -28,7 +28,7 @@ UFCStats.com  -->  UFCStats DB (raw per-fight stats)
                        |
               v1 Feature CSV (91 diff features, Red - Blue)
                        |
-    XGBoost / LR / RF / LightGBM / MLP  -->  Ensemble (69.6%)
+    XGBoost / LR / RF / LightGBM / MLP  -->  Ensemble (69.3%)
                        |
                   Predictions
 ```
@@ -186,7 +186,6 @@ ufc-predictor/
 ├── predictions/                  -- Weekly prediction outputs (MD + HTML)
 ├── raw_data/ufc-master.csv       -- Source CSV (2,271 fighters, 7,323 fights)
 │
-├── MODEL_RESULTS.md              -- Full model iteration history
 └── tests/                        -- Unit + integration tests
 ```
 
@@ -196,11 +195,11 @@ ufc-predictor/
 
 | Model | 2025+ Accuracy | Notes |
 |-------|---------------|-------|
-| XGBoost | 67.5% | Default params; tuning consistently hurts |
-| Logistic Regression | 65.3% | Platt-calibrated |
-| Random Forest | 67.0% | |
-| LightGBM | 67.0% | |
-| **Ensemble** | **69.6%** | Calibrated soft-vote; XGB ~40%, MLP ~44% |
+| XGBoost | 67.4% | Default params; tuning consistently hurts |
+| Logistic Regression | 67.0% | Platt-calibrated |
+| Random Forest | 67.5% | |
+| LightGBM | 67.4% | |
+| **Ensemble** | **69.3%** | Calibrated soft-vote; XGB ~40%, MLP ~44% |
 
 Training data: post-2018 fights only (adversarial validation confirmed distribution shift pre-2018). Evaluated on `--from-year 2025` to avoid the 80/20 split leaking 2022-2024 fights into the test window.
 
