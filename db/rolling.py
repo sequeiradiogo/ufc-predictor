@@ -8,7 +8,7 @@ from fights 1 … N-1 — no future leakage.
 Run:
     python db/rolling.py
 
-Or import and call main() from run_pipeline.py.
+Or import and call main(db_path=...) directly.
 """
 
 import datetime

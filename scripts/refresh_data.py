@@ -1,24 +1,18 @@
 """
-refresh_data.py -- Refresh the UFC database with new fight data and retrain models.
+refresh_data.py -- Refresh the UFC database with new fight data from live scrapes.
 ====================================================================================
 
-Two refresh modes
------------------
-  --csv   : You have a new/updated UFC.csv (e.g. downloaded from Kaggle).
-            Rebuilds the full DB and retrains.
-
-  --auto  : Scrapes new fights from three sources since the last recorded event:
-              - ufcstats.com    (fight results and per-fight stats)
-              - bestfightodds.com  (American moneyline odds)
-              - kaggle martj42/ufc-rankings  (UFC rankings snapshots)
-            Converts scraped data into ufc-master.csv format, appends to the CSV,
-            rebuilds the DB from scratch via ingest_mdabbert, then reruns the full
-            feature-engineering and training pipeline so ELO / diff features are
-            recomputed on up-to-date data.
+--auto  : Scrapes new fights from three sources since the last recorded event:
+            - ufcstats.com    (fight results and per-fight stats)
+            - bestfightodds.com  (American moneyline odds)
+            - kaggle martj42/ufc-rankings  (UFC rankings snapshots)
+          Converts scraped data into ufc-master.csv format, appends to the CSV,
+          and rebuilds the DB from scratch via ingest_mdabbert. Run the v1 CSV
+          enrichment scripts + ml/ML_data_preparation_v1.py + train_v1_models.py
+          separately afterward (see CLAUDE.md / monthly-refresh.yml).
 
 Usage
 -----
-  python scripts/refresh_data.py --csv path/to/updated_UFC.csv
   python scripts/refresh_data.py --auto
   python scripts/refresh_data.py --auto --dry-run   # preview without changes
 """
@@ -36,7 +30,6 @@ import pandas as pd
 
 from config import DB_PATH, DB_V1_PATH, RAW_DIR
 from utils.logger import get_logger
-import run_pipeline
 
 log = get_logger("refresh")
 
@@ -216,32 +209,6 @@ def _insert_new_data(data: dict, conn: sqlite3.Connection) -> set[str]:
 
 # -- Refresh modes -------------------------------------------------------------
 
-def refresh_from_csv(csv_path: Path, dry_run: bool = False) -> None:
-    """Rebuild DB from an updated CSV and retrain all models."""
-    if not csv_path.exists():
-        log.error("CSV not found: %s", csv_path)
-        sys.exit(1)
-
-    last_date = get_last_event_date()
-    if last_date:
-        log.info("Current DB last event: %s", last_date)
-    else:
-        log.info("No existing DB found -- will build from scratch.")
-
-    log.info("Refreshing from CSV: %s", csv_path)
-
-    if dry_run:
-        log.info("[DRY RUN] Would run full pipeline with --csv %s", csv_path)
-        run_pipeline.run_pipeline(list(run_pipeline.STEPS), dry_run=True, csv_path=csv_path)
-        return
-
-    run_pipeline.run_pipeline(
-        steps=list(run_pipeline.STEPS),
-        dry_run=False,
-        csv_path=csv_path,
-    )
-
-
 _MASTER_CSV = RAW_DIR / "ufc-master.csv"
 
 
@@ -333,11 +300,8 @@ def refresh_auto(dry_run: bool = False) -> None:
     except Exception as exc:
         log.warning("Rankings refresh skipped: %s", exc)
 
-    # ---- Feature engineering + training (ELO recomputed from scratch) ----
-    log.info("Running feature engineering and retraining models (steps 4-7)...")
-    run_pipeline.run_pipeline(steps=[4, 5, 6, 7])
-
-    log.info("Refresh complete.")
+    log.info("Refresh complete. Run the v1 CSV enrichment scripts, ml/ML_data_preparation_v1.py, "
+              "and ml/train_v1_models.py next.")
 
 
 # -- CLI -----------------------------------------------------------------------
@@ -349,15 +313,11 @@ def main() -> None:
         epilog="""
 Examples
 --------
-  python scripts/refresh_data.py --csv path/to/updated_UFC.csv
-  python scripts/refresh_data.py --csv path/to/updated_UFC.csv --dry-run
   python scripts/refresh_data.py --auto
   python scripts/refresh_data.py --auto --dry-run
         """,
     )
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument("--csv",  type=Path, help="Path to updated UFC.csv")
-    group.add_argument("--auto", action="store_true", help="Auto-scrape new events")
+    parser.add_argument("--auto", action="store_true", required=True, help="Auto-scrape new events")
     parser.add_argument("--dry-run", action="store_true", help="Preview without making changes")
 
     args = parser.parse_args()
@@ -366,10 +326,7 @@ Examples
     log.info("UFC Predictor -- Data Refresh")
     log.info("Last DB event : %s", last or "N/A (no DB)")
 
-    if args.csv:
-        refresh_from_csv(args.csv, dry_run=args.dry_run)
-    else:
-        refresh_auto(dry_run=args.dry_run)
+    refresh_auto(dry_run=args.dry_run)
 
 
 if __name__ == "__main__":

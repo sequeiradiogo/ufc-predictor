@@ -6,8 +6,8 @@ data uses mdabbert column names (R_fighter, B_fighter, R_avg_SIG_STR_landed …)
 rather than the original UFCStats hex-ID format.
 
 The mdabbert CSV already contains career-average stats going into each fight so
-rolling.py is not needed.  After running this, continue with steps 4-7:
-    python run_pipeline.py --steps 4,5,6,7
+rolling.py is not needed.  After running this, continue with the v1 CSV
+enrichment scripts, ml/ML_data_preparation_v1.py, and ml/train_v1_models.py.
 
 Usage:
     python db/ingest_mdabbert.py --csv raw_data/ufc-master.csv

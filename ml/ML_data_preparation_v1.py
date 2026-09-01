@@ -54,10 +54,6 @@ from config import (
     TRAIN_TEST_SPLIT,
     TRAJECTORY_WINDOW,
 )
-from ml.ML_data_preparation import (
-    _rolling_slope,
-    compute_sample_weights,
-)
 from utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -74,6 +70,19 @@ _STAT_COLS = [
     "win_by_ko", "win_by_sub", "win_by_dec_unanimous", "win_by_dec_split",
     # age_diff excluded per permutation importance (PR 50)
 ]
+
+
+def compute_sample_weights(dates: pd.Series) -> np.ndarray | None:
+    """Power-law decay weights: exp(-alpha * delta^beta), delta = max_year - year.
+    beta=1 is flat exponential; beta>1 steepens decay for older fights.
+    Returns None when SAMPLE_WEIGHT_ALPHA is 0 (uniform weights)."""
+    from config import SAMPLE_WEIGHT_ALPHA, SAMPLE_WEIGHT_BETA
+    if SAMPLE_WEIGHT_ALPHA == 0.0:
+        return None
+    years = pd.to_datetime(dates).dt.year.astype(float)
+    max_year = float(years.max())
+    delta = max_year - years
+    return np.exp(-SAMPLE_WEIGHT_ALPHA * (delta ** SAMPLE_WEIGHT_BETA)).values
 
 
 # ── Recent form ───────────────────────────────────────────────────────────────
@@ -130,6 +139,14 @@ def _compute_recent_form_v1(
 
 
 # ── Slope features (PR 46 equivalent for v1) ─────────────────────────────────
+
+def _rolling_slope(arr: np.ndarray) -> float:
+    """Linear slope (via np.polyfit) of the values in arr. Used as a rolling apply fn."""
+    if len(arr) < 2:
+        return 0.0
+    x = np.arange(len(arr), dtype=float)
+    return float(np.polyfit(x, arr, 1)[0])
+
 
 def compute_slope_features_v1(
     conn: sqlite3.Connection, window: int = TRAJECTORY_WINDOW

@@ -141,8 +141,8 @@ def main() -> None:
         rolling.main(db_path=DB_UFCSTATS_PATH)
         log.info("Rolling stats complete.")
 
-    log.info("Done. Run the ML pipeline next:")
-    log.info("  python run_pipeline.py  (steps 4-9)")
+    log.info("Done. Run the v1 CSV enrichment scripts, ml/ML_data_preparation_v1.py, "
+              "and ml/train_v1_models.py next.")
 
 
 if __name__ == "__main__":

@@ -183,7 +183,7 @@ def build_elo_features(conn: sqlite3.Connection | None = None) -> pd.DataFrame:
     their Welterweight rating.  Falls back cleanly to STARTING_ELO for a
     fighter's first appearance in a given division.
 
-    Used by ML_data_preparation.py to add `elo_red`, `elo_blue`, and `elo_diff`.
+    Used by scripts/add_computed_features_to_csv.py to add `elo_red`, `elo_blue`, and `elo_diff`.
 
     Returns
     -------

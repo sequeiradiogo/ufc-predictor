@@ -18,7 +18,7 @@ Arguments
 
 Notes
 -----
-- Models must have been trained first (XGBoost.py / logistic_regression.py / random_forest.py / lightgbm_model.py).
+- Models must have been trained first (ml/train_v1_models.py).
 - Fighter stats are taken from their most recent recorded fight.
 - ELO ratings are computed by replaying all historical fights.
 - Recent form (win rate, finish rate, win streak) is computed from fight history.
@@ -45,17 +45,10 @@ from config import (
     DIV_REACH_STD_FALLBACK,
     DIV_SPLM_STD,
     DIV_SPLM_STD_FALLBACK,
-    MODELS_DIR,
     MODELS_V1_DIR,
     MODELS_V1_PROD_DIR,
     STARTING_ELO, K_FACTOR_NORMAL, K_FACTOR_PROVISIONAL, PROVISIONAL_LIMIT,
     GLICKO_START_R, GLICKO_START_RD,
-    MODEL_XGB_PATH, MODEL_XGB_FEATURES,
-    MODEL_LR_PATH, MODEL_LR_SCALER, MODEL_LR_FEATURES,
-    MODEL_RF_PATH, MODEL_RF_FEATURES,
-    MODEL_LGBM_PATH, MODEL_LGBM_FEATURES,
-    MODEL_ENSEMBLE_PATH,
-    MODEL_FINISH_PATH, MODEL_FINISH_FEATURES,
     FINISH_CLASS_NAMES,
     DIVISIONS,
     EXCLUDE_STAT_KEYWORDS,
@@ -671,8 +664,8 @@ def compute_sos_single(
     """Return average ELO of the last `window` opponents (strength of schedule).
 
     Uses global ELO (not per-division) to match the training-time computation in
-    ML_data_preparation.py where opponent ELO comes from build_elo_features() which
-    uses _replay_fights() (global, single rating per fighter).
+    scripts/add_computed_features_to_csv.py where opponent ELO comes from
+    build_elo_features() which uses _replay_fights() (global, single rating per fighter).
     """
     df = pd.read_sql_query(
         """
@@ -1330,7 +1323,8 @@ def compute_prediction(
     Returns keys: red_name, blue_name, winner, red_prob, blue_prob,
                   confidence, elo_red, elo_blue, form_red, form_blue.
 
-    db_path defaults to DB_PATH; models_dir defaults to MODELS_DIR.
+    db_path defaults to DB_V1_PATH; models_dir defaults to MODELS_V1_PROD_DIR
+    (falling back to MODELS_V1_DIR if the prod tier doesn't exist).
     Pass r_fighter_id / b_fighter_id to bypass name resolution (useful when
     the caller already has the UFCStats fighter IDs).
     """
@@ -1352,10 +1346,10 @@ def compute_prediction(
     model_path, features_path, scaler_path, _is_lr = _paths[model_type]
 
     script_map = {
-        "xgb":      "ml/XGBoost.py",
-        "lr":       "ml/logistic_regression.py",
-        "rf":       "ml/random_forest.py",
-        "lgbm":     "ml/lightgbm_model.py",
+        "xgb":      "ml/train_v1_models.py --model xgb",
+        "lr":       "ml/train_v1_models.py --model lr",
+        "rf":       "ml/train_v1_models.py --model rf",
+        "lgbm":     "ml/train_v1_models.py --model lgbm",
         "mlp":      "ml/train_v1_models.py --model mlp",
         "ensemble": "ml/train_v1_models.py --model ensemble",
         "stacking": "ml/train_v1_models.py --model stacking",

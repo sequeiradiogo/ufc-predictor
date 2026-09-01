@@ -11,43 +11,16 @@ from pathlib import Path
 ROOT_DIR   = Path(__file__).resolve().parent
 DB_DIR     = ROOT_DIR / "db"
 ML_DIR     = ROOT_DIR / "ml"
-MODELS_DIR = ROOT_DIR / "models"      # persisted model artifacts
 RAW_DIR    = ROOT_DIR / "raw_data"
-
-# Create models dir on first import so saving never fails
-MODELS_DIR.mkdir(exist_ok=True)
 
 # ── Database ──────────────────────────────────────────────────────────────────
 DB_UFCSTATS_PATH = DB_DIR / "ufc_ufcstats.db"    # UFCStats per-fight DB with rolling stats
 DB_PATH          = DB_UFCSTATS_PATH               # active DB for ML pipeline (branch: feat/ufcstats-schema)
-_DB_MDABBERT     = DB_DIR / "ufc_v2.db"           # mdabbert career-aggregate DB (kept for comparison)
+_DB_MDABBERT     = DB_DIR / "ufc_v2.db"           # mdabbert career-aggregate DB (primary prediction source)
 
 # ── ML Datasets ───────────────────────────────────────────────────────────────
 CSV_MASTER         = RAW_DIR / "ufc-master.csv"          # mdabbert source CSV with historical odds
-CSV_WITH_ELO       = ML_DIR / "ufc_ml_data_with_debuts_and_elo.csv"
-CSV_WITH_DEBUTS    = ML_DIR / "ufc_ml_data_with_debuts.csv"
-CSV_WITHOUT_DEBUTS = ML_DIR / "ufc_ml_data_without_debuts.csv"
 CSV_V1_WITH_ELO    = ML_DIR / "ufc_ml_data_v1.csv"
-
-# ── Saved Model Artifacts ─────────────────────────────────────────────────────
-MODEL_LR_PATH      = MODELS_DIR / "logistic_regression.joblib"
-MODEL_LR_SCALER    = MODELS_DIR / "lr_scaler.joblib"
-MODEL_LR_FEATURES  = MODELS_DIR / "lr_features.joblib"
-
-MODEL_XGB_PATH     = MODELS_DIR / "xgboost.joblib"
-MODEL_XGB_FEATURES = MODELS_DIR / "xgb_features.joblib"
-
-MODEL_RF_PATH      = MODELS_DIR / "random_forest.joblib"
-MODEL_RF_FEATURES  = MODELS_DIR / "rf_features.joblib"
-
-MODEL_LGBM_PATH     = MODELS_DIR / "lightgbm.joblib"
-MODEL_LGBM_FEATURES = MODELS_DIR / "lgbm_features.joblib"
-
-MODEL_ENSEMBLE_PATH = MODELS_DIR / "ensemble.joblib"
-
-MODEL_MLP_PATH     = MODELS_DIR / "mlp.joblib"
-MODEL_MLP_FEATURES = MODELS_DIR / "mlp_features.joblib"
-MODEL_MLP_SCALER   = MODELS_DIR / "mlp_scaler.joblib"
 
 # ── v1 (mdabbert) Model Artifacts ─────────────────────────────────────────────
 MODELS_V1_DIR          = ROOT_DIR / "models_v1"
@@ -65,6 +38,8 @@ MODEL_V1_MLP_PATH      = MODELS_V1_DIR / "mlp.joblib"
 MODEL_V1_MLP_FEATURES  = MODELS_V1_DIR / "mlp_features.joblib"
 MODEL_V1_MLP_SCALER    = MODELS_V1_DIR / "mlp_scaler.joblib"
 MODEL_V1_STACKING_PATH = MODELS_V1_DIR / "stacking.joblib"
+MODEL_V1_FINISH_PATH      = MODELS_V1_DIR / "finish_type.joblib"
+MODEL_V1_FINISH_FEATURES  = MODELS_V1_DIR / "finish_type_features.joblib"
 
 # Production models -- trained on 100% of data, used exclusively for inference
 MODELS_V1_PROD_DIR          = ROOT_DIR / "models_v1_prod"
@@ -81,6 +56,8 @@ MODEL_V1_PROD_ENSEMBLE_PATH = MODELS_V1_PROD_DIR / "ensemble.joblib"
 MODEL_V1_PROD_MLP_PATH      = MODELS_V1_PROD_DIR / "mlp.joblib"
 MODEL_V1_PROD_MLP_FEATURES  = MODELS_V1_PROD_DIR / "mlp_features.joblib"
 MODEL_V1_PROD_MLP_SCALER    = MODELS_V1_PROD_DIR / "mlp_scaler.joblib"
+MODEL_V1_PROD_FINISH_PATH     = MODELS_V1_PROD_DIR / "finish_type.joblib"
+MODEL_V1_PROD_FINISH_FEATURES = MODELS_V1_PROD_DIR / "finish_type_features.joblib"
 DB_V1_PATH             = _DB_MDABBERT    # public alias for v1 DB
 
 # ── ELO ───────────────────────────────────────────────────────────────────────
@@ -197,10 +174,6 @@ EXCLUDED_FEATURES: list[str] = [
     "elo_diff",
 ]
 
-# Prior weight for shrinkage toward division mean in ML_data_preparation.
-# A fighter needs ~SHRINKAGE_LAMBDA fights before their own stats dominate.
-SHRINKAGE_LAMBDA = 5
-
 # Minimum fight date included in the ML training set.
 # Set to 2018-01-01 based on adversarial validation (issue #47) -- pre-2018 fights
 # show significant distribution shift and hurt out-of-sample accuracy.
@@ -254,10 +227,6 @@ FINISH_METHOD_MAP: dict[str, int] = {
     "Submission":           2,
 }
 FINISH_CLASS_NAMES = ["Decision", "KO/TKO", "Submission"]
-
-# ── Finish Type Model Artifacts ───────────────────────────────────────────────
-MODEL_FINISH_PATH     = MODELS_DIR / "finish_type.joblib"
-MODEL_FINISH_FEATURES = MODELS_DIR / "finish_type_features.joblib"
 
 # ── Division normalization constants ─────────────────────────────────────────
 # Per-division reach std (cm) for reach_div_norm_diff feature.

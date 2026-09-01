@@ -157,7 +157,6 @@ ufc-predictor/
 ├── predict.py                    -- Prediction CLI (start here)
 ├── api.py                        -- FastAPI REST wrapper
 ├── config.py                     -- All paths and constants
-├── run_pipeline.py               -- v2 pipeline orchestrator
 │
 ├── scripts/
 │   ├── predict_event.py          -- Predict a full upcoming event card

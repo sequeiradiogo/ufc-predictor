@@ -68,6 +68,8 @@ jobs:
         run: |
           python ml/train_v1_models.py
           python ml/train_v1_models.py --prod
+          python ml/finish_type_model.py
+          python ml/finish_type_model.py --prod
 
       - name: Commit updated artifacts
         if: ${{ inputs.dry_run != true }}

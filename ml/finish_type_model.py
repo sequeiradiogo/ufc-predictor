@@ -6,17 +6,20 @@ Classes:
     1 = KO / TKO
     2 = Submission
 
-Uses the same fight-level diff features as the main win-prediction model.
-Fights with unknown or rare finish methods (DQ, Overturned, etc.) are excluded.
+Uses the v1 (mdabbert) diff feature CSV -- the same features the main
+win-prediction models train on. Fights with unknown or rare finish
+methods (DQ, Overturned, etc.) are excluded.
 
 Run:
-    python ml/finish_type_model.py
+    python ml/finish_type_model.py            # eval tier -> models_v1/
+    python ml/finish_type_model.py --prod      # prod tier -> models_v1_prod/ (100% of data)
 
 Saves:
-    models/finish_type.joblib
-    models/finish_type_features.joblib
+    models_v1/finish_type.joblib, models_v1/finish_type_features.joblib
+    (or models_v1_prod/... with --prod)
 """
 
+import argparse
 import sqlite3
 import sys
 from pathlib import Path
@@ -27,20 +30,19 @@ import pandas as pd
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from sklearn.model_selection import TimeSeriesSplit
 from xgboost import XGBClassifier
-import matplotlib.pyplot as plt
-import seaborn as sns
 
 # ── Project imports ───────────────────────────────────────────────────────────
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
 from config import (
-    DB_PATH,
-    CSV_WITH_ELO,
+    DB_V1_PATH,
+    CSV_V1_WITH_ELO,
     TARGET_COL, META_COLS,
     TRAIN_TEST_SPLIT, RANDOM_STATE,
     FINISH_METHOD_MAP, FINISH_CLASS_NAMES,
-    MODEL_FINISH_PATH, MODEL_FINISH_FEATURES,
+    MODEL_V1_FINISH_PATH, MODEL_V1_FINISH_FEATURES,
+    MODEL_V1_PROD_FINISH_PATH, MODEL_V1_PROD_FINISH_FEATURES,
 )
 from utils.logger import get_logger
 
@@ -51,24 +53,24 @@ log = get_logger(__name__)
 
 def load_finish_dataset() -> pd.DataFrame:
     """
-    Load the prepared ML CSV, attach the finish-type label from the DB,
+    Load the v1 feature CSV, attach the finish-type label from the mdabbert DB,
     and return a DataFrame ready for training.
 
     Rows with unmapped finish methods (DQ, Overturned, etc.) are dropped.
     """
-    if not CSV_WITH_ELO.exists():
+    if not CSV_V1_WITH_ELO.exists():
         raise FileNotFoundError(
-            f"ML dataset not found at '{CSV_WITH_ELO}'.\n"
-            "Run 'python ml/ML_data_preparation.py' first."
+            f"v1 ML dataset not found at '{CSV_V1_WITH_ELO}'.\n"
+            "Run 'python ml/ML_data_preparation_v1.py' first."
         )
 
-    log.info("Loading ML dataset from %s…", CSV_WITH_ELO)
-    ml = pd.read_csv(CSV_WITH_ELO)
+    log.info("Loading v1 ML dataset from %s…", CSV_V1_WITH_ELO)
+    ml = pd.read_csv(CSV_V1_WITH_ELO)
     ml["date"] = pd.to_datetime(ml["date"])
 
-    # Fetch method column from DB
+    # Fetch method column from the mdabbert DB
     log.info("Fetching finish methods from database…")
-    conn = sqlite3.connect(str(DB_PATH))
+    conn = sqlite3.connect(str(DB_V1_PATH))
     methods = pd.read_sql_query("SELECT fight_id, method FROM fights", conn)
     conn.close()
 
@@ -131,7 +133,6 @@ def cross_validate(df: pd.DataFrame, n_splits: int = 5) -> list[float]:
             objective="multi:softprob",
             num_class=3,
             eval_metric="mlogloss",
-            use_label_encoder=False,
             random_state=RANDOM_STATE,
         )
         m.fit(X_tr, y_tr, verbose=False)
@@ -143,78 +144,85 @@ def cross_validate(df: pd.DataFrame, n_splits: int = 5) -> list[float]:
     return scores
 
 
-# ── Visualisation ─────────────────────────────────────────────────────────────
-
-def plot_confusion(y_test: pd.Series, predictions: np.ndarray) -> None:
-    cm = confusion_matrix(y_test, predictions)
-    plt.figure(figsize=(7, 5))
-    sns.heatmap(
-        cm, annot=True, fmt="d", cmap="Blues",
-        xticklabels=[f"Pred {n}" for n in FINISH_CLASS_NAMES],
-        yticklabels=[f"True {n}" for n in FINISH_CLASS_NAMES],
-    )
-    plt.title("Finish Type — Confusion Matrix")
-    plt.tight_layout()
-    plt.show()
-
-
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def main() -> None:
+def main(prod: bool = False) -> None:
     df = load_finish_dataset()
 
-    cv_scores = cross_validate(df)
+    if prod:
+        # Production tier: train on 100% of data, no held-out evaluation.
+        X_train, y_train = preprocess(df)
+        feature_names     = list(X_train.columns)
 
-    df_train, df_test = time_series_split(df)
-    X_train, y_train  = preprocess(df_train)
-    X_test,  y_test   = preprocess(df_test)
-    feature_names     = list(X_train.columns)
+        log.info("Training PRODUCTION finish-type XGBoost on %d samples (100%% of data)…", len(X_train))
+        model = XGBClassifier(
+            n_estimators=400,
+            learning_rate=0.05,
+            max_depth=4,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            objective="multi:softprob",
+            num_class=3,
+            eval_metric="mlogloss",
+            random_state=RANDOM_STATE,
+        )
+        model.fit(X_train, y_train, verbose=False)
 
-    log.info("Training finish-type XGBoost on %d samples…", len(X_train))
-    model = XGBClassifier(
-        n_estimators=400,
-        learning_rate=0.05,
-        max_depth=4,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        objective="multi:softprob",
-        num_class=3,
-        eval_metric="mlogloss",
-        use_label_encoder=False,
-        random_state=RANDOM_STATE,
-    )
-    model.fit(X_train, y_train, verbose=False)
+        finish_path, finish_feats_path = MODEL_V1_PROD_FINISH_PATH, MODEL_V1_PROD_FINISH_FEATURES
+    else:
+        cv_scores = cross_validate(df)
 
-    predictions = model.predict(X_test)
-    proba       = model.predict_proba(X_test)
-    acc         = accuracy_score(y_test, predictions)
+        df_train, df_test = time_series_split(df)
+        X_train, y_train  = preprocess(df_train)
+        X_test,  y_test   = preprocess(df_test)
+        feature_names     = list(X_train.columns)
 
-    log.info("Test Accuracy: %.2f%%", acc * 100)
-    log.info("Mean CV Accuracy: %.2f%% ± %.2f%%", np.mean(cv_scores) * 100, np.std(cv_scores) * 100)
+        log.info("Training finish-type XGBoost on %d samples…", len(X_train))
+        model = XGBClassifier(
+            n_estimators=400,
+            learning_rate=0.05,
+            max_depth=4,
+            subsample=0.8,
+            colsample_bytree=0.8,
+            objective="multi:softprob",
+            num_class=3,
+            eval_metric="mlogloss",
+            random_state=RANDOM_STATE,
+        )
+        model.fit(X_train, y_train, verbose=False)
 
-    print("\n=== FINISH TYPE MODEL RESULTS ===")
-    print(f"Test Accuracy:    {acc:.2%}")
-    print(f"Mean CV Accuracy: {np.mean(cv_scores):.2%} ± {np.std(cv_scores):.2%}")
-    print(f"\nClass distribution in test set:")
-    for i, name in enumerate(FINISH_CLASS_NAMES):
-        n = (y_test == i).sum()
-        print(f"  {name:12s}: {n:5d}  ({n/len(y_test):.1%})")
-    print("\nClassification Report:")
-    print(classification_report(y_test, predictions, target_names=FINISH_CLASS_NAMES))
+        predictions = model.predict(X_test)
+        acc         = accuracy_score(y_test, predictions)
 
-    # Feature importance (top 15)
-    importances = pd.Series(model.feature_importances_, index=feature_names)
-    print("\nTop 15 Features (XGBoost importance):")
-    print(importances.nlargest(15).to_string())
+        log.info("Test Accuracy: %.2f%%", acc * 100)
+        log.info("Mean CV Accuracy: %.2f%% ± %.2f%%", np.mean(cv_scores) * 100, np.std(cv_scores) * 100)
 
-    plot_confusion(y_test, predictions)
+        print("\n=== FINISH TYPE MODEL RESULTS ===")
+        print(f"Test Accuracy:    {acc:.2%}")
+        print(f"Mean CV Accuracy: {np.mean(cv_scores):.2%} ± {np.std(cv_scores):.2%}")
+        print(f"\nClass distribution in test set:")
+        for i, name in enumerate(FINISH_CLASS_NAMES):
+            n = (y_test == i).sum()
+            print(f"  {name:12s}: {n:5d}  ({n/len(y_test):.1%})")
+        print("\nClassification Report:")
+        print(classification_report(y_test, predictions, target_names=FINISH_CLASS_NAMES))
+
+        importances = pd.Series(model.feature_importances_, index=feature_names)
+        print("\nTop 15 Features (XGBoost importance):")
+        print(importances.nlargest(15).to_string())
+
+        finish_path, finish_feats_path = MODEL_V1_FINISH_PATH, MODEL_V1_FINISH_FEATURES
 
     # Save
-    log.info("Saving finish-type model to %s…", MODEL_FINISH_PATH)
-    joblib.dump(model,         MODEL_FINISH_PATH)
-    joblib.dump(feature_names, MODEL_FINISH_FEATURES)
-    log.info("Saved: %s, %s", MODEL_FINISH_PATH.name, MODEL_FINISH_FEATURES.name)
+    log.info("Saving finish-type model to %s…", finish_path)
+    joblib.dump(model,         finish_path)
+    joblib.dump(feature_names, finish_feats_path)
+    log.info("Saved: %s, %s", finish_path.name, finish_feats_path.name)
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Train the finish-type classifier.")
+    parser.add_argument("--prod", action="store_true",
+                         help="Train the production tier on 100%% of data (models_v1_prod/).")
+    args = parser.parse_args()
+    main(prod=args.prod)

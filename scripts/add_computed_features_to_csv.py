@@ -29,17 +29,219 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from config import DB_V1_PATH, DB_PATH, EWMA_SPAN
+from config import DB_V1_PATH, DB_PATH, EWMA_SPAN, FINISH_METHOD_MAP, SOS_WINDOW, STARTING_ELO
 from ml.ELO_calculator import build_elo_features, build_glicko_features
-from ml.ML_data_preparation import (
-    compute_finish_rates,
-    compute_inactivity,
-    compute_ko_vulnerability,
-    compute_sos_features,
-)
 from ml.ML_data_preparation_v1 import compute_slope_features_v1, _compute_recent_form_v1
 
 KAGGLE_CSV = ROOT / "raw_data" / "ufc-master.csv"
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Finish-method rate features
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def compute_finish_rates(conn: sqlite3.Connection) -> pd.DataFrame:
+    """
+    For every (fight_id, fighter_id) pair compute three pre-fight cumulative rates:
+      - ko_rate  : fraction of career wins by KO/TKO  (0-1)
+      - sub_rate : fraction of career wins by Submission (0-1)
+      - dec_rate : fraction of career wins by Decision (0-1)
+
+    shift(1) ensures the current fight result is never included.
+    Fighters with zero wins before a fight have all rates set to 0.
+    """
+    df = pd.read_sql_query(
+        """
+        SELECT fight_id, date, r_fighter_id, b_fighter_id, winner_id, method
+        FROM fights
+        ORDER BY date ASC, fight_id ASC
+        """,
+        conn,
+    )
+
+    long_rows = []
+    for _, row in df.iterrows():
+        method_cls = FINISH_METHOD_MAP.get(row["method"], -1)
+        for fighter_id, is_winner in [
+            (row["r_fighter_id"], row["winner_id"] == row["r_fighter_id"]),
+            (row["b_fighter_id"], row["winner_id"] == row["b_fighter_id"]),
+        ]:
+            long_rows.append({
+                "fight_id":   row["fight_id"],
+                "date":       row["date"],
+                "fighter_id": fighter_id,
+                "won":        int(is_winner),
+                "ko_win":     int(is_winner and method_cls == 1),
+                "sub_win":    int(is_winner and method_cls == 2),
+                "dec_win":    int(is_winner and method_cls == 0),
+            })
+
+    long = pd.DataFrame(long_rows)
+    long["date"] = pd.to_datetime(long["date"])
+    long = long.sort_values(["fighter_id", "date", "fight_id"]).reset_index(drop=True)
+
+    grp = long.groupby("fighter_id", sort=False)
+    for col in ("won", "ko_win", "sub_win", "dec_win"):
+        long[f"cum_{col}"] = grp[col].transform(lambda s: s.shift(1).cumsum().fillna(0))
+
+    wins = long["cum_won"]
+    long["ko_rate"]  = long["cum_ko_win"]  / wins.clip(lower=1)
+    long["sub_rate"] = long["cum_sub_win"] / wins.clip(lower=1)
+    long["dec_rate"] = long["cum_dec_win"] / wins.clip(lower=1)
+    no_wins_mask = wins == 0
+    for col in ("ko_rate", "sub_rate", "dec_rate"):
+        long.loc[no_wins_mask, col] = 0.0
+
+    return long[["fight_id", "fighter_id", "ko_rate", "sub_rate", "dec_rate"]]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Inactivity features
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def compute_inactivity(conn: sqlite3.Connection) -> pd.DataFrame:
+    """
+    For every (fight_id, fighter_id) pair compute days since the fighter's
+    previous fight (pre-fight inactivity gap).
+
+    First career appearance has no prior date — filled with the dataset median.
+    """
+    df = pd.read_sql_query(
+        """
+        SELECT fight_id, date, r_fighter_id, b_fighter_id
+        FROM fights
+        ORDER BY date ASC, fight_id ASC
+        """,
+        conn,
+    )
+
+    long_rows = []
+    for _, row in df.iterrows():
+        for fid in [row["r_fighter_id"], row["b_fighter_id"]]:
+            long_rows.append({
+                "fight_id":   row["fight_id"],
+                "date":       row["date"],
+                "fighter_id": fid,
+            })
+
+    long = pd.DataFrame(long_rows)
+    long["date"] = pd.to_datetime(long["date"])
+    long = long.sort_values(["fighter_id", "date", "fight_id"]).reset_index(drop=True)
+
+    grp = long.groupby("fighter_id", sort=False)
+    long["prev_date"] = grp["date"].transform(lambda s: s.shift(1))
+    long["days_since_last"] = (long["date"] - long["prev_date"]).dt.days
+
+    median_days = long["days_since_last"].median()
+    long["days_since_last"] = long["days_since_last"].fillna(median_days)
+
+    return long[["fight_id", "fighter_id", "days_since_last"]]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# Strength-of-schedule (SOS) features
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def compute_sos_features(df_fights: pd.DataFrame, window: int = SOS_WINDOW) -> pd.DataFrame:
+    """
+    For every (fight_id, fighter_id) pair compute the rolling average ELO of
+    the last `window` opponents before this fight (strength of schedule).
+
+    df_fights must contain: fight_id, date, r_fighter_id, b_fighter_id,
+                            elo_red, elo_blue.
+
+    Red fighter's opponent ELO = elo_blue (blue fighter's pre-fight per-division ELO).
+    Blue fighter's opponent ELO = elo_red.
+
+    shift(1) ensures the current opponent's ELO is not counted.
+    """
+    long_rows = []
+    for _, row in df_fights.iterrows():
+        long_rows.append({
+            "fight_id":   row["fight_id"],
+            "date":       row["date"],
+            "fighter_id": row["r_fighter_id"],
+            "opp_elo":    row["elo_blue"],
+        })
+        long_rows.append({
+            "fight_id":   row["fight_id"],
+            "date":       row["date"],
+            "fighter_id": row["b_fighter_id"],
+            "opp_elo":    row["elo_red"],
+        })
+
+    long = pd.DataFrame(long_rows)
+    long["date"] = pd.to_datetime(long["date"])
+    long = long.sort_values(["fighter_id", "date", "fight_id"]).reset_index(drop=True)
+
+    grp = long.groupby("fighter_id", sort=False)
+    long["sos"] = grp["opp_elo"].transform(
+        lambda s: s.shift(1).rolling(window, min_periods=1).mean()
+    )
+    long["sos"] = long["sos"].fillna(STARTING_ELO)
+
+    return long[["fight_id", "fighter_id", "sos"]]
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# KO vulnerability
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def compute_ko_vulnerability(conn: sqlite3.Connection) -> pd.DataFrame:
+    """
+    For every (fight_id, fighter_id) pair compute lifetime KO vulnerability:
+      - cumulative KO/TKO losses across all prior fights
+      - plus cumulative knockdowns received (opponent kd) across all prior fights
+
+    Cumulative over all history (not a rolling window) because chin damage is
+    career-long. shift(1) ensures the current fight is never included.
+    """
+    fights_df = pd.read_sql_query(
+        """
+        SELECT fight_id, date, r_fighter_id, b_fighter_id, winner_id, method
+        FROM fights
+        ORDER BY date ASC, fight_id ASC
+        """,
+        conn,
+    )
+
+    kd_df = pd.read_sql_query(
+        "SELECT fight_id, fighter_id, CAST(kd AS INTEGER) AS kd FROM fight_stats WHERE kd IS NOT NULL",
+        conn,
+    )
+    opp_kd = kd_df.rename(columns={"fighter_id": "opp_id", "kd": "kd_received"})
+    kd_merged = kd_df.merge(opp_kd, on="fight_id", how="left")
+    kd_merged = kd_merged[kd_merged["fighter_id"] != kd_merged["opp_id"]]
+    kd_lookup: dict = {
+        (r["fight_id"], r["fighter_id"]): int(r["kd_received"] or 0)
+        for _, r in kd_merged.iterrows()
+    }
+
+    long_rows = []
+    for _, row in fights_df.iterrows():
+        method_cls = FINISH_METHOD_MAP.get(row["method"], -1)
+        winner_id  = row["winner_id"]
+        for fighter_id in (row["r_fighter_id"], row["b_fighter_id"]):
+            is_winner  = winner_id == fighter_id
+            ko_stopped = int(not is_winner and winner_id is not None and method_cls == 1)
+            kd_recv    = kd_lookup.get((row["fight_id"], fighter_id), 0)
+            long_rows.append({
+                "fight_id":    row["fight_id"],
+                "date":        row["date"],
+                "fighter_id":  fighter_id,
+                "ko_stopped":  ko_stopped,
+                "kd_received": kd_recv,
+            })
+
+    long = pd.DataFrame(long_rows)
+    long["date"] = pd.to_datetime(long["date"])
+    long = long.sort_values(["fighter_id", "date", "fight_id"]).reset_index(drop=True)
+
+    grp = long.groupby("fighter_id", sort=False)
+    long["ko_vuln"]     = grp["ko_stopped"].transform(lambda s: s.shift(1).cumsum()).fillna(0)
+    long["kd_received"] = grp["kd_received"].transform(lambda s: s.shift(1).cumsum()).fillna(0)
+
+    return long[["fight_id", "fighter_id", "ko_vuln", "kd_received"]]
 
 # Maps (wide column) -> CSV column name
 _FIGHT_COLS = {
