@@ -336,13 +336,20 @@ def _run_prediction(req: PredictRequest) -> PredictResponse:
 
 @app.get("/", summary="Health check")
 def root():
-    """Returns API status and which models are loaded."""
+    """Returns API status and which model artifacts are available."""
+    models_dir = (
+        MODELS_V1_PROD_DIR
+        if MODELS_V1_PROD_DIR.exists() and any(MODELS_V1_PROD_DIR.iterdir())
+        else MODELS_V1_DIR
+    )
     return {
         "status": "ok",
+        "models_dir": str(models_dir),
         "models_loaded": {
-            "xgboost": "xgb" in _models,
-            "logistic_regression": "lr_base" in _models,
-            "finish_type": "finish" in _models,
+            "xgboost": (models_dir / "xgboost.joblib").exists(),
+            "logistic_regression": (models_dir / "logistic_regression.joblib").exists(),
+            "ensemble": (models_dir / "ensemble.joblib").exists(),
+            "finish_type": (models_dir / "finish_type.joblib").exists(),
         },
         "elo_cache": {
             "global_fighters": len(_elo_global),

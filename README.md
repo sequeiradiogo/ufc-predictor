@@ -103,7 +103,7 @@ Output: a Markdown table + interactive HTML dashboard saved to `predictions/<eve
 uvicorn api:app --reload
 ```
 
-Endpoints: `POST /predict`, `GET /fighters`, `GET /health`. Full schema at `/docs` (Swagger UI) once the server is running.
+Endpoints: `POST /predict`, `GET /fighters?q=`, `GET /` (health check). Full schema at `/docs` (Swagger UI) once the server is running.
 
 ---
 
