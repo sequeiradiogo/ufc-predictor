@@ -37,3 +37,6 @@ beautifulsoup4>=4.12
 lxml>=5.0          # faster HTML parser for BeautifulSoup
 playwright>=1.44   # headless Chromium for Cloudflare-protected sites (run: playwright install chromium)
 kaggle>=1.6        # kaggle datasets download (optional -- rankings scraper)
+
+# Testing
+pytest>=8.0
