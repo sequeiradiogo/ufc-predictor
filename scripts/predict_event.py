@@ -530,11 +530,13 @@ def main() -> None:
         print("[ERROR]  No fights found on the card. The page structure may have changed.")
         sys.exit(1)
 
-    if not DB_V1_PATH.exists() or not MODELS_V1_DIR.exists():
+    _prod_ready = MODELS_V1_PROD_DIR.exists() and any(MODELS_V1_PROD_DIR.iterdir())
+    _eval_ready = MODELS_V1_DIR.exists() and any(MODELS_V1_DIR.iterdir())
+    if not DB_V1_PATH.exists() or not (_prod_ready or _eval_ready):
         print("[ERROR]  v1 DB or models not found. Run the v1 training pipeline first.")
         sys.exit(1)
 
-    _models_dir = MODELS_V1_PROD_DIR if MODELS_V1_PROD_DIR.exists() and any(MODELS_V1_PROD_DIR.iterdir()) else MODELS_V1_DIR
+    _models_dir = MODELS_V1_PROD_DIR if _prod_ready else MODELS_V1_DIR
 
     conn    = sqlite3.connect(str(DB_PATH))
     results = []
