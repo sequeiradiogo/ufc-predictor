@@ -1,8 +1,11 @@
 # UFC Fight Night: Hooker vs. Parnasse -- September 5, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-09-04
+Model: Ensemble (Soft Vote) | Generated: 2026-09-04 | Scored: 2026-09-07
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
+
+**Result: 4/9 (44.4%)**
+*High-confidence (>=55%) picks: 2/6 (33.3%)*
 
 > Interactive fighter comparison: [2026-09-05-ufc-fight-night-hooker-vs-parnasse.html](./2026-09-05-ufc-fight-night-hooker-vs-parnasse.html)
 
@@ -10,19 +13,38 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 
 ## Predictions
 
-| Fight | Predicted Winner | Confidence | Likely Method |
-|---|---|---|---|
-| Fares Ziam vs Axel Sola | Fares Ziam | 83.0% | KO/TKO (54%) / Decision (40%) |
-| Michael Page vs Nursulton Ruziboev | Michael Page | 54.8% | KO/TKO (52%) / Decision (38%) |
-| Daniil Donchenko vs Punahele Soriano | Daniil Donchenko | 82.1% | KO/TKO (41%) / Decision (35%) |
-| Kurtis Campbell vs Trevor Peek | Trevor Peek | 54.4% | Decision (46%) / KO/TKO (27%) |
-| Losene Keita vs Muhammad Naimov | Muhammad Naimov | 65.5% | KO/TKO (38%) / Decision (33%) |
-| Morgan Charriere vs Felipe Lima | Felipe Lima | 53.8% | Decision (63%) / KO/TKO (23%) |
-| Mario Pinto vs Ryan Spann | Mario Pinto | 81.8% | Decision (72%) / KO/TKO (20%) |
-| Oumar Sy vs Modestas Bukauskas | Oumar Sy | 80.7% | Decision (59%) / KO/TKO (30%) |
-| Nora Cornolle vs Klaudia Sygula | Klaudia Sygula | 62.1% | Decision (74%) / KO/TKO (19%) |
+| Fight | Predicted Winner | Confidence | Likely Method | Odds (Red / Blue) | Actual Result | Correct? |
+|---|---|---|---|---|---|---|
+| Fares Ziam vs Axel Sola | Fares Ziam | 83.0% | KO/TKO (54%) / Decision (40%) | -149 / +123 | Axel Sola (KO R1) | NO |
+| Michael Page vs Nursulton Ruziboev | Michael Page | 54.8% | KO/TKO (52%) / Decision (38%) | -3487 / +2236 | Michael Page (Dec) | YES |
+| Daniil Donchenko vs Punahele Soriano | Daniil Donchenko | 82.1% | KO/TKO (41%) / Decision (35%) | -10679 / +3013 | Daniil Donchenko (Dec) | YES |
+| Kurtis Campbell vs Trevor Peek | Trevor Peek | 54.4% | Decision (46%) / KO/TKO (27%) | -5285 / +3013 | Kurtis Campbell (Sub R3) | NO |
+| Losene Keita vs Muhammad Naimov | Muhammad Naimov | 65.5% | KO/TKO (38%) / Decision (33%) | -341 / +279 | Losene Keita (KO R1) | NO |
+| Morgan Charriere vs Felipe Lima | Felipe Lima | 53.8% | Decision (63%) / KO/TKO (23%) | +2236 / -3487 | Felipe Lima (Dec) | YES |
+| Mario Pinto vs Ryan Spann | Mario Pinto | 81.8% | Decision (72%) / KO/TKO (20%) | -270 / +257 | Mario Pinto (KO R2) | YES |
+| Oumar Sy vs Modestas Bukauskas | Oumar Sy | 80.7% | Decision (59%) / KO/TKO (30%) | -161 / +140 | Modestas Bukauskas (KO R2) | NO |
+| Nora Cornolle vs Klaudia Sygula | Klaudia Sygula | 62.1% | Decision (74%) / KO/TKO (19%) | -5285 / +3013 | Nora Cornolle (Dec) | NO |
 
 ---
+
+## Post-Event Summary
+
+- Fights predicted: 9
+- Correct: 4/9 (44.4%)
+- High-confidence (>=55%) picks: 2/6 (33.3%)
+
+### P/L (EUR 1 flat on picks >=55% confidence)
+
+| Fight | Model Pick | Odds (dec) | Result | P/L |
+|---|---|---|---|---|
+| Fares Ziam vs Axel Sola | Fares Ziam | 1.67 | Loss | -EUR 1.00 |
+| Daniil Donchenko vs Punahele Soriano | Daniil Donchenko | 1.01 | Win | +EUR 0.01 |
+| Losene Keita vs Muhammad Naimov | Muhammad Naimov | 3.79 | Loss | -EUR 1.00 |
+| Mario Pinto vs Ryan Spann | Mario Pinto | 1.37 | Win | +EUR 0.37 |
+| Oumar Sy vs Modestas Bukauskas | Oumar Sy | 1.62 | Loss | -EUR 1.00 |
+| Nora Cornolle vs Klaudia Sygula | Klaudia Sygula | 31.13 | Loss | -EUR 1.00 |
+
+**Net P/L: -EUR 3.62 on EUR 6 staked (-60.3% ROI)**
 
 ## Raw Model Output
 
