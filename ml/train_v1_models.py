@@ -779,6 +779,7 @@ def train_ensemble(df: pd.DataFrame, n_trials: int = 100, prod: bool = False) ->
             hold_probas.append(p_hold)
 
         import optuna
+        from sklearn.metrics import log_loss
         optuna.logging.set_verbosity(optuna.logging.WARNING)
 
         if X_tune is not None:
@@ -787,14 +788,26 @@ def train_ensemble(df: pd.DataFrame, n_trials: int = 100, prod: bool = False) ->
                 total  = sum(raw_w) + 1e-9
                 w_norm = [w / total for w in raw_w]
                 ens    = np.average(tune_probas, axis=0, weights=w_norm)
-                return ((ens[:, 1] >= 0.5).astype(int) == y_tune).mean()
+                # Log-loss instead of raw 0/1 accuracy: accuracy on a 371-row
+                # tune split is a noisy, near-discontinuous objective and Optuna
+                # (unseeded, 5x100 trials) was landing on degenerate weight
+                # combinations that scored well on this tiny split by chance but
+                # generalized poorly on hold-out (ensemble accuracy drifted from
+                # ~69% to ~65% over the 2026-08 to 2026-09 monthly retrains,
+                # with weight mass swinging wildly onto whichever base model
+                # happened to get lucky). Log-loss is smooth in the weights and
+                # penalizes overconfident wrong predictions, giving a much more
+                # stable optimization surface.
+                probs = np.clip(ens[:, 1], 1e-6, 1 - 1e-6)
+                return -log_loss(y_tune, probs)
 
             _n_restarts  = 5
             _trials_each = max(n_trials, 100)
-            best_value   = -1.0
+            best_value   = -np.inf
             best_raw     = None
-            for _ in range(_n_restarts):
-                study = optuna.create_study(direction="maximize")
+            for restart in range(_n_restarts):
+                sampler = optuna.samplers.TPESampler(seed=42 + restart)
+                study = optuna.create_study(direction="maximize", sampler=sampler)
                 study.optimize(objective, n_trials=_trials_each)
                 if study.best_value > best_value:
                     best_value = study.best_value
