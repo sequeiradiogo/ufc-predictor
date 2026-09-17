@@ -124,16 +124,21 @@ def scrape_bfo_odds(
             candidates.append(e)
 
     fighter_keys = {_name_key(n) for pair in fighter_pairs for n in pair}
-    bfo_event, matchups = None, []
+    matched_events, matchups = [], []
 
     if len(candidates) == 1:
-        bfo_event = candidates[0]
+        matched_events = [candidates[0]]
     elif len(candidates) > 1:
         # Multiple same-day events (BFO covers many orgs) -- BFO's event names
         # are often location-based (e.g. "UFC Oklahoma") so they don't fuzzy-
         # match our fighter-based event names. Disambiguate on ground truth
-        # instead: scrape each candidate and keep the one whose card actually
-        # contains our predicted fighters.
+        # instead: scrape every candidate and keep whichever ones actually
+        # contain our predicted fighters. BFO sometimes splits a single UFC
+        # card across two listings under different names (e.g. a "UFC
+        # <location>" page with just the main event plus a separately named
+        # page -- "Noche UFC" -- with the rest of the card), so a card can
+        # legitimately span more than one candidate; collect matchups from
+        # all of them rather than stopping at the first hit.
         for cand in candidates:
             try:
                 cand_matchups = _scrape_event_odds(cand["url"])
@@ -143,10 +148,10 @@ def scrape_bfo_odds(
             cand_keys = {_name_key(m["r_name"]) for m in cand_matchups} | \
                         {_name_key(m["b_name"]) for m in cand_matchups}
             if cand_keys & fighter_keys:
-                bfo_event, matchups = cand, cand_matchups
-                break
+                matched_events.append(cand)
+                matchups.extend(cand_matchups)
 
-    if bfo_event is None:
+    if not matched_events:
         # Fall back to fuzzy title matching over everything we fetched.
         all_names = [e["name"] for e in all_events]
         matched   = _best_match(event_name, all_names, cutoff=0.60)
@@ -154,12 +159,13 @@ def scrape_bfo_odds(
             log.warning("No BFO event matched '%s' (%s)", event_name, event_date)
             return {}
         bfo_event = all_events[all_names.index(matched)]
+        matched_events = [bfo_event]
 
-    log.info("BFO event matched: '%s'", bfo_event["name"])
+    log.info("BFO event(s) matched: %s", ", ".join(e["name"] for e in matched_events))
 
     if not matchups:
         try:
-            matchups = _scrape_event_odds(bfo_event["url"])
+            matchups = _scrape_event_odds(matched_events[0]["url"])
         except Exception as exc:
             log.warning("BFO odds scrape failed: %s", exc)
             return {}

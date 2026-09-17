@@ -16,17 +16,17 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 | Fight | Predicted Winner | Confidence | Likely Method | Odds (Red / Blue) | Actual Result | Correct? |
 |---|---|---|---|---|---|---|
 | Jean Silva vs Jose Delgado | Jean Silva | 82.4% | KO/TKO (79%) / Decision (18%) | -219 / +181 | Jean Silva (Sub R3) | YES |
-| Brandon Moreno vs Joseph Morales | Brandon Moreno | 71.6% | Decision (46%) / Submission (28%) | N/A / N/A | Brandon Moreno (Dec (Split)) | YES |
-| Tommy McMillen vs Marwan Rahiki | Marwan Rahiki | 85.4% | KO/TKO (64%) / Decision (31%) | N/A / N/A | Tommy McMillen (Dec) | NO |
-| Manon Fiorot vs Alexa Grasso | Manon Fiorot | 59.5% | Decision (61%) / KO/TKO (26%) | N/A / N/A | Alexa Grasso (Dec) | NO |
-| Waldo Cortes Acosta vs Curtis Blaydes | Waldo Cortes Acosta | 56.1% | KO/TKO (63%) / Decision (28%) | N/A / N/A | Curtis Blaydes (Dec) | NO |
-| David Martinez vs Dan Ige | David Martinez | 81.2% | Decision (50%) / KO/TKO (44%) | N/A / N/A | David Martinez (Dec) | YES |
-| Tim Elliott vs Edgar Chairez | Tim Elliott | 50.3% | Decision (68%) / KO/TKO (19%) | N/A / N/A | Tim Elliott (Dec) | YES |
-| Ignacio Bahamondes vs Muslim Salikhov | Ignacio Bahamondes | 81.3% | KO/TKO (45%) / Decision (41%) | N/A / N/A | Ignacio Bahamondes (Dec) | YES |
-| Yousri Belgaroui vs Djorden Santos | Yousri Belgaroui | 83.1% | Decision (56%) / KO/TKO (39%) | N/A / N/A | Yousri Belgaroui (KO R1) | YES |
-| Drakkar Klose vs Tommy Gantt | Tommy Gantt | 86.6% | Decision (60%) / KO/TKO (27%) | N/A / N/A | Tommy Gantt (Sub R3) | YES |
-| Rafa Garcia vs Rongzhu | Rafa Garcia | 51.7% | Decision (52%) / Submission (25%) | N/A / N/A | Rongzhu (Dec) | NO |
-| JJ Aldrich vs Regina Tarin | JJ Aldrich | 56.9% | Decision (65%) / KO/TKO (27%) | N/A / N/A | Regina Tarin (Dec) | NO |
+| Brandon Moreno vs Joseph Morales | Brandon Moreno | 71.6% | Decision (46%) / Submission (28%) | +108 / -113 | Brandon Moreno (Dec (Split)) | YES |
+| Tommy McMillen vs Marwan Rahiki | Marwan Rahiki | 85.4% | KO/TKO (64%) / Decision (31%) | -10679 / +3013 | Tommy McMillen (Dec) | NO |
+| Manon Fiorot vs Alexa Grasso | Manon Fiorot | 59.5% | Decision (61%) / KO/TKO (26%) | +1770 / -3487 | Alexa Grasso (Dec) | NO |
+| Waldo Cortes Acosta vs Curtis Blaydes | Waldo Cortes Acosta | 56.1% | KO/TKO (63%) / Decision (28%) | +1460 / -2049 | Curtis Blaydes (Dec) | NO |
+| David Martinez vs Dan Ige | David Martinez | 81.2% | Decision (50%) / KO/TKO (44%) | -10679 / +4566 | David Martinez (Dec) | YES |
+| Tim Elliott vs Edgar Chairez | Tim Elliott | 50.3% | Decision (68%) / KO/TKO (19%) | +194 / -203 | Tim Elliott (Dec) | YES |
+| Ignacio Bahamondes vs Muslim Salikhov | Ignacio Bahamondes | 81.3% | KO/TKO (45%) / Decision (41%) | -2049 / +1460 | Ignacio Bahamondes (Dec) | YES |
+| Yousri Belgaroui vs Djorden Santos | Yousri Belgaroui | 83.1% | Decision (56%) / KO/TKO (39%) | -614 / +567 | Yousri Belgaroui (KO R1) | YES |
+| Drakkar Klose vs Tommy Gantt | Tommy Gantt | 86.6% | Decision (60%) / KO/TKO (27%) | +9226 / -10679 | Tommy Gantt (Sub R3) | YES |
+| Rafa Garcia vs Rongzhu | Rafa Garcia | 51.7% | Decision (52%) / Submission (25%) | +1071 / -1433 | Rongzhu (Dec) | NO |
+| JJ Aldrich vs Regina Tarin | JJ Aldrich | 56.9% | Decision (65%) / KO/TKO (27%) | +1460 / -2049 | Regina Tarin (Dec) | NO |
 
 ---
 
@@ -41,17 +41,17 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 | Fight | Model Pick | Odds (dec) | Result | P/L |
 |---|---|---|---|---|
 | Jean Silva vs Jose Delgado | Jean Silva | 1.46 | Win | +EUR 0.46 |
-| Brandon Moreno vs Joseph Morales | Brandon Moreno | -- | Win | +EUR 0.00 |
-| Tommy McMillen vs Marwan Rahiki | Marwan Rahiki | -- | Loss | -EUR 1.00 |
-| Manon Fiorot vs Alexa Grasso | Manon Fiorot | -- | Loss | -EUR 1.00 |
-| Waldo Cortes Acosta vs Curtis Blaydes | Waldo Cortes Acosta | -- | Loss | -EUR 1.00 |
-| David Martinez vs Dan Ige | David Martinez | -- | Win | +EUR 0.00 |
-| Ignacio Bahamondes vs Muslim Salikhov | Ignacio Bahamondes | -- | Win | +EUR 0.00 |
-| Yousri Belgaroui vs Djorden Santos | Yousri Belgaroui | -- | Win | +EUR 0.00 |
-| Drakkar Klose vs Tommy Gantt | Tommy Gantt | -- | Win | +EUR 0.00 |
-| JJ Aldrich vs Regina Tarin | JJ Aldrich | -- | Loss | -EUR 1.00 |
+| Brandon Moreno vs Joseph Morales | Brandon Moreno | 2.08 | Win | +EUR 1.08 |
+| Tommy McMillen vs Marwan Rahiki | Marwan Rahiki | 31.13 | Loss | -EUR 1.00 |
+| Manon Fiorot vs Alexa Grasso | Manon Fiorot | 18.70 | Loss | -EUR 1.00 |
+| Waldo Cortes Acosta vs Curtis Blaydes | Waldo Cortes Acosta | 15.60 | Loss | -EUR 1.00 |
+| David Martinez vs Dan Ige | David Martinez | 1.01 | Win | +EUR 0.01 |
+| Ignacio Bahamondes vs Muslim Salikhov | Ignacio Bahamondes | 1.05 | Win | +EUR 0.05 |
+| Yousri Belgaroui vs Djorden Santos | Yousri Belgaroui | 1.16 | Win | +EUR 0.16 |
+| Drakkar Klose vs Tommy Gantt | Tommy Gantt | 1.01 | Win | +EUR 0.01 |
+| JJ Aldrich vs Regina Tarin | JJ Aldrich | 15.60 | Loss | -EUR 1.00 |
 
-**Net P/L: -EUR 3.54 on EUR 10 staked (-35.4% ROI)**
+**Net P/L: -EUR 2.23 on EUR 10 staked (-22.3% ROI)**
 
 ## Raw Model Output
 
