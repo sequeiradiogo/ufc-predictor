@@ -1,8 +1,11 @@
 # UFC Fight Night: Rosas Jr. vs. Barcelos -- September 26, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-09-25
+Model: Ensemble (Soft Vote) | Generated: 2026-09-25 | Scored: 2026-09-28
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
+
+**Result: 7/9 (77.8%)**
+*High-confidence (>=55%) picks: 6/8 (75.0%)*
 
 > Interactive fighter comparison: [2026-09-26-ufc-fight-night-rosas-jr-vs-barcelos.html](./2026-09-26-ufc-fight-night-rosas-jr-vs-barcelos.html)
 
@@ -10,19 +13,40 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 
 ## Predictions
 
-| Fight | Predicted Winner | Confidence | Likely Method |
-|---|---|---|---|
-| Raul Rosas Jr. vs Raoni Barcelos | Raul Rosas Jr. | 69.8% | Decision (65%) / KO/TKO (24%) |
-| Norma Dumont vs Ailin Perez | Ailin Perez | 72.0% | Decision (85%) / KO/TKO (8%) |
-| Brady Hiestand vs Rinya Nakamura | Brady Hiestand | 50.2% | Decision (45%) / KO/TKO (37%) |
-| Rodolfo Vieira vs Robert Bryczek | Rodolfo Vieira | 70.7% | Decision (59%) / KO/TKO (26%) |
-| Rodolfo Bellato vs Christian Edwards | Rodolfo Bellato | 81.0% | KO/TKO (63%) / Decision (32%) |
-| Elves Brener vs Josiah Harrell | Elves Brener | 75.9% | KO/TKO (52%) / Decision (41%) |
-| Montel Jackson vs Ricky Simon | Montel Jackson | 76.3% | Decision (62%) / KO/TKO (29%) |
-| John Castaneda vs Alatengheili | John Castaneda | 76.3% | Decision (57%) / KO/TKO (34%) |
-| Vanessa Demopoulos vs Yazmin Jauregui | Yazmin Jauregui | 70.2% | Decision (59%) / KO/TKO (28%) |
+| Fight | Predicted Winner | Confidence | Likely Method | Odds (Red / Blue) | Actual Result | Correct? |
+|---|---|---|---|---|---|---|
+| Raul Rosas Jr. vs Raoni Barcelos | Raul Rosas Jr. | 69.8% | Decision (65%) / KO/TKO (24%) | +424 / -566 | Raul Rosas Jr. (KO R5) | YES |
+| Norma Dumont vs Ailin Perez | Ailin Perez | 72.0% | Decision (85%) / KO/TKO (8%) | -264 / +207 | Ailin Perez (Dec) | YES |
+| Brady Hiestand vs Rinya Nakamura | Brady Hiestand | 50.2% | Decision (45%) / KO/TKO (37%) | +207 / -240 | Brady Hiestand (Sub R2) | YES |
+| Rodolfo Vieira vs Robert Bryczek | Rodolfo Vieira | 70.7% | Decision (59%) / KO/TKO (26%) | -1433 / +1071 | Rodolfo Vieira (Dec) | YES |
+| Rodolfo Bellato vs Christian Edwards | Rodolfo Bellato | 81.0% | KO/TKO (63%) / Decision (32%) | -361 / +279 | Christian Edwards (KO R3) | NO |
+| Elves Brener vs Josiah Harrell | Elves Brener | 75.9% | KO/TKO (52%) / Decision (41%) | -168 / +145 | Elves Brener (KO R1) | YES |
+| Montel Jackson vs Ricky Simon | Montel Jackson | 76.3% | Decision (62%) / KO/TKO (29%) | -970 / +572 | Montel Jackson (KO R2) | YES |
+| John Castaneda vs Alatengheili | John Castaneda | 76.3% | Decision (57%) / KO/TKO (34%) | -291 / +239 | Alatengheili (Dec (Split)) | NO |
+| Vanessa Demopoulos vs Yazmin Jauregui | Yazmin Jauregui | 70.2% | Decision (59%) / KO/TKO (28%) | +623 / -791 | Yazmin Jauregui (KO R1) | YES |
 
 ---
+
+## Post-Event Summary
+
+- Fights predicted: 9
+- Correct: 7/9 (77.8%)
+- High-confidence (>=55%) picks: 6/8 (75.0%)
+
+### P/L (EUR 1 flat on picks >=55% confidence)
+
+| Fight | Model Pick | Odds (dec) | Result | P/L |
+|---|---|---|---|---|
+| Raul Rosas Jr. vs Raoni Barcelos | Raul Rosas Jr. | 5.24 | Win | +EUR 4.24 |
+| Norma Dumont vs Ailin Perez | Ailin Perez | 3.07 | Win | +EUR 2.07 |
+| Rodolfo Vieira vs Robert Bryczek | Rodolfo Vieira | 1.07 | Win | +EUR 0.07 |
+| Rodolfo Bellato vs Christian Edwards | Rodolfo Bellato | 1.28 | Loss | -EUR 1.00 |
+| Elves Brener vs Josiah Harrell | Elves Brener | 1.59 | Win | +EUR 0.59 |
+| Montel Jackson vs Ricky Simon | Montel Jackson | 1.10 | Win | +EUR 0.10 |
+| John Castaneda vs Alatengheili | John Castaneda | 1.34 | Loss | -EUR 1.00 |
+| Vanessa Demopoulos vs Yazmin Jauregui | Yazmin Jauregui | 1.13 | Win | +EUR 0.13 |
+
+**Net P/L: +EUR 5.20 on EUR 8 staked (+65.0% ROI)**
 
 ## Raw Model Output
 
