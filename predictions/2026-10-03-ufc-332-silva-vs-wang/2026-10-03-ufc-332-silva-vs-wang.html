@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>UFC 332: Silva vs. Wang -- October 3, 2026</title>
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f0f0f; color: #e0e0e0; }
+  header { background: #1a1a1a; border-bottom: 2px solid #c0392b; padding: 18px 32px; }
+  header h1 { font-size: 1.5rem; color: #fff; }
+  header p  { font-size: 0.85rem; color: #888; margin-top: 4px; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 16px 32px 0; background: #141414; }
+  .tab-btn {
+    padding: 7px 14px; border: 1px solid #333; border-radius: 4px;
+    background: #1e1e1e; color: #bbb; cursor: pointer; font-size: 0.78rem;
+    transition: background 0.15s, color 0.15s;
+  }
+  .tab-btn:hover  { background: #2a2a2a; color: #fff; }
+  .tab-btn.active { background: #c0392b; color: #fff; border-color: #c0392b; }
+  .panel { display: none; padding: 24px 32px; }
+  .panel.active { display: block; }
+  .fight-header { display: flex; align-items: center; justify-content: space-between;
+                   margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+  .fighter-card { text-align: center; min-width: 180px; }
+  .fighter-name { font-size: 1.3rem; font-weight: bold; }
+  .fighter-elo  { font-size: 0.82rem; color: #888; margin-top: 2px; }
+  .win-prob     { font-size: 2rem; font-weight: bold; margin-top: 6px; }
+  .red-col  { color: #e74c3c; }
+  .blue-col { color: #3498db; }
+  .vs-block { text-align: center; }
+  .vs-label { font-size: 1.1rem; color: #555; }
+  .winner-tag { font-size: 0.85rem; color: #2ecc71; margin-top: 6px; font-weight: bold; }
+  .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 780px) { .charts-row { grid-template-columns: 1fr; } }
+  .chart-box { background: #1a1a1a; border-radius: 8px; padding: 12px; }
+  .chart-title { font-size: 0.82rem; color: #888; text-transform: uppercase;
+                  letter-spacing: 0.06em; margin-bottom: 8px; }
+  .meta-row { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 20px; }
+  .meta-card { background: #1a1a1a; border-radius: 8px; padding: 14px 20px; flex: 1; min-width: 160px; }
+  .meta-card h4 { font-size: 0.75rem; color: #666; text-transform: uppercase;
+                   letter-spacing: 0.06em; margin-bottom: 8px; }
+  .meta-row-inner { display: flex; justify-content: space-between; font-size: 0.9rem; }
+  .meta-val-r { color: #e74c3c; }
+  .meta-val-b { color: #3498db; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>UFC 332: Silva vs. Wang -- October 3, 2026</h1>
+  <p>Model: Ensemble (Soft Vote) &nbsp;|&nbsp; Generated: 2026-10-02 &nbsp;|&nbsp; 10 fights predicted</p>
+</header>
+
+<div class="tabs" id="tabs"></div>
+
+<div id="panels"></div>
+
+<script>
+const FIGHTS = [
+  {
+    "label": "Natalia Silva vs Wang Cong",
+    "red_name": "Natalia Silva",
+    "blue_name": "Wang Cong",
+    "winner": "Natalia Silva",
+    "red_prob": 74.0,
+    "blue_prob": 26.0,
+    "elo_red": 1574.0,
+    "elo_blue": 1479.0,
+    "finish": [
+      0.326036274433136,
+      0.6236677765846252,
+      0.050295911729335785
+    ],
+    "finish_str": "KO/TKO (62%) / Decision (33%)",
+    "radar": {
+      "axes": [
+        "Str acc",
+        "Str def",
+        "TD acc",
+        "TD def",
+        "Finish rate",
+        "Recent W%"
+      ],
+      "units": [
+        "%",
+        "%",
+        "%",
+        "%",
+        "%",
+        "%"
+      ],
+      "red": [
+        45.3,
+        66.3,
+        30.0,
+        90.3,
+        25.0,
+        100.0
+      ],
+      "blue": [
+        57.9,
+        60.4,
+        66.7,
+        85.7,
+        16.7,
+        100.0
+      ]
+    },
+    "bars": {
+      "stats": [
+        "Strikes/min",
+        "Str absorbed/min",
+        "TD avg/15min",
+        "Win streak"
+      ],
+      "red": [
+        4.81,
+        2.36,
+        0.43,
+        8.0
+      ],
+      "blue": [
+        0.0,
+        0.0,
+        0.0,
+        4.0
+      ],
+      "units": [
+        "/min",
+        "/min",
+        "/15min",
+        ""
+      ]
+    },
+    "form": {
+      "red_streak": 8,
+      "blue_streak": 4,
+      "red_finish": 0.0,
+      "blue_finish": 0.0,
+      "red_sos": 1485.0,
+      "blue_sos": 1420.0
+    }
+  },
+  {
+    "label": "Deiveson Figueiredo vs Payton Talbott",
+    "red_name": "Deiveson Figueiredo",
+    "blue_name": "Payton Talbott",
+    "winner": "Payton Talbott",
+    "red_prob": 30.8,
+    "blue_prob": 69.2,
+    "elo_red": 1537.0,
+    "elo_blue": 1529.0,
+    "finish": [
+      0.6274839043617249,
+      0.22995124757289886,
+      0.1425648033618927
+    ],
+    "finish_str": "Decision (63%) / KO/TKO (23%)",
+    "radar": {
+      "axes": [
+        "Str acc",
+        "Str def",
+        "TD acc",
+        "TD def",
+        "Finish rate",
+        "Recent W%"
+      ],
+      "units": [
+        "%",
+        "%",
+        "%",
+        "%",
+        "%",
+        "%"
+      ],
+      "red": [
+        53.9,
+        49.6,
+        34.9,
+        57.1,
+        19.0,
+        33.3
+      ],
+      "blue": [
+        59.0,
+        45.1,
+        50.0,
+        72.0,
+        33.3,
+        66.7
+      ]
+    },
+    "bars": {
+      "stats": [
+        "Strikes/min",
+        "Str absorbed/min",
+        "TD avg/15min",
+        "Win streak"
+      ],
+      "red": [
+        2.57,
+        3.43,
+        1.61,
+        0.0
+      ],
+      "blue": [
+        5.87,
+        3.0,
+        0.97,
+        2.0
+      ],
+      "units": [
+        "/min",
+        "/min",
+        "/15min",
+        ""
+      ]
+    },
+    "form": {
+      "red_streak": 0,
+      "blue_streak": 2,
+      "red_finish": 33.3,
+      "blue_finish": 0.0,
+      "red_sos": 1563.0,
+      "blue_sos": 1466.0
+    }
+  },
+  {
+    "label": "King Green vs Esteban Ribovics",
+    "red_name": "King Green",
+    "blue_name": "Esteban Ribovics",
+    "winner": "King Green",
+    "red_prob": 53.0,
+    "blue_prob": 47.0,
+    "elo_red": 1517.0,
+    "elo_blue": 1489.0,
+    "finish": [
+      0.27305498719215393,
+      0.6589455008506775,
+      0.06799949705600739
+    ],
+    "finish_str": "KO/TKO (66%) / Decision (27%)",
+    "radar": {
+      "axes": [
+        "Str acc",
+        "Str def",
+        "TD acc",
+        "TD def",
+        "Finish rate",
+        "Recent W%"
+      ],
+      "units": [
+        "%",
+        "%",
+        "%",
+        "%",
+        "%",
+        "%"
+      ],
+      "red": [
+        53.6,
+        61.7,
+        45.8,
+        69.3,
+        17.2,
+        100.0
+      ],
+      "blue": [
+        43.8,
+        54.1,
+        66.7,
+        66.1,
+        25.0,
+        66.7
+      ]
+    },
+    "bars": {
+      "stats": [
+        "Strikes/min",
+        "Str absorbed/min",
+        "TD avg/15min",
+        "Win streak"
+      ],
+      "red": [
+        0.0,
+        0.0,
+        0.0,
+        4.0
+      ],
+      "blue": [
+        0.0,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "units": [
+        "/min",
+        "/min",
+        "/15min",
+        ""
+      ]
+    },
+    "form": {
+      "red_streak": 4,
+      "blue_streak": 1,
+      "red_finish": 100.0,
+      "blue_finish": 66.7,
+      "red_sos": 1446.0,
+      "blue_sos": 1472.0
+    }
+  },
+  {
+    "label": "Ateba Gautier vs Roman Kopylov",
+    "red_name": "Ateba Gautier",
+    "blue_name": "Roman Kopylov",
+    "winner": "Ateba Gautier",
+    "red_prob": 72.0,
+    "blue_prob": 28.0,
+    "elo_red": 1504.0,
+    "elo_blue": 1454.0,
+    "finish": [
+      0.5439609885215759,
+      0.4146706461906433,
+      0.04136836901307106
+    ],
+    "finish_str": "Decision (54%) / KO/TKO (41%)",
+    "radar": {
+      "axes": [
+        "Str acc",
+        "Str def",
+        "TD acc",
+        "TD def",
+        "Finish rate",
+        "Recent W%"
+      ],
+      "units": [
+        "%",
+        "%",
+        "%",
+        "%",
+        "%",
+        "%"
+      ],
+      "red": [
+        37.5,
+        53.8,
+        100.0,
+        100.0,
+        80.0,
+        100.0
+      ],
+      "blue": [
+        50.2,
+        53.3,
+        50.0,
+        88.9,
+        41.7,
+        33.3
+      ]
+    },
+    "bars": {
+      "stats": [
+        "Strikes/min",
+        "Str absorbed/min",
+        "TD avg/15min",
+        "Win streak"
+      ],
+      "red": [
+        3.99,
+        3.05,
+        0.54,
+        5.0
+      ],
+      "blue": [
+        4.54,
+        5.08,
+        1.12,
+        1.0
+      ],
+      "units": [
+        "/min",
+        "/min",
+        "/15min",
+        ""
+      ]
+    },
+    "form": {
+      "red_streak": 5,
+      "blue_streak": 1,
+      "red_finish": 66.7,
+      "blue_finish": 0.0,
+      "red_sos": 1349.0,
+      "blue_sos": 1478.0
+    }
+  },
+  {
+    "label": "Imanol Rodriguez vs Alden Coria",
+    "red_name": "Imanol Rodriguez",
+    "blue_name": "Alden Coria",
+    "winner": "Imanol Rodriguez",
+    "red_prob": 71.8,
+    "blue_prob": 28.2,
+    "elo_red": 1441.0,
+    "elo_blue": 1474.0,
+    "finish": [
+      0.2298963963985443,
+      0.5594860911369324,
+      0.21061751246452332
+    ],
+    "finish_str": "KO/TKO (56%) / Decision (23%)",
+    "radar": {
+      "axes": [
+        "Str acc",
+        "Str def",
+        "TD acc",
+        "TD def",
+        "Finish rate",
+        "Recent W%"
+      ],
+      "units": [
+        "%",
+        "%",
+        "%",
+        "%",
+        "%",
+        "%"
+      ],
+      "red": [
+        54.8,
+        57.7,
+        33.3,
+        0.0,
+        100.0,
+        100.0
+      ],
+      "blue": [
+        41.6,
+        69.6,
+        54.5,
+        56.2,
+        33.3,
+        100.0
+      ]
+    },
+    "bars": {
+      "stats": [
+        "Strikes/min",
+        "Str absorbed/min",
+        "TD avg/15min",
+        "Win streak"
+      ],
+      "red": [
+        4.92,
+        2.35,
+        1.6,
+        1.0
+      ],
+      "blue": [
+        0.0,
+        0.0,
+        0.0,
+        3.0
+      ],
+      "units": [
+        "/min",
+        "/min",
+        "/15min",
+        ""
+      ]
+    },
+    "form": {
+      "red_streak": 1,
+      "blue_streak": 3,
+      "red_finish": 100.0,
+      "blue_finish": 33.3,
+      "red_sos": 1385.0,
+      "blue_sos": 1345.0
+    }
+  },
+  {
+    "label": "Damian Pinas vs Andrey Pulyaev",
+    "red_name": "Damian Pinas",
+    "blue_name": "Andrey Pulyaev",
+    "winner": "Damian Pinas",
+    "red_prob": 67.3,
+    "blue_prob": 32.7,
+    "elo_red": 1487.0,
+    "elo_blue": 1373.0,
+    "finish": [
+      0.4511074423789978,
+      0.4684140086174011,
+      0.08047854900360107
+    ],
+    "finish_str": "KO/TKO (47%) / Decision (45%)",
+    "radar": {
+      "axes": [
+        "Str acc",
+        "Str def",
+        "TD acc",
+        "TD def",
+        "Finish rate",
+        "Recent W%"
+      ],
+      "units": [
+        "%",
+        "%",
+        "%",
+        "%",
+        "%",
+        "%"
+      ],
+      "red": [
+        71.4,
+        36.5,
+        0.0,
+        85.7,
+        100.0,
+        100.0
+      ],
+      "blue": [
+        47.4,
+        57.4,
+        0.0,
+        45.5,
+        25.0,
+        33.3
+      ]
+    },
+    "bars": {
+      "stats": [
+        "Strikes/min",
+        "Str absorbed/min",
+        "TD avg/15min",
+        "Win streak"
+      ],
+      "red": [
+        0.0,
+        0.0,
+        0.0,
+        2.0
+      ],
+      "blue": [
+        2.52,
+        2.91,
+        0.0,
+        0.0
+      ],
+      "units": [
+        "/min",
+        "/min",
+        "/15min",
+        ""
+      ]
+    },
+    "form": {
+      "red_streak": 2,
+      "blue_streak": 0,
+      "red_finish": 100.0,
+      "blue_finish": 66.7,
+      "red_sos": 1390.0,
+      "blue_sos": 1451.0
+    }
+  },
+  {
+    "label": "Johnny Walker vs Mick Parkin",
+    "red_name": "Johnny Walker",
+    "blue_name": "Mick Parkin",
+    "winner": "Mick Parkin",
+    "red_prob": 39.6,
+    "blue_prob": 60.4,
+    "elo_red": 1500.0,
+    "elo_blue": 1518.0,
+    "finish": [
+      0.41878682374954224,
+      0.4602394104003906,
+      0.12097378820180893
+    ],
+    "finish_str": "KO/TKO (46%) / Decision (42%)",
+    "radar": {
+      "axes": [
+        "Str acc",
+        "Str def",
+        "TD acc",
+        "TD def",
+        "Finish rate",
+        "Recent W%"
+      ],
+      "units": [
+        "%",
+        "%",
+        "%",
+        "%",
+        "%",
+        "%"
+      ],
+      "red": [
+        52.9,
+        48.9,
+        40.0,
+        50.0,
+        40.0,
+        33.3
+      ],
+      "blue": [
+        49.9,
+        59.7,
+        36.4,
+        75.0,
+        20.0,
+        66.7
+      ]
+    },
+    "bars": {
+      "stats": [
+        "Strikes/min",
+        "Str absorbed/min",
+        "TD avg/15min",
+        "Win streak"
+      ],
+      "red": [
+        3.7,
+        2.91,
+        0.28,
+        0.0
+      ],
+      "blue": [
+        4.73,
+        4.01,
+        0.95,
+        0.0
+      ],
+      "units": [
+        "/min",
+        "/min",
+        "/15min",
+        ""
+      ]
+    },
+    "form": {
+      "red_streak": 0,
+      "blue_streak": 0,
+      "red_finish": 66.7,
+      "blue_finish": 33.3,
+      "red_sos": 1545.0,
+      "blue_sos": 1390.0
+    }
+  },
+  {
+    "label": "Rafael Dos Anjos vs Alexander Hernandez",
+    "red_name": "Rafael Dos Anjos",
+    "blue_name": "Alexander Hernandez",
+    "winner": "Rafael Dos Anjos",
+    "red_prob": 52.1,
+    "blue_prob": 47.9,
+    "elo_red": 1501.0,
+    "elo_blue": 1472.0,
+    "finish": [
+      0.36512067914009094,
+      0.5068706274032593,
+      0.1280086487531662
+    ],
+    "finish_str": "KO/TKO (51%) / Decision (37%)",
+    "radar": {
+      "axes": [
+        "Str acc",
+        "Str def",
+        "TD acc",
+        "TD def",
+        "Finish rate",
+        "Recent W%"
+      ],
+      "units": [
+        "%",
+        "%",
+        "%",
+        "%",
+        "%",
+        "%"
+      ],
+      "red": [
+        47.1,
+        60.2,
+        35.6,
+        54.8,
+        11.1,
+        0.0
+      ],
+      "blue": [
+        40.4,
+        59.7,
+        35.1,
+        68.8,
+        27.8,
+        66.7
+      ]
+    },
+    "bars": {
+      "stats": [
+        "Strikes/min",
+        "Str absorbed/min",
+        "TD avg/15min",
+        "Win streak"
+      ],
+      "red": [
+        3.48,
+        3.23,
+        1.95,
+        0.0
+      ],
+      "blue": [
+        4.23,
+        4.45,
+        1.05,
+        0.0
+      ],
+      "units": [
+        "/min",
+        "/min",
+        "/15min",
+        ""
+      ]
+    },
+    "form": {
+      "red_streak": 0,
+      "blue_streak": 0,
+      "red_finish": 33.3,
+      "blue_finish": 66.7,
+      "red_sos": 1494.0,
+      "blue_sos": 1415.0
+    }
+  },
+  {
+    "label": "Marvin Vettori vs Ismail Naurdiev",
+    "red_name": "Marvin Vettori",
+    "blue_name": "Ismail Naurdiev",
+    "winner": "Ismail Naurdiev",
+    "red_prob": 39.7,
+    "blue_prob": 60.3,
+    "elo_red": 1470.0,
+    "elo_blue": 1462.0,
+    "finish": [
+      0.7203196883201599,
+      0.20496778190135956,
+      0.07471253722906113
+    ],
+    "finish_str": "Decision (72%) / KO/TKO (20%)",
+    "radar": {
+      "axes": [
+        "Str acc",
+        "Str def",
+        "TD acc",
+        "TD def",
+        "Finish rate",
+        "Recent W%"
+      ],
+      "units": [
+        "%",
+        "%",
+        "%",
+        "%",
+        "%",
+        "%"
+      ],
+      "red": [
+        45.9,
+        56.1,
+        43.9,
+        68.5,
+        0.0,
+        0.0
+      ],
+      "blue": [
+        52.8,
+        64.9,
+        40.9,
+        73.2,
+        14.3,
+        66.7
+      ]
+    },
+    "bars": {
+      "stats": [
+        "Strikes/min",
+        "Str absorbed/min",
+        "TD avg/15min",
+        "Win streak"
+      ],
+      "red": [
+        4.74,
+        4.55,
+        1.41,
+        0.0
+      ],
+      "blue": [
+        3.66,
+        1.75,
+        1.48,
+        1.0
+      ],
+      "units": [
+        "/min",
+        "/min",
+        "/15min",
+        ""
+      ]
+    },
+    "form": {
+      "red_streak": 0,
+      "blue_streak": 1,
+      "red_finish": 0.0,
+      "blue_finish": 33.3,
+      "red_sos": 1495.0,
+      "blue_sos": 1452.0
+    }
+  },
+  {
+    "label": "Court McGee vs Eric Nolan",
+    "red_name": "Court McGee",
+    "blue_name": "Eric Nolan",
+    "winner": "Court McGee",
+    "red_prob": 63.1,
+    "blue_prob": 36.9,
+    "elo_red": 1418.0,
+    "elo_blue": 1321.0,
+    "finish": [
+      0.28584423661231995,
+      0.3963700532913208,
+      0.31778571009635925
+    ],
+    "finish_str": "KO/TKO (40%) / Submission (32%)",
+    "radar": {
+      "axes": [
+        "Str acc",
+        "Str def",
+        "TD acc",
+        "TD def",
+        "Finish rate",
+        "Recent W%"
+      ],
+      "units": [
+        "%",
+        "%",
+        "%",
+        "%",
+        "%",
+        "%"
+      ],
+      "red": [
+        36.9,
+        61.0,
+        24.8,
+        70.8,
+        0.0,
+        33.3
+      ],
+      "blue": [
+        34.6,
+        44.7,
+        0.0,
+        44.1,
+        0.0,
+        0.0
+      ]
+    },
+    "bars": {
+      "stats": [
+        "Strikes/min",
+        "Str absorbed/min",
+        "TD avg/15min",
+        "Win streak"
+      ],
+      "red": [
+        4.5,
+        3.65,
+        1.78,
+        0.0
+      ],
+      "blue": [
+        1.68,
+        2.59,
+        0.0,
+        0.0
+      ],
+      "units": [
+        "/min",
+        "/min",
+        "/15min",
+        ""
+      ]
+    },
+    "form": {
+      "red_streak": 0,
+      "blue_streak": 0,
+      "red_finish": 33.3,
+      "blue_finish": 50.0,
+      "red_sos": 1474.0,
+      "blue_sos": 1473.0
+    }
+  }
+];
+const FINISH_NAMES = ["Decision", "KO/TKO", "Submission"];
+
+const RED  = '#e74c3c';
+const BLUE = '#3498db';
+
+const plotCfg = {responsive: true, displayModeBar: false};
+
+function radarLayout() {
+  return {
+    polar: {
+      bgcolor: '#1a1a1a',
+      radialaxis: { visible: true, range: [0, 100], color: '#444',
+                    gridcolor: '#333', tickfont: {color:'#555', size:9} },
+      angularaxis: { color: '#888', gridcolor: '#2a2a2a', linecolor: '#333' },
+    },
+    paper_bgcolor: '#1a1a1a', plot_bgcolor: '#1a1a1a',
+    showlegend: true,
+    legend: { font: {color:'#bbb', size:11}, bgcolor:'#1a1a1a',
+               x: 0.5, xanchor:'center', y:-0.15, orientation:'h' },
+    margin: {t:10, b:40, l:40, r:40},
+  };
+}
+
+function barLayout() {
+  return {
+    barmode: 'group',
+    paper_bgcolor: '#1a1a1a', plot_bgcolor: '#1a1a1a',
+    xaxis: { color:'#888', gridcolor:'#2a2a2a', zeroline:false },
+    yaxis: { color:'#bbb', gridcolor:'#2a2a2a', zeroline:false,
+              automargin: true, tickfont: {size: 11} },
+    legend: { font:{color:'#bbb', size:11}, bgcolor:'#1a1a1a',
+               x:0.5, xanchor:'center', y:-0.18, orientation:'h' },
+    margin: {t:10, b:50, l:10, r:20},
+  };
+}
+
+function buildPanel(f, idx) {
+  const div = document.createElement('div');
+  div.className = 'panel';
+  div.id = 'panel-' + idx;
+
+  const isRedWinner  = f.winner === f.red_name;
+  const isBlueWinner = f.winner === f.blue_name;
+
+  div.innerHTML = `
+    <div class="fight-header">
+      <div class="fighter-card">
+        <div class="fighter-name red-col">${f.red_name}</div>
+        <div class="fighter-elo">ELO ${f.elo_red}</div>
+        <div class="win-prob red-col">${f.red_prob}%</div>
+        ${isRedWinner ? '<div class="winner-tag">Model pick</div>' : ''}
+      </div>
+      <div class="vs-block">
+        <div class="vs-label">VS</div>
+      </div>
+      <div class="fighter-card">
+        <div class="fighter-name blue-col">${f.blue_name}</div>
+        <div class="fighter-elo">ELO ${f.elo_blue}</div>
+        <div class="win-prob blue-col">${f.blue_prob}%</div>
+        ${isBlueWinner ? '<div class="winner-tag">Model pick</div>' : ''}
+      </div>
+    </div>
+
+    <div class="charts-row">
+      <div class="chart-box">
+        <div class="chart-title">Percentage stats (radar)</div>
+        <div id="radar-${idx}" style="height:340px"></div>
+      </div>
+      <div class="chart-box">
+        <div class="chart-title">Volume / rate stats</div>
+        <div id="bars-${idx}" style="height:340px"></div>
+      </div>
+    </div>
+
+    <div class="meta-row">
+      <div class="meta-card">
+        <h4>Recent form</h4>
+        <div class="meta-row-inner">
+          <span class="meta-val-r">${f.red_name.split(' ').pop()}</span>
+          <span class="meta-val-b">${f.blue_name.split(' ').pop()}</span>
+        </div>
+        <div class="meta-row-inner" style="margin-top:6px; font-size:0.82rem; color:#888">
+          <span>Win streak: ${f.form.red_streak}</span>
+          <span>Win streak: ${f.form.blue_streak}</span>
+        </div>
+        <div class="meta-row-inner" style="margin-top:4px; font-size:0.82rem; color:#888">
+          <span>Finish rate: ${f.form.red_finish}%</span>
+          <span>Finish rate: ${f.form.blue_finish}%</span>
+        </div>
+      </div>
+      <div class="meta-card">
+        <h4>Strength of schedule (ELO)</h4>
+        <div class="meta-row-inner">
+          <span class="meta-val-r">${f.red_name.split(' ').pop()}</span>
+          <span class="meta-val-b">${f.blue_name.split(' ').pop()}</span>
+        </div>
+        <div class="meta-row-inner" style="margin-top:6px; font-size:0.82rem; color:#888">
+          <span>${f.form.red_sos}</span>
+          <span>${f.form.blue_sos}</span>
+        </div>
+      </div>
+      ${f.finish.length ? `
+      <div class="meta-card">
+        <h4>Likely finish</h4>
+        ${FINISH_NAMES.map((n,i) => `
+        <div class="meta-row-inner" style="margin-top:${i?6:0}px; font-size:0.9rem">
+          <span>${n}</span>
+          <span style="color:#aaa">${(f.finish[i]*100).toFixed(0)}%</span>
+        </div>`).join('')}
+      </div>` : ''}
+    </div>
+  `;
+
+  return div;
+}
+
+function plotRadar(f, idx) {
+  const axes  = f.radar.axes.concat([f.radar.axes[0]]);
+  const red_r = f.radar.red.concat([f.radar.red[0]]);
+  const blue_r = f.radar.blue.concat([f.radar.blue[0]]);
+  const units = f.radar.units;
+
+  const hoverLines = (vals) => f.radar.axes.map((a,i) =>
+    `<b>${a}</b>: ${vals[i]}${units[i]}`).join('<br>');
+
+  Plotly.newPlot('radar-' + idx, [
+    {
+      type:'scatterpolar', mode:'lines+markers', name: f.red_name,
+      r: red_r, theta: axes, fill:'toself',
+      line:{color:RED, width:2}, fillcolor:'rgba(231,76,60,0.15)',
+      marker:{color:RED, size:5},
+      hovertemplate: hoverLines(f.radar.red) + '<extra>' + f.red_name + '</extra>',
+    },
+    {
+      type:'scatterpolar', mode:'lines+markers', name: f.blue_name,
+      r: blue_r, theta: axes, fill:'toself',
+      line:{color:BLUE, width:2}, fillcolor:'rgba(52,152,219,0.15)',
+      marker:{color:BLUE, size:5},
+      hovertemplate: hoverLines(f.radar.blue) + '<extra>' + f.blue_name + '</extra>',
+    },
+  ], radarLayout(), plotCfg);
+}
+
+function plotBars(f, idx) {
+  const stats = f.bars.stats;
+  const units = f.bars.units;
+
+  Plotly.newPlot('bars-' + idx, [
+    {
+      type:'bar', name: f.red_name,
+      x: f.bars.red, y: stats, orientation:'h',
+      marker:{color:'rgba(231,76,60,0.8)'},
+      hovertemplate: stats.map((s,i) =>
+        `<b>${s}</b>: ${f.bars.red[i]}${units[i]}<extra></extra>`),
+    },
+    {
+      type:'bar', name: f.blue_name,
+      x: f.bars.blue, y: stats, orientation:'h',
+      marker:{color:'rgba(52,152,219,0.8)'},
+      hovertemplate: stats.map((s,i) =>
+        `<b>${s}</b>: ${f.bars.blue[i]}${units[i]}<extra></extra>`),
+    },
+  ], barLayout(), plotCfg);
+}
+
+function activate(idx) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelector('#tab-' + idx).classList.add('active');
+  document.querySelector('#panel-' + idx).classList.add('active');
+  plotRadar(FIGHTS[idx], idx);
+  plotBars(FIGHTS[idx],  idx);
+}
+
+const tabsEl   = document.getElementById('tabs');
+const panelsEl = document.getElementById('panels');
+
+FIGHTS.forEach((f, i) => {
+  const btn = document.createElement('button');
+  btn.className = 'tab-btn';
+  btn.id = 'tab-' + i;
+  btn.textContent = f.label;
+  btn.onclick = () => activate(i);
+  tabsEl.appendChild(btn);
+
+  panelsEl.appendChild(buildPanel(f, i));
+});
+
+activate(0);
+</script>
+</body>
+</html>
