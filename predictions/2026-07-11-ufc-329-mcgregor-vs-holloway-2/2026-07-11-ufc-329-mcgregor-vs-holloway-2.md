@@ -1,10 +1,11 @@
 # UFC 329: McGregor vs. Holloway 2 -- July 11, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-07-06 | Scored: 2026-07-13
+Model: Ensemble (Soft Vote) | Generated: 2026-07-06 | Scored: 2026-10-07
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
 
 **Result: 4/12 (33.3%)**
+*High-confidence (>=55%) picks: 3/11 (27.3%)*
 
 > Interactive fighter comparison: [2026-07-11-ufc-329-mcgregor-vs-holloway-2.html](./2026-07-11-ufc-329-mcgregor-vs-holloway-2.html)
 
@@ -14,19 +15,19 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 
 | Fight | Predicted Winner | Confidence | Likely Method | Odds (Red / Blue) | Actual Result | Correct? |
 |---|---|---|---|---|---|---|
-| Conor McGregor vs Max Holloway | Max Holloway | 73.8% | KO/TKO (50%) / Decision (47%) | +213 / -223 | Max Holloway (KO R1) | YES |
-| Benoit Saint Denis vs Paddy Pimblett | Benoit Saint Denis | 57.3% | Decision (53%) / Submission (24%) | -113 / +108 | Paddy Pimblett (Sub R1) | NO |
-| Cory Sandhagen vs Mario Bautista | Cory Sandhagen | 56.5% | Decision (68%) / KO/TKO (24%) | -138 / +133 | Mario Bautista (Dec) | NO |
-| Brandon Royval vs Lone'er Kavanagh | Lone'er Kavanagh | 66.4% | Decision (63%) / KO/TKO (20%) | +213 / -223 | Brandon Royval (Sub R3) | NO |
-| King Green vs Terrance McKinney | King Green | 52.4% | Decision (70%) / KO/TKO (25%) | -104 / -100 | King Green (KO R1) | YES |
-| Nikita Krylov vs Robert Whittaker | Nikita Krylov | 63.5% | Decision (65%) / KO/TKO (26%) | +113 / -117 | Robert Whittaker (KO R3) | NO |
-| Cody Garbrandt vs Adrian Yanez | Cody Garbrandt | 66.3% | Decision (50%) / KO/TKO (46%) | +335 / -355 | Adrian Yanez (KO R1) | NO |
-| Luke Riley vs Kai Kamaka | Kai Kamaka | 67.5% | Decision (53%) / KO/TKO (38%) | -223 / +213 | Luke Riley (KO R1) | NO |
-| Tracy Cortez vs Wang Cong | Wang Cong | 67.6% | Decision (84%) / KO/TKO (12%) | +117 / -122 | Wang Cong (Dec) | YES |
-| Damian Pinas vs Cesar Almeida | Damian Pinas | 57.2% | KO/TKO (53%) / Decision (37%) | -245 / +233 | Damian Pinas (KO R1) | YES |
+| Conor McGregor vs Max Holloway | Max Holloway | 73.8% | KO/TKO (50%) / Decision (47%) | +235 / -290 | Max Holloway (KO R1) | YES |
+| Benoit Saint Denis vs Paddy Pimblett | Benoit Saint Denis | 57.3% | Decision (53%) / Submission (24%) | -120 / +102 | Paddy Pimblett (Sub R1) | NO |
+| Cory Sandhagen vs Mario Bautista | Cory Sandhagen | 56.5% | Decision (68%) / KO/TKO (24%) | -154 / +130 | Mario Bautista (Dec) | NO |
+| Brandon Royval vs Lone'er Kavanagh | Lone'er Kavanagh | 66.4% | Decision (63%) / KO/TKO (20%) | +198 / -240 | Brandon Royval (Sub R3) | NO |
+| King Green vs Terrance McKinney | King Green | 52.4% | Decision (70%) / KO/TKO (25%) | -118 / +100 | King Green (KO R1) | YES |
+| Nikita Krylov vs Robert Whittaker | Nikita Krylov | 63.5% | Decision (65%) / KO/TKO (26%) | +108 / -126 | Robert Whittaker (KO R3) | NO |
+| Cody Garbrandt vs Adrian Yanez | Cody Garbrandt | 66.3% | Decision (50%) / KO/TKO (46%) | +320 / -405 | Adrian Yanez (KO R1) | NO |
+| Luke Riley vs Kai Kamaka | Kai Kamaka | 67.5% | Decision (53%) / KO/TKO (38%) | -260 / +215 | Luke Riley (KO R1) | NO |
+| Tracy Cortez vs Wang Cong | Wang Cong | 67.6% | Decision (84%) / KO/TKO (12%) | +102 / -120 | Wang Cong (Dec) | YES |
+| Damian Pinas vs Cesar Almeida | Damian Pinas | 57.2% | KO/TKO (53%) / Decision (37%) | -255 / +210 | Damian Pinas (KO R1) | YES |
 | Farid Basharat vs Ethyn Ewing | Ethyn Ewing | 67.4% | Decision (51%) / KO/TKO (27%) | N/A / N/A | ? | ? |
-| Ryan Gandra vs Zach Reese | Zach Reese | 66.2% | Decision (43%) / KO/TKO (42%) | -127 / +122 | Ryan Gandra (KO R1) | NO |
-| Alessandro Costa vs Cody Durden | Cody Durden | 62.2% | Decision (54%) / KO/TKO (34%) | -872 / +623 | Alessandro Costa (Sub R2) | NO |
+| Ryan Gandra vs Zach Reese | Zach Reese | 66.2% | Decision (43%) / KO/TKO (42%) | -134 / +114 | Ryan Gandra (KO R1) | NO |
+| Alessandro Costa vs Cody Durden | Cody Durden | 62.2% | Decision (54%) / KO/TKO (34%) | -230 / +190 | Alessandro Costa (Sub R2) | NO |
 
 ---
 
@@ -34,25 +35,25 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 
 - Fights predicted: 13
 - Correct: 4/12 (33.3%)
+- High-confidence (>=55%) picks: 3/11 (27.3%)
 
-### P/L (EUR 1 flat on each predicted winner)
+### P/L (EUR 1 flat on picks >=55% confidence)
 
 | Fight | Model Pick | Odds (dec) | Result | P/L |
 |---|---|---|---|---|
-| Conor McGregor vs Max Holloway | Max Holloway | 1.45 | Win | +EUR 0.45 |
-| Benoit Saint Denis vs Paddy Pimblett | Benoit Saint Denis | 1.89 | Loss | -EUR 1.00 |
-| Cory Sandhagen vs Mario Bautista | Cory Sandhagen | 1.73 | Loss | -EUR 1.00 |
-| Brandon Royval vs Lone'er Kavanagh | Lone'er Kavanagh | 1.45 | Loss | -EUR 1.00 |
-| King Green vs Terrance McKinney | King Green | 1.96 | Win | +EUR 0.96 |
-| Nikita Krylov vs Robert Whittaker | Nikita Krylov | 2.13 | Loss | -EUR 1.00 |
-| Cody Garbrandt vs Adrian Yanez | Cody Garbrandt | 4.35 | Loss | -EUR 1.00 |
-| Luke Riley vs Kai Kamaka | Kai Kamaka | 3.13 | Loss | -EUR 1.00 |
-| Tracy Cortez vs Wang Cong | Wang Cong | 1.82 | Win | +EUR 0.82 |
-| Damian Pinas vs Cesar Almeida | Damian Pinas | 1.41 | Win | +EUR 0.41 |
-| Ryan Gandra vs Zach Reese | Zach Reese | 2.22 | Loss | -EUR 1.00 |
-| Alessandro Costa vs Cody Durden | Cody Durden | 7.23 | Loss | -EUR 1.00 |
+| Conor McGregor vs Max Holloway | Max Holloway | 1.34 | Win | +EUR 0.34 |
+| Benoit Saint Denis vs Paddy Pimblett | Benoit Saint Denis | 1.83 | Loss | -EUR 1.00 |
+| Cory Sandhagen vs Mario Bautista | Cory Sandhagen | 1.65 | Loss | -EUR 1.00 |
+| Brandon Royval vs Lone'er Kavanagh | Lone'er Kavanagh | 1.42 | Loss | -EUR 1.00 |
+| Nikita Krylov vs Robert Whittaker | Nikita Krylov | 2.08 | Loss | -EUR 1.00 |
+| Cody Garbrandt vs Adrian Yanez | Cody Garbrandt | 4.20 | Loss | -EUR 1.00 |
+| Luke Riley vs Kai Kamaka | Kai Kamaka | 3.15 | Loss | -EUR 1.00 |
+| Tracy Cortez vs Wang Cong | Wang Cong | 1.83 | Win | +EUR 0.83 |
+| Damian Pinas vs Cesar Almeida | Damian Pinas | 1.39 | Win | +EUR 0.39 |
+| Ryan Gandra vs Zach Reese | Zach Reese | 2.14 | Loss | -EUR 1.00 |
+| Alessandro Costa vs Cody Durden | Cody Durden | 2.90 | Loss | -EUR 1.00 |
 
-**Net P/L: -EUR 5.36 on EUR 12 staked (-44.7% ROI)**
+**Net P/L: -EUR 6.44 on EUR 11 staked (-58.5% ROI)**
 
 ## Raw Model Output
 

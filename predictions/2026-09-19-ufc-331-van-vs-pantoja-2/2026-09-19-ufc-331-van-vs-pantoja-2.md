@@ -1,6 +1,6 @@
 # UFC 331: Van vs. Pantoja 2 -- September 19, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-09-18 | Scored: 2026-09-21
+Model: Ensemble (Soft Vote) | Generated: 2026-09-18 | Scored: 2026-10-07
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
 
@@ -15,17 +15,17 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 
 | Fight | Predicted Winner | Confidence | Likely Method | Odds (Red / Blue) | Actual Result | Correct? |
 |---|---|---|---|---|---|---|
-| Joshua Van vs Alexandre Pantoja | Joshua Van | 81.1% | KO/TKO (52%) / Decision (28%) | -3487 / +2236 | Joshua Van (Dec) | YES |
-| Arman Tsarukyan vs Mauricio Ruffy | Arman Tsarukyan | 67.7% | Decision (70%) / KO/TKO (19%) | -240 / +189 | Arman Tsarukyan (KO R1) | YES |
-| Gable Steveson vs Sean Sharaf | Gable Steveson | 69.3% | KO/TKO (71%) / Decision (25%) | -1090 / +838 | Sean Sharaf (KO R1) | NO |
-| Alonzo Menifield vs Iwo Baraniewski | Iwo Baraniewski | 69.3% | KO/TKO (83%) / Decision (16%) | +114 / -137 | Alonzo Menifield (Dec (Split)) | NO |
-| Marlon Vera vs Charles Jourdain | Charles Jourdain | 56.7% | Decision (74%) / KO/TKO (20%) | -1433 / +1071 | Marlon Vera (KO R3) | NO |
-| Tai Tuivasa vs Robelis Despaigne | Robelis Despaigne | 54.0% | KO/TKO (52%) / Decision (30%) | +572 / -721 | Robelis Despaigne (Dec (Split)) | YES |
-| Michael Aswell Jr. vs JooSang Yoo | Michael Aswell Jr. | 63.0% | Decision (56%) / KO/TKO (39%) | -1433 / +1071 | Michael Aswell Jr. (Dec (Split)) | YES |
-| Ryan Gandra vs Ozzy Diaz | Ozzy Diaz | 61.7% | KO/TKO (74%) / Decision (25%) | -361 / +295 | Ryan Gandra (KO R1) | NO |
-| Edmen Shahbazyan vs Brunno Ferreira | Edmen Shahbazyan | 68.6% | Decision (55%) / KO/TKO (33%) | -1240 / +754 | Edmen Shahbazyan (Dec) | YES |
-| Casey O'Neill vs Eduarda Moura | Casey O'Neill | 75.8% | Decision (56%) / KO/TKO (25%) | +123 / -155 | Casey O'Neill (Sub R1) | YES |
-| Giga Chikadze vs Joanderson Brito | Joanderson Brito | 70.5% | Decision (62%) / KO/TKO (23%) | +330 / -405 | Joanderson Brito (KO R1) | YES |
+| Joshua Van vs Alexandre Pantoja | Joshua Van | 81.1% | KO/TKO (52%) / Decision (28%) | -154 / +130 | Joshua Van (Dec) | YES |
+| Arman Tsarukyan vs Mauricio Ruffy | Arman Tsarukyan | 67.7% | Decision (70%) / KO/TKO (19%) | -275 / +225 | Arman Tsarukyan (KO R1) | YES |
+| Gable Steveson vs Sean Sharaf | Gable Steveson | 69.3% | KO/TKO (71%) / Decision (25%) | -1350 / +810 | Sean Sharaf (KO R1) | NO |
+| Alonzo Menifield vs Iwo Baraniewski | Iwo Baraniewski | 69.3% | KO/TKO (83%) / Decision (16%) | +240 / -295 | Alonzo Menifield (Dec (Split)) | NO |
+| Marlon Vera vs Charles Jourdain | Charles Jourdain | 56.7% | Decision (74%) / KO/TKO (20%) | +168 / -200 | Marlon Vera (KO R3) | NO |
+| Tai Tuivasa vs Robelis Despaigne | Robelis Despaigne | 54.0% | KO/TKO (52%) / Decision (30%) | +320 / -405 | Robelis Despaigne (Dec (Split)) | YES |
+| Michael Aswell Jr. vs JooSang Yoo | Michael Aswell Jr. | 63.0% | Decision (56%) / KO/TKO (39%) | +150 / -178 | Michael Aswell Jr. (Dec (Split)) | YES |
+| Ryan Gandra vs Ozzy Diaz | Ozzy Diaz | 61.7% | KO/TKO (74%) / Decision (25%) | -560 / +420 | Ryan Gandra (KO R1) | NO |
+| Edmen Shahbazyan vs Brunno Ferreira | Edmen Shahbazyan | 68.6% | Decision (55%) / KO/TKO (33%) | -178 / +150 | Edmen Shahbazyan (Dec) | YES |
+| Casey O'Neill vs Eduarda Moura | Casey O'Neill | 75.8% | Decision (56%) / KO/TKO (25%) | -235 / +194 | Casey O'Neill (Sub R1) | YES |
+| Giga Chikadze vs Joanderson Brito | Joanderson Brito | 70.5% | Decision (62%) / KO/TKO (23%) | +340 / -430 | Joanderson Brito (KO R1) | YES |
 
 ---
 
@@ -39,18 +39,18 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 
 | Fight | Model Pick | Odds (dec) | Result | P/L |
 |---|---|---|---|---|
-| Joshua Van vs Alexandre Pantoja | Joshua Van | 1.03 | Win | +EUR 0.03 |
-| Arman Tsarukyan vs Mauricio Ruffy | Arman Tsarukyan | 1.42 | Win | +EUR 0.42 |
-| Gable Steveson vs Sean Sharaf | Gable Steveson | 1.09 | Loss | -EUR 1.00 |
-| Alonzo Menifield vs Iwo Baraniewski | Iwo Baraniewski | 1.73 | Loss | -EUR 1.00 |
-| Marlon Vera vs Charles Jourdain | Charles Jourdain | 11.71 | Loss | -EUR 1.00 |
-| Michael Aswell Jr. vs JooSang Yoo | Michael Aswell Jr. | 1.07 | Win | +EUR 0.07 |
-| Ryan Gandra vs Ozzy Diaz | Ozzy Diaz | 3.95 | Loss | -EUR 1.00 |
-| Edmen Shahbazyan vs Brunno Ferreira | Edmen Shahbazyan | 1.08 | Win | +EUR 0.08 |
-| Casey O'Neill vs Eduarda Moura | Casey O'Neill | 2.23 | Win | +EUR 1.23 |
-| Giga Chikadze vs Joanderson Brito | Joanderson Brito | 1.25 | Win | +EUR 0.25 |
+| Joshua Van vs Alexandre Pantoja | Joshua Van | 1.65 | Win | +EUR 0.65 |
+| Arman Tsarukyan vs Mauricio Ruffy | Arman Tsarukyan | 1.36 | Win | +EUR 0.36 |
+| Gable Steveson vs Sean Sharaf | Gable Steveson | 1.07 | Loss | -EUR 1.00 |
+| Alonzo Menifield vs Iwo Baraniewski | Iwo Baraniewski | 1.34 | Loss | -EUR 1.00 |
+| Marlon Vera vs Charles Jourdain | Charles Jourdain | 1.50 | Loss | -EUR 1.00 |
+| Michael Aswell Jr. vs JooSang Yoo | Michael Aswell Jr. | 2.50 | Win | +EUR 1.50 |
+| Ryan Gandra vs Ozzy Diaz | Ozzy Diaz | 5.20 | Loss | -EUR 1.00 |
+| Edmen Shahbazyan vs Brunno Ferreira | Edmen Shahbazyan | 1.56 | Win | +EUR 0.56 |
+| Casey O'Neill vs Eduarda Moura | Casey O'Neill | 1.43 | Win | +EUR 0.43 |
+| Giga Chikadze vs Joanderson Brito | Joanderson Brito | 1.23 | Win | +EUR 0.23 |
 
-**Net P/L: -EUR 1.92 on EUR 10 staked (-19.2% ROI)**
+**Net P/L: -EUR 0.27 on EUR 10 staked (-2.7% ROI)**
 
 ## Raw Model Output
 

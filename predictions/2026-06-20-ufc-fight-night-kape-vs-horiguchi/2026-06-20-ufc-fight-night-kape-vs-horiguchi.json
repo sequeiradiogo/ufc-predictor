@@ -1,6 +1,7 @@
 {
   "event": "UFC Fight Night: Kape vs. Horiguchi",
   "date": "2026-06-20",
+  "event_url": "http://www.ufcstats.com/event-details/c8661e204c66f325",
   "model_type": "ensemble",
   "fights": [
     {
@@ -84,7 +85,8 @@
         "blue_finish": 33.3,
         "red_sos": 1469.0,
         "blue_sos": 1484.0
-      }
+      },
+      "finish_str": "Decision (65%) / KO/TKO (26%)"
     },
     {
       "label": "Ion Cutelaba vs Navajo Stirling",
@@ -167,7 +169,8 @@
         "blue_finish": 33.3,
         "red_sos": 1420.0,
         "blue_sos": 1382.0
-      }
+      },
+      "finish_str": "Decision (65%) / KO/TKO (25%)"
     },
     {
       "label": "Vinicius Oliveira vs Andre Fili",
@@ -250,7 +253,8 @@
         "blue_finish": 33.3,
         "red_sos": 1485.0,
         "blue_sos": 1454.0
-      }
+      },
+      "finish_str": "Decision (71%) / KO/TKO (25%)"
     },
     {
       "label": "Hyder Amil vs Christian Rodriguez",
@@ -333,7 +337,8 @@
         "blue_finish": 0.0,
         "red_sos": 1430.0,
         "blue_sos": 1437.0
-      }
+      },
+      "finish_str": "Decision (58%) / KO/TKO (31%)"
     },
     {
       "label": "Andre Lima vs Kevin Borjas",
@@ -416,7 +421,8 @@
         "blue_finish": 33.3,
         "red_sos": 1409.0,
         "blue_sos": 1406.0
-      }
+      },
+      "finish_str": "KO/TKO (43%) / Decision (41%)"
     },
     {
       "label": "Bia Mesquita vs Melissa Mullins",
@@ -499,7 +505,8 @@
         "blue_finish": 66.7,
         "red_sos": 1344.0,
         "blue_sos": 1439.0
-      }
+      },
+      "finish_str": "Decision (50%) / Submission (27%)"
     },
     {
       "label": "Allan Nascimento vs Mitch Raposo",
@@ -582,7 +589,8 @@
         "blue_finish": 0.0,
         "red_sos": 1436.0,
         "blue_sos": 1381.0
-      }
+      },
+      "finish_str": "Decision (46%) / Submission (28%)"
     },
     {
       "label": "Gaston Bolanos vs Michael Aswell Jr.",
@@ -665,7 +673,8 @@
         "blue_finish": 33.3,
         "red_sos": 1378.0,
         "blue_sos": 1394.0
-      }
+      },
+      "finish_str": "Decision (58%) / KO/TKO (33%)"
     },
     {
       "label": "Karol Rosa vs Luana Santos",
@@ -748,7 +757,8 @@
         "blue_finish": 33.3,
         "red_sos": 1447.0,
         "blue_sos": 1437.0
-      }
+      },
+      "finish_str": "Decision (70%) / Submission (16%)"
     }
   ]
 }

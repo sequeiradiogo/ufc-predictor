@@ -1,6 +1,6 @@
 # UFC 330: Makhachev vs. Machado Garry -- August 15, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-08-14 | Scored: 2026-08-17
+Model: Ensemble (Soft Vote) | Generated: 2026-08-14 | Scored: 2026-10-07
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
 
@@ -15,16 +15,16 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 
 | Fight | Predicted Winner | Confidence | Likely Method | Odds (Red / Blue) | Actual Result | Correct? |
 |---|---|---|---|---|---|---|
-| Islam Makhachev vs Ian Machado Garry | Islam Makhachev | 74.8% | Decision (49%) / Submission (31%) | -285 / +270 | Islam Makhachev (Dec) | YES |
-| Mackenzie Dern vs Gillian Robertson | Gillian Robertson | 77.2% | Decision (70%) / KO/TKO (21%) | -194 / +186 | Mackenzie Dern (Dec) | NO |
-| Jalin Turner vs Kaue Fernandes | Kaue Fernandes | 66.9% | Decision (59%) / Submission (24%) | -113 / +108 | Jalin Turner (KO R1) | NO |
-| Mansur Abdul-Malik vs Dustin Stoltzfus | Mansur Abdul-Malik | 75.7% | Decision (59%) / KO/TKO (25%) | -614 / +567 | Dustin Stoltzfus (Sub R2) | NO |
-| Edson Barboza vs Esteban Ribovics | Esteban Ribovics | 68.0% | Decision (58%) / KO/TKO (30%) | +567 / -614 | Esteban Ribovics (KO R2) | YES |
-| Chidi Njokuani vs Joel Alvarez | Joel Alvarez | 67.0% | Decision (52%) / KO/TKO (36%) | -5285 / +3013 | Chidi Njokuani (Dec) | NO |
-| Donte Johnson vs Eric McConico | Donte Johnson | 97.3% | Decision (57%) / Submission (27%) | -611 / +489 | Donte Johnson (KO R1) | YES |
-| Vicente Luque vs Tresean Gore | Vicente Luque | 76.3% | KO/TKO (48%) / Decision (36%) | +113 / -117 | Tresean Gore (Dec) | NO |
-| Neil Magny vs Ramiz Brahimaj | Neil Magny | 67.0% | Decision (43%) / KO/TKO (42%) | +488 / -525 | Neil Magny (KO R2) | YES |
-| Jeremiah Wells vs Myktybek Orolbai | Myktybek Orolbai | 81.1% | Decision (63%) / KO/TKO (19%) | +567 / -733 | Jeremiah Wells (Sub R3) | NO |
+| Islam Makhachev vs Ian Machado Garry | Islam Makhachev | 74.8% | Decision (49%) / Submission (31%) | -330 / +265 | Islam Makhachev (Dec) | YES |
+| Mackenzie Dern vs Gillian Robertson | Gillian Robertson | 77.2% | Decision (70%) / KO/TKO (21%) | -215 / +180 | Mackenzie Dern (Dec) | NO |
+| Jalin Turner vs Kaue Fernandes | Kaue Fernandes | 66.9% | Decision (59%) / Submission (24%) | -122 / +104 | Jalin Turner (KO R1) | NO |
+| Mansur Abdul-Malik vs Dustin Stoltzfus | Mansur Abdul-Malik | 75.7% | Decision (59%) / KO/TKO (25%) | -670 / +490 | Dustin Stoltzfus (Sub R2) | NO |
+| Edson Barboza vs Esteban Ribovics | Esteban Ribovics | 68.0% | Decision (58%) / KO/TKO (30%) | +500 / -700 | Esteban Ribovics (KO R2) | YES |
+| Chidi Njokuani vs Joel Alvarez | Joel Alvarez | 67.0% | Decision (52%) / KO/TKO (36%) | +295 / -370 | Chidi Njokuani (Dec) | NO |
+| Donte Johnson vs Eric McConico | Donte Johnson | 97.3% | Decision (57%) / Submission (27%) | -340 / +275 | Donte Johnson (KO R1) | YES |
+| Vicente Luque vs Tresean Gore | Vicente Luque | 76.3% | KO/TKO (48%) / Decision (36%) | -106 / -110 | Tresean Gore (Dec) | NO |
+| Neil Magny vs Ramiz Brahimaj | Neil Magny | 67.0% | Decision (43%) / KO/TKO (42%) | +130 / -154 | Neil Magny (KO R2) | YES |
+| Jeremiah Wells vs Myktybek Orolbai | Myktybek Orolbai | 81.1% | Decision (63%) / KO/TKO (19%) | +750 / -1200 | Jeremiah Wells (Sub R3) | NO |
 
 ---
 
@@ -38,18 +38,18 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 
 | Fight | Model Pick | Odds (dec) | Result | P/L |
 |---|---|---|---|---|
-| Islam Makhachev vs Ian Machado Garry | Islam Makhachev | 1.35 | Win | +EUR 0.35 |
-| Mackenzie Dern vs Gillian Robertson | Gillian Robertson | 2.86 | Loss | -EUR 1.00 |
-| Jalin Turner vs Kaue Fernandes | Kaue Fernandes | 2.08 | Loss | -EUR 1.00 |
-| Mansur Abdul-Malik vs Dustin Stoltzfus | Mansur Abdul-Malik | 1.16 | Loss | -EUR 1.00 |
-| Edson Barboza vs Esteban Ribovics | Esteban Ribovics | 1.16 | Win | +EUR 0.16 |
-| Chidi Njokuani vs Joel Alvarez | Joel Alvarez | 31.13 | Loss | -EUR 1.00 |
-| Donte Johnson vs Eric McConico | Donte Johnson | 1.16 | Win | +EUR 0.16 |
-| Vicente Luque vs Tresean Gore | Vicente Luque | 2.13 | Loss | -EUR 1.00 |
-| Neil Magny vs Ramiz Brahimaj | Neil Magny | 5.88 | Win | +EUR 4.88 |
-| Jeremiah Wells vs Myktybek Orolbai | Myktybek Orolbai | 1.14 | Loss | -EUR 1.00 |
+| Islam Makhachev vs Ian Machado Garry | Islam Makhachev | 1.30 | Win | +EUR 0.30 |
+| Mackenzie Dern vs Gillian Robertson | Gillian Robertson | 2.80 | Loss | -EUR 1.00 |
+| Jalin Turner vs Kaue Fernandes | Kaue Fernandes | 2.04 | Loss | -EUR 1.00 |
+| Mansur Abdul-Malik vs Dustin Stoltzfus | Mansur Abdul-Malik | 1.15 | Loss | -EUR 1.00 |
+| Edson Barboza vs Esteban Ribovics | Esteban Ribovics | 1.14 | Win | +EUR 0.14 |
+| Chidi Njokuani vs Joel Alvarez | Joel Alvarez | 1.27 | Loss | -EUR 1.00 |
+| Donte Johnson vs Eric McConico | Donte Johnson | 1.29 | Win | +EUR 0.29 |
+| Vicente Luque vs Tresean Gore | Vicente Luque | 1.94 | Loss | -EUR 1.00 |
+| Neil Magny vs Ramiz Brahimaj | Neil Magny | 2.30 | Win | +EUR 1.30 |
+| Jeremiah Wells vs Myktybek Orolbai | Myktybek Orolbai | 1.08 | Loss | -EUR 1.00 |
 
-**Net P/L: -EUR 0.45 on EUR 10 staked (-4.5% ROI)**
+**Net P/L: -EUR 3.97 on EUR 10 staked (-39.7% ROI)**
 
 ## Raw Model Output
 

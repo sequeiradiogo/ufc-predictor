@@ -1,6 +1,6 @@
 # UFC Fight Night: Gamrot vs. Salkilld -- August 8, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-08-07 | Scored: 2026-08-10
+Model: Ensemble (Soft Vote) | Generated: 2026-08-07 | Scored: 2026-10-07
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
 
@@ -15,15 +15,15 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 
 | Fight | Predicted Winner | Confidence | Likely Method | Odds (Red / Blue) | Actual Result | Correct? |
 |---|---|---|---|---|---|---|
-| Mateusz Gamrot vs Quillan Salkilld | Quillan Salkilld | 92.2% | Decision (64%) / Submission (21%) | +133 / -138 | Quillan Salkilld (Sub R1) | YES |
-| Diego Ferreira vs Billy Quarantillo | Billy Quarantillo | 73.1% | Decision (45%) / KO/TKO (30%) | -163 / +156 | Diego Ferreira (Dec) | NO |
-| Darren Elkins vs Yadier del Valle | Yadier del Valle | 76.3% | Decision (56%) / Submission (26%) | +623 / -791 | Yadier del Valle (KO R1) | YES |
-| Amanda Lemos vs Alexia Thainara | Alexia Thainara | 77.4% | Decision (51%) / Submission (32%) | +245 / -257 | Alexia Thainara (Dec) | YES |
-| Billy Ray Goff vs Ty Miller | Ty Miller | 50.0% | Decision (46%) / KO/TKO (43%) | +9226 / -10679 | Ty Miller (KO R3) | -- |
-| Steven Asplund vs Guilherme Pat | Guilherme Pat | 65.8% | KO/TKO (65%) / Decision (29%) | -270 / +257 | Steven Asplund (Dec) | NO |
-| Diyar Nurgozhay vs Bruno Lopes | Diyar Nurgozhay | 97.2% | Decision (51%) / KO/TKO (38%) | -150 / +144 | Diyar Nurgozhay (KO R1) | YES |
-| Miles Johns vs Gianni Vazquez | Miles Johns | 85.4% | Decision (54%) / KO/TKO (38%) | -491 / +397 | Miles Johns (KO R1) | YES |
-| Juliana Miller vs Ravena Oliveira | Juliana Miller | 78.7% | Decision (45%) / Submission (43%) | -1240 / +942 | Juliana Miller (Sub R2) | YES |
+| Mateusz Gamrot vs Quillan Salkilld | Quillan Salkilld | 92.2% | Decision (64%) / Submission (21%) | +140 / -166 | Quillan Salkilld (Sub R1) | YES |
+| Diego Ferreira vs Billy Quarantillo | Billy Quarantillo | 73.1% | Decision (45%) / KO/TKO (30%) | -176 / +148 | Diego Ferreira (Dec) | NO |
+| Darren Elkins vs Yadier del Valle | Yadier del Valle | 76.3% | Decision (56%) / Submission (26%) | +640 / -950 | Yadier del Valle (KO R1) | YES |
+| Amanda Lemos vs Alexia Thainara | Alexia Thainara | 77.4% | Decision (51%) / Submission (32%) | +260 / -320 | Alexia Thainara (Dec) | YES |
+| Billy Ray Goff vs Ty Miller | Ty Miller | 50.0% | Decision (46%) / KO/TKO (43%) | +350 / -450 | Ty Miller (KO R3) | -- |
+| Steven Asplund vs Guilherme Pat | Guilherme Pat | 65.8% | KO/TKO (65%) / Decision (29%) | -295 / +240 | Steven Asplund (Dec) | NO |
+| Diyar Nurgozhay vs Bruno Lopes | Diyar Nurgozhay | 97.2% | Decision (51%) / KO/TKO (38%) | -166 / +140 | Diyar Nurgozhay (KO R1) | YES |
+| Miles Johns vs Gianni Vazquez | Miles Johns | 85.4% | Decision (54%) / KO/TKO (38%) | -210 / +176 | Miles Johns (KO R1) | YES |
+| Juliana Miller vs Ravena Oliveira | Juliana Miller | 78.7% | Decision (45%) / Submission (43%) | -350 / +280 | Juliana Miller (Sub R2) | YES |
 
 ---
 
@@ -37,16 +37,16 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 
 | Fight | Model Pick | Odds (dec) | Result | P/L |
 |---|---|---|---|---|
-| Mateusz Gamrot vs Quillan Salkilld | Quillan Salkilld | 1.73 | Win | +EUR 0.73 |
-| Diego Ferreira vs Billy Quarantillo | Billy Quarantillo | 2.56 | Loss | -EUR 1.00 |
-| Darren Elkins vs Yadier del Valle | Yadier del Valle | 1.13 | Win | +EUR 0.13 |
-| Amanda Lemos vs Alexia Thainara | Alexia Thainara | 1.39 | Win | +EUR 0.39 |
-| Steven Asplund vs Guilherme Pat | Guilherme Pat | 3.57 | Loss | -EUR 1.00 |
-| Diyar Nurgozhay vs Bruno Lopes | Diyar Nurgozhay | 1.67 | Win | +EUR 0.67 |
-| Miles Johns vs Gianni Vazquez | Miles Johns | 1.20 | Win | +EUR 0.20 |
-| Juliana Miller vs Ravena Oliveira | Juliana Miller | 1.08 | Win | +EUR 0.08 |
+| Mateusz Gamrot vs Quillan Salkilld | Quillan Salkilld | 1.60 | Win | +EUR 0.60 |
+| Diego Ferreira vs Billy Quarantillo | Billy Quarantillo | 2.48 | Loss | -EUR 1.00 |
+| Darren Elkins vs Yadier del Valle | Yadier del Valle | 1.10 | Win | +EUR 0.10 |
+| Amanda Lemos vs Alexia Thainara | Alexia Thainara | 1.31 | Win | +EUR 0.31 |
+| Steven Asplund vs Guilherme Pat | Guilherme Pat | 3.40 | Loss | -EUR 1.00 |
+| Diyar Nurgozhay vs Bruno Lopes | Diyar Nurgozhay | 1.60 | Win | +EUR 0.60 |
+| Miles Johns vs Gianni Vazquez | Miles Johns | 1.48 | Win | +EUR 0.48 |
+| Juliana Miller vs Ravena Oliveira | Juliana Miller | 1.29 | Win | +EUR 0.29 |
 
-**Net P/L: +EUR 0.20 on EUR 8 staked (+2.5% ROI)**
+**Net P/L: +EUR 0.38 on EUR 8 staked (+4.7% ROI)**
 
 ## Raw Model Output
 

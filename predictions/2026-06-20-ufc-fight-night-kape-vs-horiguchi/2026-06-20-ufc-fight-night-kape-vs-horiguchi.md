@@ -1,10 +1,11 @@
 # UFC Fight Night: Kape vs. Horiguchi -- June 20, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-06-17 | Scored: 2026-06-24
+Model: Ensemble (Soft Vote) | Generated: 2026-06-17 | Scored: 2026-10-07
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
 
-**Result: 6/9 correct (66.7%)**
+**Result: 6/9 (66.7%)**
+*High-confidence (>=55%) picks: 4/6 (66.7%)*
 
 > Interactive fighter comparison: [2026-06-20-ufc-fight-night-kape-vs-horiguchi.html](./2026-06-20-ufc-fight-night-kape-vs-horiguchi.html)
 
@@ -12,17 +13,17 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 
 ## Predictions
 
-| Fight | Predicted Winner | Confidence | Likely Method | Actual Result | Correct? |
-|---|---|---|---|---|---|
-| Manel Kape vs Kyoji Horiguchi | Kyoji Horiguchi | 52.7% | Decision (65%) / KO/TKO (26%) | Kape (KO/TKO R3 2:42) | NO |
-| Ion Cutelaba vs Navajo Stirling | Navajo Stirling | 69.6% | Decision (65%) / KO/TKO (25%) | Stirling (KO/TKO R2 3:23) | YES |
-| Vinicius Oliveira vs Andre Fili | Vinicius Oliveira | 83.1% | Decision (71%) / KO/TKO (25%) | Oliveira (KO/TKO R2 4:56) | YES |
-| Hyder Amil vs Christian Rodriguez | Christian Rodriguez | 51.2% | Decision (58%) / KO/TKO (31%) | Rodriguez (Sub R1 3:43) | YES |
-| Andre Lima vs Kevin Borjas | Andre Lima | 92.6% | KO/TKO (43%) / Decision (41%) | Borjas (Dec R3 5:00) | NO |
-| Bia Mesquita vs Melissa Mullins | Bia Mesquita | 78.4% | Decision (50%) / Submission (27%) | Mesquita (Sub R1 3:16) | YES |
-| Allan Nascimento vs Mitch Raposo | Allan Nascimento | 75.3% | Decision (46%) / Submission (28%) | Raposo (Dec Split R3 5:00) | NO |
-| Gaston Bolanos vs Michael Aswell Jr. | Gaston Bolanos | 51.3% | Decision (58%) / KO/TKO (33%) | Bolanos (Dec R3 5:00) | YES |
-| Karol Rosa vs Luana Santos | Luana Santos | 59.7% | Decision (70%) / Submission (16%) | Santos (Dec R3 5:00) | YES |
+| Fight | Predicted Winner | Confidence | Likely Method | Odds (Red / Blue) | Actual Result | Correct? |
+|---|---|---|---|---|---|---|
+| Manel Kape vs Kyoji Horiguchi | Kyoji Horiguchi | 52.7% | Decision (65%) / KO/TKO (26%) | -172 / +144 | Manel Kape (KO R3) | NO |
+| Ion Cutelaba vs Navajo Stirling | Navajo Stirling | 69.6% | Decision (65%) / KO/TKO (25%) | +310 / -390 | Navajo Stirling (KO R2) | YES |
+| Vinicius Oliveira vs Andre Fili | Vinicius Oliveira | 83.1% | Decision (71%) / KO/TKO (25%) | -270 / +220 | Vinicius Oliveira (KO R2) | YES |
+| Hyder Amil vs Christian Rodriguez | Christian Rodriguez | 51.2% | Decision (58%) / KO/TKO (31%) | +184 / -220 | Christian Rodriguez (Sub R1) | YES |
+| Andre Lima vs Kevin Borjas | Andre Lima | 92.6% | KO/TKO (43%) / Decision (41%) | -770 / +540 | Kevin Borjas (Dec) | NO |
+| Bia Mesquita vs Melissa Mullins | Bia Mesquita | 78.4% | Decision (50%) / Submission (27%) | -800 / +560 | Bia Mesquita (Sub R1) | YES |
+| Allan Nascimento vs Mitch Raposo | Allan Nascimento | 75.3% | Decision (46%) / Submission (28%) | -158 / +134 | Mitch Raposo (Dec (Split)) | NO |
+| Gaston Bolanos vs Michael Aswell Jr. | Gaston Bolanos | 51.3% | Decision (58%) / KO/TKO (33%) | +300 / -375 | Gaston Bolanos (Dec) | YES |
+| Karol Rosa vs Luana Santos | Luana Santos | 59.7% | Decision (70%) / Submission (16%) | -116 / -104 | Luana Santos (Dec) | YES |
 
 ---
 
@@ -30,28 +31,20 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 
 - Fights predicted: 9
 - Correct: 6/9 (66.7%)
+- High-confidence (>=55%) picks: 4/6 (66.7%)
 
-### P/L (EUR 1 flat on each predicted winner)
+### P/L (EUR 1 flat on picks >=55% confidence)
 
-Closing moneyline odds via BFO (American). Kape/Horiguchi from FanDuel pre-event (main event not listed in BFO closing table).
+| Fight | Model Pick | Odds (dec) | Result | P/L |
+|---|---|---|---|---|
+| Ion Cutelaba vs Navajo Stirling | Navajo Stirling | 1.26 | Win | +EUR 0.26 |
+| Vinicius Oliveira vs Andre Fili | Vinicius Oliveira | 1.37 | Win | +EUR 0.37 |
+| Andre Lima vs Kevin Borjas | Andre Lima | 1.13 | Loss | -EUR 1.00 |
+| Bia Mesquita vs Melissa Mullins | Bia Mesquita | 1.12 | Win | +EUR 0.12 |
+| Allan Nascimento vs Mitch Raposo | Allan Nascimento | 1.63 | Loss | -EUR 1.00 |
+| Karol Rosa vs Luana Santos | Luana Santos | 1.96 | Win | +EUR 0.96 |
 
-| Fight | Model Pick | Odds (American) | Odds (dec) | Result | P/L |
-|---|---|---|---|---|---|
-| Kape vs Horiguchi | Kyoji Horiguchi | +132 | 2.32 | Loss | -EUR 1.00 |
-| Cutelaba vs Stirling | Navajo Stirling | -345 | 1.29 | Win | +EUR 0.29 |
-| Oliveira vs Fili | Vinicius Oliveira | -305 | 1.33 | Win | +EUR 0.33 |
-| Amil vs Rodriguez | Christian Rodriguez | -220 | 1.45 | Win | +EUR 0.45 |
-| Lima vs Borjas | Andre Lima | -670 | 1.15 | Loss | -EUR 1.00 |
-| Mesquita vs Mullins | Bia Mesquita | -625 | 1.16 | Win | +EUR 0.16 |
-| Nascimento vs Raposo | Allan Nascimento | -167 | 1.60 | Loss | -EUR 1.00 |
-| Bolanos vs Aswell Jr. | Gaston Bolanos | +330 | 4.30 | Win | +EUR 3.30 |
-| Rosa vs Santos | Luana Santos | -105 | 1.95 | Win | +EUR 0.95 |
-
-**Net P/L: +EUR 2.48 on EUR 9.00 staked (+27.6% ROI)**
-
-Three losses but Bolanos at +330 single-handedly swung the card green. The main event upset (Kape KO'd the slight favourite Horiguchi at +132) and the Lima/Borjas shock (-670 losing) were the pain points; Bolanos winning as a +330 dog more than offset both.
-
----
+**Net P/L: -EUR 0.29 on EUR 6 staked (-4.8% ROI)**
 
 ## Raw Model Output
 

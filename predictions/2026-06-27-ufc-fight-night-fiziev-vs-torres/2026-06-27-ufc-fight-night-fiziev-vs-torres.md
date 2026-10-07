@@ -1,10 +1,11 @@
 # UFC Fight Night: Fiziev vs. Torres -- June 27, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-06-25 | Scored: 2026-06-30
+Model: Ensemble (Soft Vote) | Generated: 2026-06-25 | Scored: 2026-10-07
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
 
-**Result: 5/9 correct (55.6%)** *(1 fight excluded: 50/50 pick)*
+**Result: 5/9 (55.6%)** *(1 fight excluded: 50/50 pick)*
+*High-confidence (>=55%) picks: 5/9 (55.6%)*
 
 ---
 
@@ -12,42 +13,40 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 
 | Fight | Predicted Winner | Confidence | Likely Method | Odds (Red / Blue) | Actual Result | Correct? |
 |---|---|---|---|---|---|---|
-| Rafael Fiziev vs Manuel Torres | Manuel Torres | 63.5% | Decision (53%) / KO/TKO (31%) | -108 / -108 | Fiziev (KO R2) | NO |
-| Shara Magomedov vs Michel Pereira | Shara Magomedov | 61.8% | Decision (66%) / KO/TKO (26%) | -390 / +310 | Magomedov (Dec) | YES |
-| Nazim Sadykhov vs Matheus Camilo | Nazim Sadykhov | 50.0% | Decision (52%) / KO/TKO (33%) | -186 / +154 | Camilo (TKO R1) | -- |
-| Asu Almabayev vs Charles Johnson | Asu Almabayev | 75.7% | Submission (76%) / Decision (14%) | -290 / +235 | Almabayev (Sub R3) | YES |
-| Ikram Aliskerov vs Brunno Ferreira | Ikram Aliskerov | 77.8% | Decision (59%) / KO/TKO (26%) | -260 / +215 | Aliskerov (Dec) | YES |
-| Abus Magomedov vs Michal Oleksiejczuk | Michal Oleksiejczuk | 62.3% | Decision (66%) / KO/TKO (24%) | +102 / -120 | A. Magomedov (Sub R1) | NO |
-| Abdul Rakhman Yakhyaev vs Julius Walker | Julius Walker | 55.5% | Decision (57%) / Submission (25%) | -750 / +530 | Yakhyaev (KO R1) | NO |
-| Nursulton Ruziboev vs Andrey Pulyaev | Nursultan Ruziboev | 55.1% | KO/TKO (63%) / Decision (31%) | -174 / +146 | Ruziboev (Tech Sub R1) | YES |
-| Kaan Ofli vs Javier Reyes | Javier Reyes | 70.9% | Decision (55%) / KO/TKO (26%) | +205 / -250 | Ofli (Sub R1) | NO |
-| Bekzat Almakhan vs Jean Matsumoto | Jean Matsumoto | 88.5% | KO/TKO (44%) / Decision (35%) | +148 / -176 | Matsumoto (Dec) | YES |
+| Rafael Fiziev vs Manuel Torres | Manuel Torres | 63.5% | Decision (53%) / KO/TKO (31%) | -108 / -108 | Rafael Fiziev (KO R2) | NO |
+| Shara Magomedov vs Michel Pereira | Shara Magomedov | 61.8% | Decision (66%) / KO/TKO (26%) | -390 / +310 | Shara Magomedov (Dec) | YES |
+| Nazim Sadykhov vs Matheus Camilo | Nazim Sadykhov | 50.0% | Decision (52%) / KO/TKO (33%) | -186 / +154 | Matheus Camilo (KO R1) | -- |
+| Asu Almabayev vs Charles Johnson | Asu Almabayev | 75.7% | Submission (76%) / Decision (14%) | -290 / +235 | Asu Almabayev (Sub R3) | YES |
+| Ikram Aliskerov vs Brunno Ferreira | Ikram Aliskerov | 77.8% | Decision (59%) / KO/TKO (26%) | -260 / +215 | Ikram Aliskerov (Dec) | YES |
+| Abus Magomedov vs Michal Oleksiejczuk | Michal Oleksiejczuk | 62.3% | Decision (66%) / KO/TKO (24%) | +102 / -120 | Abus Magomedov (Sub R1) | NO |
+| Abdul Rakhman Yakhyaev vs Julius Walker | Julius Walker | 55.5% | Decision (57%) / Submission (25%) | -750 / +530 | Abdul Rakhman Yakhyaev (KO R1) | NO |
+| Nursulton Ruziboev vs Andrey Pulyaev | Nursulton Ruziboev | 55.1% | KO/TKO (63%) / Decision (31%) | -174 / +146 | Nursulton Ruziboev (Sub R1) | YES |
+| Kaan Ofli vs Javier Reyes | Javier Reyes | 70.9% | Decision (55%) / KO/TKO (26%) | +205 / -250 | Kaan Ofli (Sub R1) | NO |
+| Bekzat Almakhan vs Jean Matsumoto | Jean Matsumoto | 88.5% | KO/TKO (44%) / Decision (35%) | +148 / -176 | Jean Matsumoto (Dec) | YES |
 
 ---
 
 ## Post-Event Summary
 
-- Fights predicted: 9 (1 excluded: 50/50 pick)
+- Fights predicted: 10 (1 excluded: 50/50 pick)
 - Correct: 5/9 (55.6%)
+- High-confidence (>=55%) picks: 5/9 (55.6%)
 
-### P/L (EUR 1 flat on each predicted winner)
+### P/L (EUR 1 flat on picks >=55% confidence)
 
 | Fight | Model Pick | Odds (dec) | Result | P/L |
 |---|---|---|---|---|
-| Fiziev vs Torres | Manuel Torres | 1.93 | Loss | -EUR 1.00 |
-| Magomedov vs Pereira | Shara Magomedov | 1.26 | Win | +EUR 0.26 |
-| Sadykhov vs Camilo | -- (50/50) | -- | -- | -- |
-| Almabayev vs Johnson | Asu Almabayev | 1.34 | Win | +EUR 0.34 |
-| Aliskerov vs Ferreira | Ikram Aliskerov | 1.38 | Win | +EUR 0.38 |
-| A. Magomedov vs Oleksiejczuk | Michal Oleksiejczuk | 1.83 | Loss | -EUR 1.00 |
-| Yakhyaev vs Walker | Julius Walker | 6.30 | Loss | -EUR 1.00 |
-| Ruziboev vs Pulyaev | Nursultan Ruziboev | 1.57 | Win | +EUR 0.57 |
-| Ofli vs Reyes | Javier Reyes | 1.40 | Loss | -EUR 1.00 |
-| Almakhan vs Matsumoto | Jean Matsumoto | 1.57 | Win | +EUR 0.57 |
+| Rafael Fiziev vs Manuel Torres | Manuel Torres | 1.93 | Loss | -EUR 1.00 |
+| Shara Magomedov vs Michel Pereira | Shara Magomedov | 1.26 | Win | +EUR 0.26 |
+| Asu Almabayev vs Charles Johnson | Asu Almabayev | 1.34 | Win | +EUR 0.34 |
+| Ikram Aliskerov vs Brunno Ferreira | Ikram Aliskerov | 1.39 | Win | +EUR 0.39 |
+| Abus Magomedov vs Michal Oleksiejczuk | Michal Oleksiejczuk | 1.83 | Loss | -EUR 1.00 |
+| Abdul Rakhman Yakhyaev vs Julius Walker | Julius Walker | 6.30 | Loss | -EUR 1.00 |
+| Nursulton Ruziboev vs Andrey Pulyaev | Nursulton Ruziboev | 1.57 | Win | +EUR 0.57 |
+| Kaan Ofli vs Javier Reyes | Javier Reyes | 1.40 | Loss | -EUR 1.00 |
+| Bekzat Almakhan vs Jean Matsumoto | Jean Matsumoto | 1.57 | Win | +EUR 0.57 |
 
-**Net P/L: -EUR 1.88 on EUR 9.00 staked (-20.9% ROI)**
-
----
+**Net P/L: -EUR 1.87 on EUR 9 staked (-20.8% ROI)**
 
 ## Raw Model Output
 

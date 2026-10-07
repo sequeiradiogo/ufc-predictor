@@ -1,6 +1,7 @@
 {
   "event": "UFC Fight Night: Fiziev vs. Torres",
   "date": "2026-06-27",
+  "event_url": "http://www.ufcstats.com/event-details/31e1ea6fe6b682f8",
   "model_type": "ensemble",
   "fights": [
     {
@@ -84,7 +85,8 @@
         "blue_finish": 100.0,
         "red_sos": 1523.0,
         "blue_sos": 1441.0
-      }
+      },
+      "finish_str": "Decision (53%) / KO/TKO (31%)"
     },
     {
       "label": "Shara Magomedov vs Michel Pereira",
@@ -167,7 +169,8 @@
         "blue_finish": 33.3,
         "red_sos": 1429.0,
         "blue_sos": 1426.0
-      }
+      },
+      "finish_str": "Decision (66%) / KO/TKO (26%)"
     },
     {
       "label": "Nazim Sadykhov vs Matheus Camilo",
@@ -250,7 +253,8 @@
         "blue_finish": 50.0,
         "red_sos": 1418.0,
         "blue_sos": 1433.0
-      }
+      },
+      "finish_str": "Decision (52%) / KO/TKO (33%)"
     },
     {
       "label": "Asu Almabayev vs Charles Johnson",
@@ -333,7 +337,8 @@
         "blue_finish": 66.7,
         "red_sos": 1435.0,
         "blue_sos": 1444.0
-      }
+      },
+      "finish_str": "Submission (76%) / Decision (14%)"
     },
     {
       "label": "Ikram Aliskerov vs Brunno Ferreira",
@@ -416,7 +421,8 @@
         "blue_finish": 66.7,
         "red_sos": 1503.0,
         "blue_sos": 1415.0
-      }
+      },
+      "finish_str": "Decision (59%) / KO/TKO (26%)"
     },
     {
       "label": "Abus Magomedov vs Michal Oleksiejczuk",
@@ -499,7 +505,8 @@
         "blue_finish": 66.7,
         "red_sos": 1494.0,
         "blue_sos": 1460.0
-      }
+      },
+      "finish_str": "Decision (66%) / KO/TKO (24%)"
     },
     {
       "label": "Abdul Rakhman Yakhyaev vs Julius Walker",
@@ -582,7 +589,8 @@
         "blue_finish": 33.3,
         "red_sos": 1291.0,
         "blue_sos": 1391.0
-      }
+      },
+      "finish_str": "Decision (57%) / Submission (25%)"
     },
     {
       "label": "Nursulton Ruziboev vs Andrey Pulyaev",
@@ -665,7 +673,8 @@
         "blue_finish": 33.3,
         "red_sos": 1452.0,
         "blue_sos": 1395.0
-      }
+      },
+      "finish_str": "KO/TKO (63%) / Decision (31%)"
     },
     {
       "label": "Kaan Ofli vs Javier Reyes",
@@ -748,7 +757,8 @@
         "blue_finish": 100.0,
         "red_sos": 1454.0,
         "blue_sos": 1400.0
-      }
+      },
+      "finish_str": "Decision (55%) / KO/TKO (26%)"
     },
     {
       "label": "Bekzat Almakhan vs Jean Matsumoto",
@@ -831,7 +841,8 @@
         "blue_finish": 0.0,
         "red_sos": 1477.0,
         "blue_sos": 1450.0
-      }
+      },
+      "finish_str": "KO/TKO (44%) / Decision (35%)"
     }
   ]
 }
