@@ -7,6 +7,7 @@ the prediction markdown with actual results and P/L analysis.
 Usage:
   python scripts/score_event.py                       # auto-detect most recent unscored prediction
   python scripts/score_event.py --json path/to/f.json
+  python scripts/score_event.py --json path/to/f.json --rescore   # re-score an already-scored event
 """
 
 import argparse
@@ -22,8 +23,8 @@ sys.path.insert(0, str(ROOT))
 
 from scrapers.ufcstats import _browser_session, _col_ps_text, _normalize_method
 from scrapers.bestfightodds import (
-    _fetch_bfo_events, _fetch_bfo_archive_events, _scrape_event_odds,
-    _name_key, _best_match, _parse_bfo_date,
+    _fetch_bfo_events, _fetch_bfo_archive_events, _fetch_fighter_events,
+    _scrape_event_odds, _name_key, _parse_bfo_date,
 )
 from utils.logger import get_logger
 
@@ -97,8 +98,11 @@ def scrape_bfo_odds(
     usually already dropped off BFO's homepage (upcoming events only) -- the
     archive of completed events is checked as well. BFO event names are often
     location-based (e.g. "UFC Oklahoma") rather than fighter-based like
-    UFCStats/our own naming, so events are matched by date first and only
-    fall back to fuzzy name matching to disambiguate same-day events.
+    UFCStats/our own naming, so events are matched by date and confirmed by
+    their card actually containing our fighters. The archive only covers the
+    ~20 most recent events (all orgs), so any fight still uncovered after
+    that is looked up through the fighter's own BFO page (needed when
+    re-scoring older events).
     """
     try:
         bfo_events = _fetch_bfo_events()
@@ -112,63 +116,62 @@ def scrape_bfo_odds(
         log.warning("BFO archive fetch failed: %s", exc)
         archive_events = []
 
-    all_events = bfo_events + archive_events
-    if not all_events:
-        log.warning("BFO event list was empty -- skipping odds scrape")
-        return {}
-
-    candidates = []
-    for e in all_events:
-        parsed = _parse_bfo_date(e["date_text"], ref_year=event_date.year)
-        if parsed and abs((parsed - event_date).days) <= 1:
-            candidates.append(e)
+    def _on_date(events: list[dict]) -> list[dict]:
+        out = []
+        for e in events:
+            parsed = _parse_bfo_date(e["date_text"], ref_year=event_date.year)
+            if parsed and abs((parsed - event_date).days) <= 1:
+                out.append(e)
+        return out
 
     fighter_keys = {_name_key(n) for pair in fighter_pairs for n in pair}
     matched_events, matchups = [], []
+    seen_urls: set[str] = set()
 
-    if len(candidates) == 1:
-        matched_events = [candidates[0]]
-    elif len(candidates) > 1:
-        # Multiple same-day events (BFO covers many orgs) -- BFO's event names
-        # are often location-based (e.g. "UFC Oklahoma") so they don't fuzzy-
-        # match our fighter-based event names. Disambiguate on ground truth
-        # instead: scrape every candidate and keep whichever ones actually
-        # contain our predicted fighters. BFO sometimes splits a single UFC
-        # card across two listings under different names (e.g. a "UFC
-        # <location>" page with just the main event plus a separately named
-        # page -- "Noche UFC" -- with the rest of the card), so a card can
-        # legitimately span more than one candidate; collect matchups from
-        # all of them rather than stopping at the first hit.
-        for cand in candidates:
+    def _try_event(ev: dict) -> None:
+        # Scrape a candidate and keep it only if its card contains our
+        # fighters -- BFO covers many orgs on the same date. BFO also splits
+        # a single UFC card across several listings under different names
+        # (e.g. "UFC 332" for the main card + a bare "UFC" page for the
+        # prelims), so every matching candidate is kept, not just the first.
+        if ev["url"] in seen_urls:
+            return
+        seen_urls.add(ev["url"])
+        try:
+            ev_matchups = _scrape_event_odds(ev["url"])
+        except Exception as exc:
+            log.warning("BFO odds scrape failed for '%s': %s", ev["name"], exc)
+            return
+        ev_keys = {_name_key(m["r_name"]) for m in ev_matchups} | \
+                  {_name_key(m["b_name"]) for m in ev_matchups}
+        if ev_keys & fighter_keys:
+            matched_events.append(ev)
+            matchups.extend(ev_matchups)
+
+    for cand in _on_date(bfo_events + archive_events):
+        _try_event(cand)
+
+    # Fights still uncovered (event older than the archive window, or a card
+    # listing the archive missed): find the event via the fighter's BFO page.
+    for red, blue in fighter_pairs:
+        if _fuzzy_odds_lookup(red, blue, matchups) is not None:
+            continue
+        for name in (red, blue):
             try:
-                cand_matchups = _scrape_event_odds(cand["url"])
+                fighter_events = _fetch_fighter_events(name)
             except Exception as exc:
-                log.warning("BFO odds scrape failed for '%s': %s", cand["name"], exc)
+                log.warning("BFO fighter lookup failed for '%s': %s", name, exc)
                 continue
-            cand_keys = {_name_key(m["r_name"]) for m in cand_matchups} | \
-                        {_name_key(m["b_name"]) for m in cand_matchups}
-            if cand_keys & fighter_keys:
-                matched_events.append(cand)
-                matchups.extend(cand_matchups)
+            for ev in _on_date(fighter_events):
+                _try_event(ev)
+            if _fuzzy_odds_lookup(red, blue, matchups) is not None:
+                break
 
     if not matched_events:
-        # Fall back to fuzzy title matching over everything we fetched.
-        all_names = [e["name"] for e in all_events]
-        matched   = _best_match(event_name, all_names, cutoff=0.60)
-        if not matched:
-            log.warning("No BFO event matched '%s' (%s)", event_name, event_date)
-            return {}
-        bfo_event = all_events[all_names.index(matched)]
-        matched_events = [bfo_event]
+        log.warning("No BFO event matched '%s' (%s)", event_name, event_date)
+        return {}
 
     log.info("BFO event(s) matched: %s", ", ".join(e["name"] for e in matched_events))
-
-    if not matchups:
-        try:
-            matchups = _scrape_event_odds(matched_events[0]["url"])
-        except Exception as exc:
-            log.warning("BFO odds scrape failed: %s", exc)
-            return {}
 
     # Build lookup keyed by (red_key, blue_key)
     bfo_lookup: dict[tuple[str, str], tuple[int | None, int | None]] = {}
@@ -265,22 +268,50 @@ def _result_str(r: dict) -> str:
 
 # -- Markdown update ----------------------------------------------------------
 
+def _strip_scoring(md: str) -> str:
+    """
+    Undo a previous scoring pass (header date, result lines, Post-Event
+    Summary) so the event can be scored again. The predictions table needs no
+    undoing -- score_markdown() rebuilds it from the JSON either way.
+    """
+    md = re.sub(r" \| Scored: \S+", "", md, count=1)
+    md = re.sub(
+        r"(Fighters making their UFC debut were excluded.*?\n)"
+        r"(?:\n?(?:\*\*Result:|\*High-confidence).*\n)+",
+        r"\1",
+        md,
+        count=1,
+    )
+    md = re.sub(
+        r"## Post-Event Summary\n.*?(?=## Raw Model Output)",
+        "",
+        md,
+        count=1,
+        flags=re.DOTALL,
+    )
+    return md
+
+
 def score_markdown(
     md_path: Path,
     predictions: list[dict],
     results: list[dict],
     odds_map: dict[str, tuple[int | None, int | None]],
     min_confidence: float = MIN_CONFIDENCE,
+    rescore: bool = False,
 ) -> str:
     """
     Update *md_path* with actual results and P/L.
+    With *rescore*, an already-scored file is stripped and scored again.
     Returns a short summary string for logging.
     """
     md = md_path.read_text(encoding="utf-8")
 
     if SCORED_MARKER in md:
-        log.info("Already scored: %s", md_path)
-        return "already scored"
+        if not rescore:
+            log.info("Already scored: %s", md_path)
+            return "already scored"
+        md = _strip_scoring(md)
 
     today = date.today().isoformat()
 
@@ -509,7 +540,13 @@ def main() -> None:
         "--min-confidence", type=float, default=MIN_CONFIDENCE,
         help=f"Confidence threshold (0-1) for the high-confidence breakout and P/L gating (default: {MIN_CONFIDENCE})",
     )
+    parser.add_argument(
+        "--rescore", action="store_true",
+        help="Re-score an already-scored prediction (requires --json): re-fetches results + odds",
+    )
     args = parser.parse_args()
+    if args.rescore and not args.json:
+        parser.error("--rescore requires --json")
 
     json_path = Path(args.json) if args.json else find_unscored_prediction()
     if json_path is None:
@@ -544,7 +581,8 @@ def main() -> None:
     odds_map = scrape_bfo_odds(meta["event"], event_date, fighter_pairs)
 
     md_path = json_path.with_suffix(".md")
-    acc_str = score_markdown(md_path, predictions, results, odds_map, min_confidence=args.min_confidence)
+    acc_str = score_markdown(md_path, predictions, results, odds_map,
+                             min_confidence=args.min_confidence, rescore=args.rescore)
 
     print(f"\nScored:    {md_path}")
     print(f"Accuracy:  {acc_str}")

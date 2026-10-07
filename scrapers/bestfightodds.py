@@ -15,6 +15,7 @@ import sys
 import time
 from datetime import date, datetime
 from pathlib import Path
+from urllib.parse import quote_plus
 
 import requests
 from bs4 import BeautifulSoup
@@ -50,7 +51,11 @@ def _parse_american_odds(text: str) -> int | None:
 
 def _name_key(name: str) -> str:
     """Lowercase, strip punctuation for fuzzy matching."""
-    return re.sub(r"[^a-z ]", "", name.lower()).strip()
+    words = re.sub(r"[^a-z ]", "", name.lower()).split()
+    # BFO repeats mononyms as first + last name ("Sumudaerji Sumudaerji")
+    if len(words) == 2 and words[0] == words[1]:
+        words = words[:1]
+    return " ".join(words)
 
 
 def _best_match(target: str, candidates: list[str], cutoff: float = 0.80) -> str | None:
@@ -138,14 +143,65 @@ def _fetch_bfo_archive_events() -> list[dict]:
     return events
 
 
+def _parse_fighter_events(soup: BeautifulSoup) -> list[dict]:
+    """Parse the {name, url, date_text} event headers from a BFO fighter page."""
+    events = []
+    for tr in soup.select("table.team-stats-table tr.event-header"):
+        a = tr.select_one("a[href*='/events/']")
+        if a is None:
+            continue
+        href = a["href"].strip()
+        name = a.get_text(strip=True)
+        events.append({
+            "name":      name,
+            "url":       BASE + href if href.startswith("/") else href,
+            "date_text": tr.get_text(" ", strip=True)[len(name):].strip(),
+        })
+    return events
+
+
+def _fetch_fighter_events(fighter_name: str) -> list[dict]:
+    """
+    Return {name, url, date_text} for every BFO event *fighter_name* appears on.
+
+    The archive page only lists the ~20 most recent events (all orgs), so
+    older events are reached through a fighter's page instead. BFO's search
+    redirects straight to the fighter page on an exact single match;
+    otherwise it returns a result list, fuzzy-matched here.
+    """
+    soup = _get(f"{BASE}/search?query={quote_plus(fighter_name)}")
+    if soup is None:
+        return []
+    if soup.select_one("table.team-stats-table") is None:
+        links = {a.get_text(strip=True): a["href"].strip()
+                 for a in soup.select("table.content-list a[href^='/fighters/']")}
+        match = _best_match(fighter_name, list(links))
+        if match is None:
+            return []
+        soup = _get(BASE + links[match])
+        if soup is None:
+            return []
+    return _parse_fighter_events(soup)
+
+
 # ── BFO event page ────────────────────────────────────────────────────────────
+
+#: Prediction-market exchanges BFO lists in the same table as sportsbooks
+#: (matched against the column header text, lowercased). Their prices are
+#: last trades on thin books and drift toward ~0%/100% once a fight is
+#: decided -- score_event.py scrapes after the event, so these columns
+#: produced "closing odds" like -3487 / +2236 for a -205 / +163 fight.
+_EXCHANGE_BOOKS = ("polymarket", "kalshi", "prophetx", "novig", "sporttrade")
+
 
 def _scrape_event_odds(event_url: str) -> list[dict]:
     """
     Scrape one BFO event page.
 
-    Returns list of {r_name, b_name, odds_red, odds_blue} dicts. For each
-    fighter, uses the 'bestbet' (best available) moneyline across sportsbooks.
+    Returns list of {r_name, b_name, odds_red, odds_blue} dicts. Both sides'
+    odds come from the same sportsbook -- the first one in BFO's column order
+    that prices both fighters -- with prediction-market exchanges skipped.
+    Fights only an exchange prices get (None, None).
     """
     soup = _get(event_url)
     if soup is None:
@@ -157,30 +213,41 @@ def _scrape_event_odds(event_url: str) -> list[dict]:
         if table is None:
             continue
 
-        # (name, [odds per sportsbook column, in table order]) per fighter row.
-        # "Best" odds per side come from whichever book happens to be most
-        # favorable for that side -- taking that independently per fighter
-        # mixes books (e.g. a mainstream sportsbook for the favorite and a
-        # thin prediction-market exchange for the underdog) and produces
-        # incoherent pairs. Use the same book -- the first one both fighters
-        # have a price at -- for both sides instead.
-        fighter_rows: list[tuple[str, list[int | None]]] = []
+        # Sportsbook ids in column order. Header <th data-b="21"> and row
+        # <td data-li="[21,1,45055]"> share the book id, so odds are keyed by
+        # book rather than by position (empty cells would otherwise shift
+        # columns and pair different books' prices).
+        book_order = [
+            th["data-b"] for th in table.select("thead th[data-b]")
+            if not any(x in th.get_text(strip=True).lower() for x in _EXCHANGE_BOOKS)
+        ]
+        if not book_order:
+            log.warning("BFO odds table on %s has no sportsbook headers -- markup changed?",
+                        event_url)
+
+        # Taking each side's best price independently mixes books and produces
+        # incoherent pairs, so both sides come from the same book.
+        fighter_rows: list[tuple[str, dict[str, int | None]]] = []
         for row in table.select("tbody tr"):
             name_span = row.select_one("th span.t-b-fcc")
             if name_span is None:
                 continue  # prop-bet row, not a fighter row
             name = name_span.get_text(strip=True)
-            book_odds = [
-                _parse_american_odds(span.get_text(strip=True))
-                for span in row.select("td.but-sg span[id]")
-            ]
+            book_odds: dict[str, int | None] = {}
+            for td in row.select("td.but-sg[data-li]"):
+                span = td.select_one("span[id]")
+                if span is None:
+                    continue
+                book_id = td["data-li"].strip("[]").split(",")[0].strip()
+                book_odds[book_id] = _parse_american_odds(span.get_text(strip=True))
             fighter_rows.append((name, book_odds))
 
         for i in range(0, len(fighter_rows) - 1, 2):
             r_name, r_odds = fighter_rows[i]
             b_name, b_odds = fighter_rows[i + 1]
             odds_red = odds_blue = None
-            for r_val, b_val in zip(r_odds, b_odds):
+            for book_id in book_order:
+                r_val, b_val = r_odds.get(book_id), b_odds.get(book_id)
                 if r_val is not None and b_val is not None:
                     odds_red, odds_blue = r_val, b_val
                     break

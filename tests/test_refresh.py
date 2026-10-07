@@ -7,6 +7,7 @@ Tests for the incremental refresh pipeline:
   - rolling.main(fighter_ids=...) incremental filter
 """
 
+import re
 import sqlite3
 import sys
 import tempfile
@@ -194,6 +195,9 @@ class TestNameKey:
     def test_strip_punctuation(self):
         assert _name_key("Jon 'Bones' Jones") == "jon bones jones"
 
+    def test_repeated_mononym(self):
+        assert _name_key("Sumudaerji Sumudaerji") == "sumudaerji"
+
 
 class TestBestMatch:
     def test_exact(self):
@@ -205,6 +209,155 @@ class TestBestMatch:
 
     def test_no_match(self):
         assert _best_match("xyz qrs", ["jon jones", "israel adesanya"]) is None
+
+
+# Trimmed from the real BFO UFC 332 page (2026-10): two exchange columns
+# (Polymarket, Kalshi) ahead of the sportsbooks, Kalshi already near-settled.
+_BFO_EVENT_HTML = """
+<div class="table-scroller"><table class="odds-table">
+<thead><tr>
+  <th></th>
+  <th data-b="28"><a>Polymarket</a>$20 Bonus</th>
+  <th data-b="29"><a>Kalshi</a>Up to $500</th>
+  <th data-b="21"><a>FanDuel</a></th>
+  <th data-b="24"><a>Caesars</a></th>
+  <th class="table-prop-header">Props</th>
+</tr></thead>
+<tbody>
+  <tr><th><a><span class="t-b-fcc">Natalia Silva</span></a></th>
+    <td></td>
+    <td class="but-sg" data-li="[29,1,1]"><span id="a1">-3487</span></td>
+    <td class="but-sg" data-li="[21,1,1]"><span id="a2">-198</span></td>
+    <td class="but-sg" data-li="[24,1,1]"><span id="a3">-210</span></td>
+    <td class="prop-cell"></td></tr>
+  <tr><th><a><span class="t-b-fcc">Wang Cong</span></a></th>
+    <td></td>
+    <td class="but-sg" data-li="[29,2,1]"><span id="b1">+2236</span></td>
+    <td class="but-sg" data-li="[21,2,1]"><span id="b2">+166</span></td>
+    <td class="but-sg" data-li="[24,2,1]"><span id="b3">+175</span></td>
+    <td class="prop-cell"></td></tr>
+  <tr><th><a><span class="t-b-fcc">Fighter A</span></a></th>
+    <td></td>
+    <td></td>
+    <td class="but-sg" data-li="[21,1,2]"><span id="c1">-150</span></td>
+    <td class="but-sg" data-li="[24,1,2]"><span id="c2">-160</span></td>
+    <td class="prop-cell"></td></tr>
+  <tr><th><a><span class="t-b-fcc">Fighter B</span></a></th>
+    <td></td>
+    <td class="but-sg" data-li="[29,2,2]"><span id="d1">+900</span></td>
+    <td></td>
+    <td class="but-sg" data-li="[24,2,2]"><span id="d2">+140</span></td>
+    <td class="prop-cell"></td></tr>
+  <tr><th><a><span class="t-b-fcc">Exchange Only</span></a></th>
+    <td></td>
+    <td class="but-sg" data-li="[29,1,3]"><span id="e1">+105</span></td>
+    <td></td><td></td><td class="prop-cell"></td></tr>
+  <tr><th><a><span class="t-b-fcc">Exchange Other</span></a></th>
+    <td></td>
+    <td class="but-sg" data-li="[29,2,3]"><span id="f1">-126</span></td>
+    <td></td><td></td><td class="prop-cell"></td></tr>
+</tbody></table></div>
+"""
+
+
+class TestScrapeEventOdds:
+    @pytest.fixture
+    def matchups(self, monkeypatch):
+        from bs4 import BeautifulSoup
+        import scrapers.bestfightodds as bfo
+        monkeypatch.setattr(bfo, "_get", lambda url: BeautifulSoup(_BFO_EVENT_HTML, "lxml"))
+        return {m["r_name"]: m for m in bfo._scrape_event_odds("https://example/events/x")}
+
+    def test_skips_prediction_market_columns(self, matchups):
+        m = matchups["Natalia Silva"]
+        assert (m["odds_red"], m["odds_blue"]) == (-198, 166)
+
+    def test_pairs_by_book_not_position(self, matchups):
+        # FanDuel only prices Fighter A, so both sides come from Caesars.
+        m = matchups["Fighter A"]
+        assert (m["odds_red"], m["odds_blue"]) == (-160, 140)
+
+    def test_exchange_only_fight_has_no_odds(self, matchups):
+        m = matchups["Exchange Only"]
+        assert (m["odds_red"], m["odds_blue"]) == (None, None)
+
+
+class TestParseFighterEvents:
+    def test_event_headers(self):
+        from bs4 import BeautifulSoup
+        from scrapers.bestfightodds import _parse_fighter_events
+        html = """<table class="team-stats-table">
+          <tr class="event-header item-mobile-only-row"><td colspan="8" scope="row">
+            <a href="/events/ufc-vegas-119-4226">UFC Vegas 119</a> Jun 21st 2026</td></tr>
+          <tr class="main-row"><th><a href="/fighters/manel-kape-7510">Manel Kape</a></th></tr>
+        </table>"""
+        events = _parse_fighter_events(BeautifulSoup(html, "lxml"))
+        assert events == [{
+            "name":      "UFC Vegas 119",
+            "url":       "https://www.bestfightodds.com/events/ufc-vegas-119-4226",
+            "date_text": "Jun 21st 2026",
+        }]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# 2b. score_event.py re-scoring
+# ══════════════════════════════════════════════════════════════════════════════
+
+_UNSCORED_MD = """# UFC Test -- October 3, 2026
+
+Model: Ensemble (Soft Vote) | Generated: 2026-10-02
+
+Fighters making their UFC debut were excluded (no historical stats in DB).
+
+> Interactive fighter comparison: [x.html](./x.html)
+
+---
+
+## Predictions
+
+| Fight | Predicted Winner | Confidence | Likely Method |
+|---|---|---|---|
+| Ann Red vs Bea Blue | Ann Red | 70.0% | Decision (60%) / KO/TKO (30%) |
+
+---
+
+## Raw Model Output
+
+### Ann Red vs Bea Blue
+- Ensemble (Soft Vote): Ann Red 70.0% | Bea Blue 30.0%
+"""
+
+_PREDICTIONS = [{
+    "red_name": "Ann Red", "blue_name": "Bea Blue", "winner": "Ann Red",
+    "red_prob": 70.0, "blue_prob": 30.0, "finish_str": "Decision (60%) / KO/TKO (30%)",
+}]
+_RESULTS = [{"winner": "Ann Red", "loser": "Bea Blue", "method": "Decision - Unanimous", "round": 3}]
+
+
+class TestRescore:
+    def test_strip_undoes_scoring(self, tmp_path):
+        from scripts.score_event import score_markdown, _strip_scoring
+        md = tmp_path / "e.md"
+        md.write_text(_UNSCORED_MD, encoding="utf-8")
+        score_markdown(md, _PREDICTIONS, _RESULTS, {"Ann Red vs Bea Blue": (-3487, 2236)})
+        table = re.compile(r"\| Fight \|.*?\n\|[-|]+\|\n.*?(?=\n\n|\n---)", re.DOTALL)
+        stripped = _strip_scoring(md.read_text(encoding="utf-8"))
+        assert table.sub("", stripped) == table.sub("", _UNSCORED_MD)
+
+    def test_rescore_replaces_odds_and_summary(self, tmp_path):
+        from scripts.score_event import score_markdown
+        md = tmp_path / "e.md"
+        md.write_text(_UNSCORED_MD, encoding="utf-8")
+        score_markdown(md, _PREDICTIONS, _RESULTS, {"Ann Red vs Bea Blue": (-3487, 2236)})
+        assert score_markdown(md, _PREDICTIONS, _RESULTS, {}) == "already scored"
+
+        score_markdown(md, _PREDICTIONS, _RESULTS, {"Ann Red vs Bea Blue": (-198, 166)},
+                       rescore=True)
+        text = md.read_text(encoding="utf-8")
+        assert "-198 / +166" in text and "-3487" not in text
+        assert text.count("## Post-Event Summary") == 1
+        assert text.count("**Result:") == 1
+        assert text.count("| Scored:") == 1
 
 
 # ══════════════════════════════════════════════════════════════════════════════
