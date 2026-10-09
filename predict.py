@@ -160,6 +160,7 @@ def compute_live_career_stats(
     conn_v2: sqlite3.Connection,
     fighter_name: str,
     trajectory_window: int = TRAJECTORY_WINDOW,
+    before_date: str | None = None,
 ) -> dict | None:
     """
     Recompute career aggregate stats and trajectory slopes from raw per-fight
@@ -173,6 +174,11 @@ def compute_live_career_stats(
     Slope computation matches the training pipeline: polyfit is applied to the
     series of *running career averages* (avg_sig_str_pct, splm, avg_td_pct)
     over the last trajectory_window fights -- NOT per-fight accuracy.
+
+    Pass *before_date* ('YYYY-MM-DD') to get the pre-fight snapshot for a fight
+    on that date: only fights strictly before it count, and age is taken at
+    that date. Training features are built this way so they match live
+    inference by construction.
 
     Returns None if the fighter cannot be found in the UFCStats DB.
     """
@@ -199,10 +205,11 @@ def compute_live_career_stats(
         FROM fights f
         JOIN fight_stats p ON p.fight_id = f.fight_id AND p.fighter_id = ?
         JOIN fight_stats o ON o.fight_id = f.fight_id AND o.fighter_id != ?
+        WHERE (? IS NULL OR f.date < ?)
         ORDER BY f.date ASC, f.fight_id ASC
         """,
         conn_v2,
-        params=(fid, fid),
+        params=(fid, fid, before_date, before_date),
     )
     if df.empty:
         return None
@@ -349,7 +356,8 @@ def compute_live_career_stats(
     if phys_row and phys_row[2]:
         try:
             dob = date.fromisoformat(str(phys_row[2])[:10])
-            age = (date.today() - dob).days / 365.25
+            as_of = date.fromisoformat(before_date[:10]) if before_date else date.today()
+            age = (as_of - dob).days / 365.25
         except ValueError:
             age = 30.0
 

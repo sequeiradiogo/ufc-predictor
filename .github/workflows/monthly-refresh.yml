@@ -68,6 +68,7 @@ jobs:
         run: |
           python scripts/add_defensive_stats_to_csv.py
           python scripts/add_rankings_to_csv.py
+          python scripts/rebuild_career_stats.py
           python scripts/add_computed_features_to_csv.py
 
       - name: Rebuild mdabbert DB and v1 feature CSV
