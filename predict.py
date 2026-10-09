@@ -260,6 +260,20 @@ def compute_live_career_stats(
     # cumulative time THROUGH the most recent fight, not a sum of per-row values
     # (each row's fight_time_min is already a running total, see above).
     total_time = float(df["cum_fight_time"].iloc[-1])
+
+    # Integrity guard: career minutes from the cumulative total_fight_time must
+    # equal the sum of this fighter's own fight durations. A mismatch means the
+    # DB is stale (rolling.py not re-run) or fights lack a duration -- the state
+    # UFC 329 (2026-07-11) was predicted from, with live splm of 0.0 and 20.7.
+    summed_secs = df["own_fight_time"].sum(min_count=len(df))
+    if np.isnan(total_time) or np.isnan(summed_secs) or \
+            abs(summed_secs - total_time * 60) > max(60.0, 0.01 * summed_secs):
+        raise ValueError(
+            f"Career fight time for {fighter_name} is inconsistent "
+            f"(cumulative {total_time * 60:.0f}s vs per-fight sum {summed_secs:.0f}s) -- "
+            "run scripts/check_db_health.py and re-run db/rolling.py"
+        )
+
     avg_sig_str_pct = float(df["career_str_acc"].iloc[-1])
     avg_td_pct      = float(df["career_td_acc"].iloc[-1])
     splm            = float(df["career_splm"].iloc[-1])

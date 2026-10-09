@@ -113,9 +113,14 @@ _FIGHT_COLS     = (
     "fight_id", "event_id", "date", "division",
     "r_fighter_id", "b_fighter_id", "winner_id",
     "method", "title_fight", "odds_red", "odds_blue",
+    # Fight duration: rolling.py and predict.py derive fight time as
+    # match_time_sec + (finish_round - 1) * 300 -- without these every
+    # refreshed fight counts as 0 minutes (Jul-Sep 2026 were inserted so).
+    "finish_round", "match_time_sec",
+    "location", "country", "finish_details",
 )
 _STAT_COLS = (
-    "fight_id", "fighter_id", "corner",
+    "fight_id", "fighter_id", "date", "corner",
     "kd",
     "sig_str_landed",  "sig_str_atmpted",
     "total_str_landed","total_str_atmpted",
@@ -133,6 +138,15 @@ _STAT_COLS = (
 
 def _row(d: dict, cols: tuple) -> tuple:
     return tuple(d.get(c) for c in cols)
+
+
+def _mmss_to_secs(text: str | None) -> int | None:
+    """'3:42' -> 222 (time elapsed in the final round)."""
+    try:
+        mins, secs = str(text).split(":")
+        return int(mins) * 60 + int(secs)
+    except (ValueError, AttributeError):
+        return None
 
 
 def _placeholders(cols: tuple) -> str:
@@ -162,8 +176,18 @@ def _insert_new_data(data: dict, conn: sqlite3.Connection) -> set[str]:
             log.info("Migrated: added column %s to fights", col)
             fight_db_cols.add(col)
 
+    # The scraper reports the final-round clock as "m:ss" and the fight date
+    # only on the fight dict; the DB stores match_time_sec, and rolling.py
+    # also expects fight_stats.date to be set.
+    fight_dates = {}
+    for f in data["fights"]:
+        f.setdefault("match_time_sec", _mmss_to_secs(f.get("finish_round_time")))
+        fight_dates[f["fight_id"]] = f.get("date")
+    for s in data["fight_stats"]:
+        s.setdefault("date", fight_dates.get(s["fight_id"]))
+
     # Restrict each insert to columns that actually exist in the DB
-    fighter_cols = tuple(c for c in _FIGHTER_COLS if c in _db_cols(cur, "fighters"))
+    fighter_cols =tuple(c for c in _FIGHTER_COLS if c in _db_cols(cur, "fighters"))
     fight_cols   = tuple(c for c in _FIGHT_COLS   if c in fight_db_cols)
     stat_cols    = tuple(c for c in _STAT_COLS     if c in _db_cols(cur, "fight_stats"))
 

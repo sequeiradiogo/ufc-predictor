@@ -466,6 +466,14 @@ def build_csv_rows(data: dict, ufcstats_db_path: Path, mdabbert_db_path: Path) -
                 state.stance = bio.get("stance")
             if state.dob is None:
                 state.dob = bio.get("dob")
+        # Bios are only scraped for fighters new to the DB, so for everyone
+        # else dob has to come from the UFCStats fighters table -- without it
+        # age_at() returns None and R/B_age went NaN for ~80% of refreshed rows.
+        if state.dob is None:
+            row = ufcstats_conn.execute(
+                "SELECT dob FROM fighters WHERE fighter_id = ?", (fid,)
+            ).fetchone()
+            state.dob = row[0] if row and row[0] else None
         states[fid] = state
 
     conn.close()

@@ -50,6 +50,19 @@ jobs:
             python scripts/refresh_data.py --auto
           fi
 
+      # refresh_data.py only inserts raw per-fight rows; the pre-fight rolling
+      # columns (splm, sapm, head_acc, cumulative total_fight_time, ...) that
+      # the CSV enrichment and predict.py read come from rolling.py. Skipping
+      # it left every fight from Jul 2026 on with NULL rolling stats.
+      # refresh_data.py doesn't write fight_stats_rounds either; the round-1
+      # EWMA features read it. Only fights missing round rows are scraped.
+      - name: Rebuild rolling stats and round stats
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          python scripts/backfill_rounds.py
+          python -c "from db.rolling import main; from config import DB_UFCSTATS_PATH; main(db_path=DB_UFCSTATS_PATH)"
+          python scripts/check_db_health.py
+
       - name: Enrich v1 CSV
         if: ${{ inputs.dry_run != true }}
         run: |

@@ -379,12 +379,14 @@ CREATE TABLE fights (
     event_id TEXT, date TEXT, division TEXT,
     r_fighter_id TEXT, b_fighter_id TEXT, winner_id TEXT,
     method TEXT, title_fight INTEGER,
-    odds_red REAL, odds_blue REAL
+    odds_red REAL, odds_blue REAL,
+    finish_round INTEGER, match_time_sec INTEGER,
+    location TEXT, country TEXT, finish_details TEXT
 )
 """
 _STATS_DDL = """
 CREATE TABLE fight_stats (
-    fight_id TEXT, fighter_id TEXT,
+    fight_id TEXT, fighter_id TEXT, date TEXT,
     corner TEXT,
     kd INTEGER,
     sig_str_landed INTEGER, sig_str_atmpted INTEGER,
@@ -425,6 +427,7 @@ _SAMPLE_DATA = {
             "division": "lightweight", "r_fighter_id": "aaa", "b_fighter_id": "bbb",
             "winner_id": "aaa", "method": "KO/TKO", "title_fight": 0,
             "odds_red": -150, "odds_blue": 130,
+            "finish_round": 2, "finish_round_time": "2:30",
         }
     ],
     "fight_stats": [
@@ -489,6 +492,17 @@ class TestInsertNewData:
         _insert_new_data(_SAMPLE_DATA, temp_db)
         row = temp_db.execute("SELECT odds_red, odds_blue FROM fights WHERE fight_id='fff'").fetchone()
         assert row == (-150, 130)
+
+    def test_fight_duration_stored(self, temp_db):
+        # rolling.py/predict.py need match_time_sec + finish_round to get fight minutes
+        _insert_new_data(_SAMPLE_DATA, temp_db)
+        row = temp_db.execute("SELECT finish_round, match_time_sec FROM fights WHERE fight_id='fff'").fetchone()
+        assert row == (2, 150)
+
+    def test_fight_stats_date_stored(self, temp_db):
+        _insert_new_data(_SAMPLE_DATA, temp_db)
+        dates = {r[0] for r in temp_db.execute("SELECT date FROM fight_stats")}
+        assert dates == {"2026-05-30"}
 
     def test_empty_data_no_error(self, temp_db):
         affected = _insert_new_data({"fighters": [], "fights": [], "fight_stats": []}, temp_db)

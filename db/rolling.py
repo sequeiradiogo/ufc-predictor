@@ -61,11 +61,16 @@ def load_raw_data(conn: sqlite3.Connection) -> pd.DataFrame:
     """Load fight_stats joined with fight metadata."""
     query = """
         SELECT fs.*, f.winner_id, f.match_time_sec,
-               f.finish_round, f.r_fighter_id, f.b_fighter_id
+               f.finish_round, f.r_fighter_id, f.b_fighter_id,
+               f.date AS fight_date
         FROM fight_stats AS fs
         JOIN fights AS f ON fs.fight_id = f.fight_id
     """
-    df = pd.read_sql_query(query, conn, parse_dates=["date"])
+    df = pd.read_sql_query(query, conn)
+    # Order by fights.date, not fight_stats.date: rows inserted without a
+    # fight_stats.date sort last (NaT) and then by fight_id hash, which
+    # scrambled the chronology of fighters with several such rows.
+    df["date"] = pd.to_datetime(df.pop("fight_date"))
 
     # Only coerce columns that are actually present (UFCStats schema omits some
     # mdabbert-only columns like wins/losses and landed_*_per percentages).

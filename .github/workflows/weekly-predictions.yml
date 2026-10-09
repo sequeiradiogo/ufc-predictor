@@ -56,6 +56,11 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release upload data-artifacts-latest raw_data/rankings_history.csv --clobber
 
+      # predict.py silently computes garbage splm/sapm from a broken DB
+      # (UFC 329 shipped that way) -- refuse to predict instead.
+      - name: Check DB health
+        run: python scripts/check_db_health.py
+
       - name: Run event predictions
         run: python scripts/predict_event.py --model ensemble --skip-existing
 
