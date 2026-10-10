@@ -404,7 +404,11 @@ def _replay_fights_glicko_by_division(
 
     df = df.copy()
     df["date"] = pd.to_datetime(df["date"])
-    df = df.sort_values("date").reset_index(drop=True)
+    # Stable sort: callers assign the returned pre-fight lists back to their
+    # own (already date-ordered) frame by position. The default quicksort
+    # reordered same-date fights, so every fight on a card got another fight's
+    # Glicko values.
+    df = df.sort_values("date", kind="mergesort").reset_index(drop=True)
 
     # Assign each fight to a calendar quarter
     df["period"] = df["date"].dt.to_period("Q")
@@ -594,9 +598,16 @@ def build_glicko_features(conn: sqlite3.Connection | None = None) -> pd.DataFram
 
 def get_current_glicko_by_division(
     conn: sqlite3.Connection | None = None,
+    as_of: str | None = None,
 ) -> dict[tuple[str, str], tuple[float, float, float]]:
     """
-    Replay all fights and return each fighter's current Glicko-2 state.
+    Replay all fights and return each fighter's Glicko-2 state for a fight on
+    *as_of* (default today).
+
+    build_glicko_features() records a fight's pre-fight rating as the state at
+    the START of its calendar-quarter rating period. To match it, only periods
+    before as_of's quarter are replayed -- including the current partial
+    quarter would apply its updates and inactivity decay early.
 
     Returns
     -------
@@ -616,6 +627,8 @@ def get_current_glicko_by_division(
     if own_conn:
         conn.close()
 
+    cutoff_period = pd.Timestamp(as_of or pd.Timestamp.now().normalize()).to_period("Q")
+    df = df[pd.to_datetime(df["date"]).dt.to_period("Q") < cutoff_period]
     log.info("Computing current Glicko-2 ratings for %d fights...", len(df))
     current_ratings, _, _, _, _ = _replay_fights_glicko_by_division(df)
     log.info("Glicko-2 ratings computed for %d (fighter, division) pairs.", len(current_ratings))

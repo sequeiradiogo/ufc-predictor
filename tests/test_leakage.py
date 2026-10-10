@@ -35,18 +35,26 @@ def two_fight_db():
     """Fighter A: wins fight 1 (TD 1/2), loses fight 2 (TD 4/4)."""
     conn = sqlite3.connect(":memory:")
     conn.executescript("""
-        CREATE TABLE fighters (fighter_id TEXT, name TEXT, height REAL, reach REAL, dob TEXT);
+        CREATE TABLE fighters (fighter_id TEXT, name TEXT, height REAL, reach REAL, dob TEXT, stance TEXT);
         CREATE TABLE fights (fight_id TEXT, date TEXT, method TEXT, winner_id TEXT, title_fight INTEGER,
                              finish_round INTEGER, match_time_sec INTEGER);
         CREATE TABLE fight_stats (fight_id TEXT, fighter_id TEXT, sig_str_landed INTEGER, sig_str_atmpted INTEGER,
-                                  td_landed INTEGER, td_atmpted INTEGER, sub_att INTEGER, total_fight_time INTEGER);
-        INSERT INTO fighters VALUES ('a', 'Fighter A', 180, 185, '1990-01-01'), ('b', 'Fighter B', 180, 185, NULL),
-                                    ('c', 'Fighter C', 180, 185, NULL);
+                                  td_landed INTEGER, td_atmpted INTEGER, sub_att INTEGER, total_fight_time INTEGER,
+                                  head_landed INTEGER, head_atmpted INTEGER, body_landed INTEGER, body_atmpted INTEGER,
+                                  leg_landed INTEGER, leg_atmpted INTEGER, dist_landed INTEGER, dist_atmpted INTEGER,
+                                  ground_landed INTEGER, ground_atmpted INTEGER);
+        INSERT INTO fighters VALUES ('a', 'Fighter A', 180, 185, '1990-01-01', 'Southpaw'),
+                                    ('b', 'Fighter B', 180, 185, NULL, 'Orthodox'),
+                                    ('c', 'Fighter C', 180, 185, NULL, NULL);
         INSERT INTO fights VALUES ('f1', '2025-01-01', 'Decision - Unanimous', 'a', 0, 3, 300),
                                   ('f2', '2025-06-01', 'KO/TKO', 'c', 0, 1, 60);
         -- total_fight_time = cumulative seconds BEFORE the fight (rolling.py convention)
-        INSERT INTO fight_stats VALUES ('f1', 'a', 30, 60, 1, 2, 0, 0),   ('f1', 'b', 20, 50, 0, 1, 0, 0),
-                                       ('f2', 'a', 5, 10, 4, 4, 1, 900),  ('f2', 'c', 9, 12, 0, 0, 0, 0);
+        -- zone columns: head, body, leg, dist, ground (landed, attempted)
+        INSERT INTO fight_stats VALUES
+            ('f1', 'a', 30, 60, 1, 2, 0, 0,   20, 40, 5, 10, 5, 10, 25, 50, 0, 0),
+            ('f1', 'b', 20, 50, 0, 1, 0, 0,   10, 30, 5, 10, 5, 10, 15, 40, 5, 10),
+            ('f2', 'a', 5, 10, 4, 4, 1, 900,  5, 10, 0, 0, 0, 0, 0, 0, 5, 10),
+            ('f2', 'c', 9, 12, 0, 0, 0, 0,    9, 10, 0, 2, 0, 0, 9, 12, 0, 0);
     """)
     yield conn
     conn.close()
@@ -68,6 +76,20 @@ class TestBeforeDate:
         latest = compute_live_career_stats(two_fight_db, "Fighter A")
         after = compute_live_career_stats(two_fight_db, "Fighter A", before_date="2099-01-01")
         assert latest["wins"] == after["wins"] and latest["splm"] == pytest.approx(after["splm"])
+
+    def test_zone_stats_cover_every_prior_fight(self, two_fight_db):
+        # rolling.py formulas over fights before the cutoff, including the most
+        # recent one (reading the stored row for that fight lagged one fight)
+        s = compute_live_career_stats(two_fight_db, "Fighter A", before_date="2025-06-02")
+        assert s["head_acc"] == pytest.approx(25 / 50 * 100)
+        assert s["head_def"] == pytest.approx((40 - 19) / 40 * 100)   # opponents: 10/30 + 9/10
+        s = compute_live_career_stats(two_fight_db, "Fighter A", before_date="2025-06-01")
+        assert s["head_acc"] == pytest.approx(20 / 40 * 100)
+
+    def test_stance_returned(self, two_fight_db):
+        # build_feature_vector() reads it for southpaw_adv_diff; missing -> always 0
+        s = compute_live_career_stats(two_fight_db, "Fighter A")
+        assert s["stance"] == "Southpaw"
 
     def test_age_taken_at_cutoff(self, two_fight_db):
         s = compute_live_career_stats(two_fight_db, "Fighter A", before_date="2020-01-01")

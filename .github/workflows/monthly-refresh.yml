@@ -85,6 +85,13 @@ jobs:
           python ml/finish_type_model.py
           python ml/finish_type_model.py --prod
 
+      # Replays predict.py on the last events and compares every win-model
+      # feature with its training value -- fails (before anything is committed
+      # or uploaded) if live inference no longer builds what was trained on.
+      - name: Check live-inference feature parity
+        if: ${{ inputs.dry_run != true }}
+        run: python scripts/check_live_parity.py --events 4 --min-match 0.9
+
       - name: Commit updated artifacts
         if: ${{ inputs.dry_run != true }}
         run: |

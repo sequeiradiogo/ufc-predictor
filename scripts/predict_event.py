@@ -571,6 +571,8 @@ def main() -> None:
                 title_fight=fight["title_fight"],
                 db_path=DB_V1_PATH,
                 models_dir=_models_dir,
+                # Age / layoff / rankings as of fight night, like training
+                as_of=str(event["date"])[:10],
             )
             results.append(result)
         except SystemExit:

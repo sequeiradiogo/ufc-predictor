@@ -1,7 +1,7 @@
 """
 scripts/add_computed_features_to_csv.py
 
-Pre-compute ELO, Glicko-2, recent form, SOS, slope features, finish rates,
+Pre-compute ELO, Glicko-2, SOS,
 inactivity, and KO vulnerability for every fight and write them into ufc-master.csv.
 
 These are all deterministic per-fight values (no leakage -- each uses shift(1)
@@ -29,70 +29,60 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from config import DB_V1_PATH, DB_PATH, EWMA_SPAN, FINISH_METHOD_MAP, SOS_WINDOW, STARTING_ELO
+from config import DB_V1_PATH, DB_PATH, EWMA_SPAN, FINISH_METHOD_MAP, NAME_ALIASES, SOS_WINDOW, STARTING_ELO
 from ml.ELO_calculator import build_elo_features, build_glicko_features
-from ml.ML_data_preparation_v1 import compute_slope_features_v1, _compute_recent_form_v1
 
 KAGGLE_CSV = ROOT / "raw_data" / "ufc-master.csv"
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Finish-method rate features
+# mdabbert <-> UFCStats fight mapping (ratings are replayed over UFCStats fights)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def compute_finish_rates(conn: sqlite3.Connection) -> pd.DataFrame:
+def map_v1_to_ufcstats_fights(conn: sqlite3.Connection, ufc_conn: sqlite3.Connection) -> pd.DataFrame:
     """
-    For every (fight_id, fighter_id) pair compute three pre-fight cumulative rates:
-      - ko_rate  : fraction of career wins by KO/TKO  (0-1)
-      - sub_rate : fraction of career wins by Submission (0-1)
-      - dec_rate : fraction of career wins by Decision (0-1)
+    Map every mdabbert fight to its UFCStats fight by date + both fighters.
 
-    shift(1) ensures the current fight result is never included.
-    Fighters with zero wins before a fight have all rates set to 0.
+    ELO / Glicko / SOS are replayed over the UFCStats fight history -- the
+    same history predict.py replays at inference. Replaying the mdabbert DB
+    instead (2010+ only) started long-career fighters from a different rating
+    than live, so elo_diff / glicko / sos never matched inference.
+
+    Returns fight_id, r_fighter_id, b_fighter_id (mdabbert) with ufc_fight_id,
+    ufc_r, ufc_b (UFCStats) and `swapped` when the corners are reversed.
     """
-    df = pd.read_sql_query(
-        """
-        SELECT fight_id, date, r_fighter_id, b_fighter_id, winner_id, method
-        FROM fights
-        ORDER BY date ASC, fight_id ASC
-        """,
-        conn,
-    )
+    v1 = pd.read_sql_query(
+        """SELECT f.fight_id, f.date, f.r_fighter_id, f.b_fighter_id, r.name AS r_name, b.name AS b_name
+           FROM fights f JOIN fighters r ON r.fighter_id = f.r_fighter_id
+                         JOIN fighters b ON b.fighter_id = f.b_fighter_id""", conn)
+    us = pd.read_sql_query(
+        """SELECT f.fight_id AS ufc_fight_id, f.date, f.r_fighter_id AS ufc_r, f.b_fighter_id AS ufc_b,
+                  r.name AS ufc_r_name, b.name AS ufc_b_name
+           FROM fights f JOIN fighters r ON r.fighter_id = f.r_fighter_id
+                         JOIN fighters b ON b.fighter_id = f.b_fighter_id""", ufc_conn)
+    canonical = {n.lower().strip(): n for n in pd.concat([us["ufc_r_name"], us["ufc_b_name"]]).unique()}
 
-    long_rows = []
-    for _, row in df.iterrows():
-        method_cls = FINISH_METHOD_MAP.get(row["method"], -1)
-        for fighter_id, is_winner in [
-            (row["r_fighter_id"], row["winner_id"] == row["r_fighter_id"]),
-            (row["b_fighter_id"], row["winner_id"] == row["b_fighter_id"]),
-        ]:
-            long_rows.append({
-                "fight_id":   row["fight_id"],
-                "date":       row["date"],
-                "fighter_id": fighter_id,
-                "won":        int(is_winner),
-                "ko_win":     int(is_winner and method_cls == 1),
-                "sub_win":    int(is_winner and method_cls == 2),
-                "dec_win":    int(is_winner and method_cls == 0),
-            })
+    def _canon(name: str) -> str:
+        key = str(name).lower().strip()
+        return (NAME_ALIASES.get(key) or canonical.get(key) or key).lower()
 
-    long = pd.DataFrame(long_rows)
-    long["date"] = pd.to_datetime(long["date"])
-    long = long.sort_values(["fighter_id", "date", "fight_id"]).reset_index(drop=True)
+    for df, d, r, b in ((v1, "date", "r_name", "b_name"), (us, "date", "ufc_r_name", "ufc_b_name")):
+        df["_r"] = df[r].map(_canon)
+        df["_b"] = df[b].map(_canon)
+        df["_key"] = df[d].astype(str).str[:10] + "|" + np.where(df["_r"] < df["_b"], df["_r"] + "|" + df["_b"], df["_b"] + "|" + df["_r"])
+    us = us.drop_duplicates("_key", keep=False)
+    m = v1.merge(us[["_key", "_r", "ufc_fight_id", "ufc_r", "ufc_b"]], on="_key", suffixes=("", "_us"))
+    m["swapped"] = m["_r"] != m["_r_us"]
+    print(f"    mapped {len(m)}/{len(v1)} mdabbert fights to UFCStats ({int(m['swapped'].sum())} with corners reversed)")
+    return m[["fight_id", "r_fighter_id", "b_fighter_id", "ufc_fight_id", "ufc_r", "ufc_b", "swapped"]]
 
-    grp = long.groupby("fighter_id", sort=False)
-    for col in ("won", "ko_win", "sub_win", "dec_win"):
-        long[f"cum_{col}"] = grp[col].transform(lambda s: s.shift(1).cumsum().fillna(0))
 
-    wins = long["cum_won"]
-    long["ko_rate"]  = long["cum_ko_win"]  / wins.clip(lower=1)
-    long["sub_rate"] = long["cum_sub_win"] / wins.clip(lower=1)
-    long["dec_rate"] = long["cum_dec_win"] / wins.clip(lower=1)
-    no_wins_mask = wins == 0
-    for col in ("ko_rate", "sub_rate", "dec_rate"):
-        long.loc[no_wins_mask, col] = 0.0
-
-    return long[["fight_id", "fighter_id", "ko_rate", "sub_rate", "dec_rate"]]
+def _to_v1(fight_map: pd.DataFrame, ufc_df: pd.DataFrame, pairs: list[tuple[str, str]]) -> pd.DataFrame:
+    """Re-key a per-fight UFCStats frame (red/blue column pairs) to mdabbert fight ids."""
+    m = fight_map.merge(ufc_df.rename(columns={"fight_id": "ufc_fight_id"}), on="ufc_fight_id")
+    for red, blue in pairs:
+        m[red], m[blue] = np.where(m["swapped"], m[blue], m[red]), np.where(m["swapped"], m[red], m[blue])
+    return m[["fight_id"] + [c for pair in pairs for c in pair]]
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -243,6 +233,7 @@ def compute_ko_vulnerability(conn: sqlite3.Connection) -> pd.DataFrame:
 
     return long[["fight_id", "fighter_id", "ko_vuln", "kd_received"]]
 
+
 # Maps (wide column) -> CSV column name
 _FIGHT_COLS = {
     "elo_red":    "R_elo",
@@ -252,23 +243,6 @@ _FIGHT_COLS = {
     "glicko_rd_red":  "R_glicko_rd",
     "glicko_rd_blue": "B_glicko_rd",
 }
-
-# Per-fighter features: (db_col, red_csv_col, blue_csv_col)
-_PER_FIGHTER_COLS = [
-    ("recent_win_rate",    "R_recent_win_rate",    "B_recent_win_rate"),
-    ("recent_finish_rate", "R_recent_finish_rate", "B_recent_finish_rate"),
-    ("sos",                "R_sos",                "B_sos"),
-    ("str_acc_slope",      "R_str_acc_slope",      "B_str_acc_slope"),
-    ("splm_slope",         "R_splm_slope",         "B_splm_slope"),
-    ("td_acc_slope",       "R_td_acc_slope",       "B_td_acc_slope"),
-    ("ko_rate",            "R_ko_rate",            "B_ko_rate"),
-    ("sub_rate",           "R_sub_rate",           "B_sub_rate"),
-    ("dec_rate",           "R_dec_rate",           "B_dec_rate"),
-    ("days_since_last",    "R_days_since_last",     "B_days_since_last"),
-    ("ko_vuln",            "R_ko_vuln",            "B_ko_vuln"),
-    ("kd_received",        "R_kd_received",        "B_kd_received"),
-]
-
 
 def _fight_id(r_name: str, b_name: str, date: str) -> str:
     key = f"{r_name.lower().strip()}|{b_name.lower().strip()}|{date}"
@@ -312,28 +286,31 @@ def main(dry_run: bool = False) -> None:
     )
     fights_meta["date"] = pd.to_datetime(fights_meta["date"])
 
-    # ── ELO ───────────────────────────────────────────────────────────────────
+    # ── ELO / Glicko-2 / SOS: replayed over the UFCStats history, like inference
+    ufc_conn = sqlite3.connect(str(DB_PATH))
+    print("  Mapping mdabbert fights to UFCStats ...")
+    fight_map = map_v1_to_ufcstats_fights(conn, ufc_conn)
+
     print("  ELO ...")
-    elo_df = build_elo_features(conn)
+    elo_ufc = build_elo_features(ufc_conn)
+    elo_df = _to_v1(fight_map, elo_ufc, [("elo_red", "elo_blue")])
 
-    # ── Glicko-2 ──────────────────────────────────────────────────────────────
     print("  Glicko-2 ...")
-    glicko_df = build_glicko_features(conn)
+    glicko_df = _to_v1(fight_map, build_glicko_features(ufc_conn),
+                       [("glicko_red", "glicko_blue"), ("glicko_rd_red", "glicko_rd_blue")])
 
-    # ── SOS (needs ELO) ───────────────────────────────────────────────────────
     print("  SOS ...")
-    elo_for_sos = fights_meta.merge(elo_df, on="fight_id", how="left")
-    sos_df = compute_sos_features(
-        elo_for_sos[["fight_id", "date", "r_fighter_id", "b_fighter_id", "elo_red", "elo_blue"]]
-    )
-
-    # ── Recent form ───────────────────────────────────────────────────────────
-    print("  Recent form ...")
-    form_df = _compute_recent_form_v1(conn)
-
-    # ── Finish rates ──────────────────────────────────────────────────────────
-    print("  Finish rates ...")
-    fin_df = compute_finish_rates(conn)
+    ufc_meta = pd.read_sql_query("SELECT fight_id, date, r_fighter_id, b_fighter_id FROM fights", ufc_conn)
+    sos_ufc = compute_sos_features(ufc_meta.merge(elo_ufc, on="fight_id"))
+    # per-fighter rows: map (ufc fight, ufc fighter) -> (mdabbert fight, mdabbert fighter)
+    corner = pd.concat([
+        fight_map.assign(ufc_fid=np.where(fight_map["swapped"], fight_map["ufc_b"], fight_map["ufc_r"]),
+                         v1_fid=fight_map["r_fighter_id"]),
+        fight_map.assign(ufc_fid=np.where(fight_map["swapped"], fight_map["ufc_r"], fight_map["ufc_b"]),
+                         v1_fid=fight_map["b_fighter_id"]),
+    ])
+    sos_df = corner.merge(sos_ufc.rename(columns={"fight_id": "ufc_fight_id", "fighter_id": "ufc_fid"}),
+                          on=["ufc_fight_id", "ufc_fid"])[["fight_id", "v1_fid", "sos"]]                    .rename(columns={"v1_fid": "fighter_id"})
 
     # ── Inactivity ────────────────────────────────────────────────────────────
     print("  Inactivity ...")
@@ -341,7 +318,6 @@ def main(dry_run: bool = False) -> None:
 
     # ── KO vulnerability + kd received (needs UFCStats DB for per-fight kd) ───
     print("  KO vulnerability ...")
-    ufc_conn = sqlite3.connect(str(DB_PATH))
     kovuln_raw = compute_ko_vulnerability(ufc_conn)
 
     # Map UFCStats (fight_id, fighter_id) -> mdabbert (fight_id, fighter_id)
@@ -668,9 +644,11 @@ def main(dry_run: bool = False) -> None:
     else:
         r1_df = None
 
-    # ── Slope features ────────────────────────────────────────────────────────
-    print("  Slope features ...")
-    slope_df = compute_slope_features_v1(conn)
+    # Recent form, finish rates and trajectory slopes are written by
+    # scripts/rebuild_career_stats.py from predict.compute_live_career_stats --
+    # computing them here read ufc_v2.db, which is only rebuilt from this CSV
+    # *after* this script, so they always lagged one pipeline run (and used a
+    # window one fight behind the live one).
 
     conn.close()
 
@@ -681,15 +659,7 @@ def main(dry_run: bool = False) -> None:
     wide = wide.merge(glicko_df, on="fight_id", how="left")
 
     per_fighter_data = [
-        (form_df,      "recent_win_rate",    "R_recent_win_rate",    "B_recent_win_rate"),
-        (form_df,      "recent_finish_rate", "R_recent_finish_rate", "B_recent_finish_rate"),
         (sos_df,       "sos",                "R_sos",                "B_sos"),
-        (slope_df,     "str_acc_slope",      "R_str_acc_slope",      "B_str_acc_slope"),
-        (slope_df,     "splm_slope",         "R_splm_slope",         "B_splm_slope"),
-        (slope_df,     "td_acc_slope",       "R_td_acc_slope",       "B_td_acc_slope"),
-        (fin_df,       "ko_rate",            "R_ko_rate",            "B_ko_rate"),
-        (fin_df,       "sub_rate",           "R_sub_rate",           "B_sub_rate"),
-        (fin_df,       "dec_rate",           "R_dec_rate",           "B_dec_rate"),
         (inact_df,     "days_since_last",    "R_days_since_last",    "B_days_since_last"),
         (kovuln_df,    "ko_vuln",            "R_ko_vuln",            "B_ko_vuln"),
         (kovuln_df,    "kd_received",        "R_kd_received",        "B_kd_received"),
@@ -772,9 +742,11 @@ def main(dry_run: bool = False) -> None:
     df["both_southpaw"]     = (red_sp & blue_sp).astype(int)
 
     _UNRANKED = 16.0
-    r_rank = pd.to_numeric(df["R_match_weightclass_rank"], errors="coerce").fillna(0)
-    b_rank = pd.to_numeric(df["B_match_weightclass_rank"], errors="coerce").fillna(0)
-    df["weightclass_rank_diff"] = (r_rank.where(r_rank > 0, _UNRANKED) - b_rank.where(b_rank > 0, _UNRANKED))
+    # Rank 0 is the champion -- only a missing rank means unranked. (This used
+    # to map 0 to unranked too, so every champion trained as an unranked fighter.)
+    r_rank = pd.to_numeric(df["R_match_weightclass_rank"], errors="coerce").fillna(_UNRANKED)
+    b_rank = pd.to_numeric(df["B_match_weightclass_rank"], errors="coerce").fillna(_UNRANKED)
+    df["weightclass_rank_diff"] = r_rank - b_rank
 
     from config import DIVISIONS
     div_lower = df["weight_class"].str.lower().str.strip().fillna("")

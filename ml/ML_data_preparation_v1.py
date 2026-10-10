@@ -39,7 +39,9 @@ from config import (
     CSV_V1_WITH_ELO,
     DB_PATH,
     DB_V1_PATH,
+    DIV_REACH_STD,
     DIV_REACH_STD_FALLBACK,
+    DIV_SPLM_STD,
     DIV_SPLM_STD_FALLBACK,
     DIVISIONS,
     FINISH_METHOD_MAP,
@@ -47,12 +49,10 @@ from config import (
     MIN_FIGHT_DATE,
     NAME_ALIASES,
     RANDOM_STATE,
-    RECENT_FORM_WINDOW,
     SAMPLE_WEIGHT_ALPHA,
     STARTING_ELO,
     TARGET_COL,
     TRAIN_TEST_SPLIT,
-    TRAJECTORY_WINDOW,
 )
 from utils.logger import get_logger
 
@@ -83,107 +83,6 @@ def compute_sample_weights(dates: pd.Series) -> np.ndarray | None:
     max_year = float(years.max())
     delta = max_year - years
     return np.exp(-SAMPLE_WEIGHT_ALPHA * (delta ** SAMPLE_WEIGHT_BETA)).values
-
-
-# ── Recent form ───────────────────────────────────────────────────────────────
-
-def _compute_recent_form_v1(
-    conn: sqlite3.Connection,
-    window: int = RECENT_FORM_WINDOW,
-) -> pd.DataFrame:
-    """
-    Compute pre-fight recent win rate and finish rate per (fight_id, fighter_id).
-
-    Uses the same fights table as v2 -- leakage-free via shift(1) approach.
-    """
-    log.info("Computing recent form (window=%d)...", window)
-
-    df = pd.read_sql_query(
-        """
-        SELECT fight_id, date, r_fighter_id, b_fighter_id, winner_id, method
-        FROM fights
-        ORDER BY date ASC, fight_id ASC
-        """,
-        conn,
-    )
-
-    finish_methods = {m for m, cls in FINISH_METHOD_MAP.items() if cls > 0}
-
-    long_rows = []
-    for _, row in df.iterrows():
-        for fid, is_win in [
-            (row["r_fighter_id"], row["winner_id"] == row["r_fighter_id"]),
-            (row["b_fighter_id"], row["winner_id"] == row["b_fighter_id"]),
-        ]:
-            long_rows.append({
-                "fight_id":   row["fight_id"],
-                "date":       row["date"],
-                "fighter_id": fid,
-                "won":        int(is_win),
-                "finished":   int(row["method"] in finish_methods),
-            })
-
-    long = pd.DataFrame(long_rows)
-    long["date"] = pd.to_datetime(long["date"])
-    long = long.sort_values(["fighter_id", "date", "fight_id"]).reset_index(drop=True)
-
-    grp = long.groupby("fighter_id", sort=False)
-    long["recent_win_rate"] = grp["won"].transform(
-        lambda s: s.shift(1).rolling(window, min_periods=1).mean()
-    ).fillna(0)
-    long["recent_finish_rate"] = grp["finished"].transform(
-        lambda s: s.shift(1).rolling(window, min_periods=1).mean()
-    ).fillna(0)
-
-    return long[["fight_id", "fighter_id", "recent_win_rate", "recent_finish_rate"]]
-
-
-# ── Slope features (PR 46 equivalent for v1) ─────────────────────────────────
-
-def _rolling_slope(arr: np.ndarray) -> float:
-    """Linear slope (via np.polyfit) of the values in arr. Used as a rolling apply fn."""
-    if len(arr) < 2:
-        return 0.0
-    x = np.arange(len(arr), dtype=float)
-    return float(np.polyfit(x, arr, 1)[0])
-
-
-def compute_slope_features_v1(
-    conn: sqlite3.Connection, window: int = TRAJECTORY_WINDOW
-) -> pd.DataFrame:
-    """
-    For every (fight_id, fighter_id) pair compute the linear slope of the
-    fighter's career-average striking accuracy, TD accuracy, and SPLM over
-    the last `window` fights.
-
-    v1 fight_stats stores career averages as pre-fight snapshots, so these
-    are already leakage-free. shift(1) ensures the current fight's snapshot
-    is not included in the window used to compute the slope going INTO it.
-
-    Fighters with fewer than 2 prior fights get slope=0.
-    """
-    log.info("Computing slope features (window=%d)...", window)
-
-    fs = pd.read_sql_query("SELECT fight_id, fighter_id, avg_sig_str_pct, splm, avg_td_pct FROM fight_stats", conn)
-    dates = pd.read_sql_query("SELECT fight_id, date FROM fights ORDER BY date ASC, fight_id ASC", conn)
-    fs = fs.merge(dates, on="fight_id", how="left")
-    fs["date"] = pd.to_datetime(fs["date"])
-    for col in ("avg_sig_str_pct", "splm", "avg_td_pct"):
-        fs[col] = pd.to_numeric(fs[col], errors="coerce").fillna(0)
-
-    fs = fs.sort_values(["fighter_id", "date", "fight_id"]).reset_index(drop=True)
-    grp = fs.groupby("fighter_id", sort=False)
-
-    for metric, col in [
-        ("str_acc_slope", "avg_sig_str_pct"),
-        ("splm_slope",    "splm"),
-        ("td_acc_slope",  "avg_td_pct"),
-    ]:
-        fs[metric] = grp[col].transform(
-            lambda s: s.shift(1).rolling(window, min_periods=2).apply(_rolling_slope, raw=True)
-        ).fillna(0)
-
-    return fs[["fight_id", "fighter_id", "str_acc_slope", "splm_slope", "td_acc_slope"]]
 
 
 # ── v2 defensive metrics enrichment ──────────────────────────────────────────
@@ -409,14 +308,12 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
     # A reach/output advantage matters more in lower weight classes where the
     # distribution is compressed.  Per-division std normalisation makes a single
     # coefficient work across all divisions.
+    # The per-division stds are fixed constants shared with predict.py --
+    # recomputing them from the data on every build made live values drift.
     r_reach_num = pd.to_numeric(wide.get("r_reach"), errors="coerce").fillna(0)
     b_reach_num = pd.to_numeric(wide.get("b_reach"), errors="coerce").fillna(0)
-    _both_reach = pd.concat([
-        wide[["division"]].assign(v=r_reach_num.where(r_reach_num > 0)),
-        wide[["division"]].assign(v=b_reach_num.where(b_reach_num > 0)),
-    ])
-    div_reach_std_map = _both_reach.groupby("division")["v"].std().fillna(DIV_REACH_STD_FALLBACK)
-    per_row_reach_std = wide["division"].map(div_reach_std_map).fillna(DIV_REACH_STD_FALLBACK).clip(lower=1.0)
+    div_key = wide["division"].astype(str).str.lower().str.strip()
+    per_row_reach_std = div_key.map(DIV_REACH_STD).fillna(DIV_REACH_STD_FALLBACK).clip(lower=1.0)
     ml["reach_div_norm_diff"] = (ml["reach_diff"] / per_row_reach_std.values).fillna(0)
 
     # Reach ratio: relative advantage vs raw gap; 0 when either reach is unknown
@@ -430,12 +327,7 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
 
     r_splm_num = pd.to_numeric(wide.get("r_splm"), errors="coerce").fillna(0)
     b_splm_num = pd.to_numeric(wide.get("b_splm"), errors="coerce").fillna(0)
-    _both_splm = pd.concat([
-        wide[["division"]].assign(v=r_splm_num.where(r_splm_num > 0)),
-        wide[["division"]].assign(v=b_splm_num.where(b_splm_num > 0)),
-    ])
-    div_splm_std_map = _both_splm.groupby("division")["v"].std().fillna(DIV_SPLM_STD_FALLBACK)
-    per_row_splm_std = wide["division"].map(div_splm_std_map).fillna(DIV_SPLM_STD_FALLBACK).clip(lower=0.1)
+    per_row_splm_std = div_key.map(DIV_SPLM_STD).fillna(DIV_SPLM_STD_FALLBACK).clip(lower=0.1)
     ml["splm_div_norm_diff"] = ((r_splm_num - b_splm_num) / per_row_splm_std.values).fillna(0)
 
     # ── Item 6: TD offense vs TD defense matchup ──────────────────────────────

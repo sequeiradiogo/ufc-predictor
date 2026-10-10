@@ -60,7 +60,7 @@ from config import (
     TRAJECTORY_WINDOW,
     NAME_ALIASES,
 )
-from ml.ELO_calculator import get_current_glicko_by_division
+from ml.ELO_calculator import build_elo_features, get_current_glicko_by_division, get_current_ratings
 from utils.odds import print_value_bet_summary
 from utils.logger import get_logger
 
@@ -113,37 +113,8 @@ def _get_v2_defensive_stats(conn_v2: sqlite3.Connection, fighter_name: str) -> d
     return {k: float(v or 0) for k, v in zip(keys, stats)}
 
 
-_ZONE_STAT_ZEROS = {
-    "head_acc": 0.0, "body_acc": 0.0, "leg_acc": 0.0, "dist_acc": 0.0,
-    "head_def": 0.0, "body_def": 0.0, "dist_def": 0.0, "ground_def": 0.0,
-}
-
-
-def _get_strike_zone_accs(conn_v2: sqlite3.Connection, fighter_id: str) -> dict:
-    """
-    Return most recent rolling zone accuracy (head/body/leg/dist) and zone
-    defense (head/body/dist/ground) from UFCStats fight_stats. Both are
-    pre-fight rolling snapshots written by rolling.py -- same pattern as
-    sapm/str_def/td_def.
-    """
-    row = conn_v2.execute(
-        """
-        SELECT CAST(fs.head_acc   AS REAL), CAST(fs.body_acc   AS REAL),
-               CAST(fs.leg_acc    AS REAL), CAST(fs.dist_acc   AS REAL),
-               CAST(fs.head_def   AS REAL), CAST(fs.body_def   AS REAL),
-               CAST(fs.dist_def   AS REAL), CAST(fs.ground_def AS REAL)
-        FROM fight_stats fs
-        JOIN fights f ON fs.fight_id = f.fight_id
-        WHERE fs.fighter_id = ?
-        ORDER BY f.date DESC, f.fight_id DESC
-        LIMIT 1
-        """,
-        (fighter_id,),
-    ).fetchone()
-    if not row:
-        return dict(_ZONE_STAT_ZEROS)
-    keys = ["head_acc", "body_acc", "leg_acc", "dist_acc", "head_def", "body_def", "dist_def", "ground_def"]
-    return {k: float(v or 0) for k, v in zip(keys, row)}
+# Zone accuracy / defence keys returned by compute_live_career_stats()
+_ZONE_KEYS = ("head_acc", "body_acc", "leg_acc", "dist_acc", "head_def", "body_def", "dist_def", "ground_def")
 
 
 # ── Live career stat refresh from UFCStats DB ─────────────────────────────────
@@ -201,7 +172,15 @@ def compute_live_career_stats(
                CAST(o.sig_str_landed  AS REAL)   AS o_sig_landed,
                CAST(o.sig_str_atmpted AS REAL)   AS o_sig_atmpted,
                CAST(o.td_landed       AS REAL)   AS o_td_landed,
-               CAST(o.td_atmpted      AS REAL)   AS o_td_atmpted
+               CAST(o.td_atmpted      AS REAL)   AS o_td_atmpted,
+               CAST(p.head_landed AS REAL) AS p_head_landed, CAST(p.head_atmpted AS REAL) AS p_head_atmpted,
+               CAST(p.body_landed AS REAL) AS p_body_landed, CAST(p.body_atmpted AS REAL) AS p_body_atmpted,
+               CAST(p.leg_landed  AS REAL) AS p_leg_landed,  CAST(p.leg_atmpted  AS REAL) AS p_leg_atmpted,
+               CAST(p.dist_landed AS REAL) AS p_dist_landed, CAST(p.dist_atmpted AS REAL) AS p_dist_atmpted,
+               CAST(o.head_landed AS REAL) AS o_head_landed, CAST(o.head_atmpted AS REAL) AS o_head_atmpted,
+               CAST(o.body_landed AS REAL) AS o_body_landed, CAST(o.body_atmpted AS REAL) AS o_body_atmpted,
+               CAST(o.dist_landed AS REAL) AS o_dist_landed, CAST(o.dist_atmpted AS REAL) AS o_dist_atmpted,
+               CAST(o.ground_landed AS REAL) AS o_ground_landed, CAST(o.ground_atmpted AS REAL) AS o_ground_atmpted
         FROM fights f
         JOIN fight_stats p ON p.fight_id = f.fight_id AND p.fighter_id = ?
         JOIN fight_stats o ON o.fight_id = f.fight_id AND o.fighter_id != ?
@@ -299,6 +278,21 @@ def compute_live_career_stats(
         if not valid_o_td.empty else 0.0
     )
 
+    # Zone accuracy / defence over every fight to date -- the formulas rolling.py
+    # uses for the training columns (cumulative landed / attempted x 100). The
+    # stored fight_stats row for the latest fight is the snapshot *before* it,
+    # so reading that (as this used to) lagged one fight behind training.
+    def _pct(num: str, den: str, invert: bool = False) -> float:
+        n = pd.to_numeric(df[num], errors="coerce").sum()
+        d = pd.to_numeric(df[den], errors="coerce").sum()
+        if d <= 0:
+            return 0.0
+        return float((d - n) / d * 100.0) if invert else float(n / d * 100.0)
+
+    zone = {f"{z}_acc": _pct(f"p_{z}_landed", f"p_{z}_atmpted") for z in ("head", "body", "leg", "dist")}
+    zone.update({f"{z}_def": _pct(f"o_{z}_landed", f"o_{z}_atmpted", invert=True)
+                 for z in ("head", "body", "dist", "ground")})
+
     # Win/loss counts and methods — exclude No Contest fights (winner_id IS NULL)
     df_decided = df[df["winner_id"].notna()].copy()
     wins   = int((df_decided["won"] == 1).sum())
@@ -345,10 +339,13 @@ def compute_live_career_stats(
     # (build_feature_vector falls back to red_stats.get(...), which was never
     # populated).
     phys_row = conn_v2.execute(
-        "SELECT height, reach, dob FROM fighters WHERE fighter_id = ?", (fid,)
+        "SELECT height, reach, dob, stance FROM fighters WHERE fighter_id = ?", (fid,)
     ).fetchone()
     height = float(phys_row[0]) if phys_row and phys_row[0] is not None else 0.0
     reach  = float(phys_row[1]) if phys_row and phys_row[1] is not None else 0.0
+    # build_feature_vector() reads stance for southpaw_adv_diff / both_southpaw;
+    # without it every fighter defaulted to Orthodox and both were always 0.
+    stance = (phys_row[3] or "Orthodox").strip() if phys_row else "Orthodox"
     # 30.0 fallback matches training's fillna(30.0) for unknown DOB
     # (ML_data_preparation_v1.py) -- keeps age_ratio_diff at 0 for unknowns
     # instead of distorting it with an artificial extreme age.
@@ -364,6 +361,7 @@ def compute_live_career_stats(
     return {
         "height":               height,
         "reach":                reach,
+        "stance":               stance,
         "age":                  age,
         "wins":                 wins,
         "losses":               losses,
@@ -387,6 +385,7 @@ def compute_live_career_stats(
         "sapm":                 sapm,
         "str_def":              str_def,
         "td_def":               td_def,
+        **zone,
     }
 
 
@@ -395,9 +394,11 @@ def compute_live_career_stats(
 _RANKINGS_CSV = ROOT_DIR / "raw_data" / "rankings_history.csv"
 _rankings_cache: pd.DataFrame | None = None
 
-def _get_current_rank(fighter_name: str, division: str | None) -> float:
+def _get_current_rank(fighter_name: str, division: str | None, as_of: str | None = None) -> float:
     """
-    Return the most recent UFC ranking for a fighter in the given division.
+    Return the most recent UFC ranking for a fighter in the given division,
+    from snapshots dated <= *as_of* (default: all) -- the same rule as
+    scripts/add_rankings_to_csv.py at training time.
     Returns 16.0 (unranked encoding) if not found.
     """
     global _rankings_cache
@@ -407,18 +408,25 @@ def _get_current_rank(fighter_name: str, division: str | None) -> float:
     if _rankings_cache is None:
         _rankings_cache = pd.read_csv(_RANKINGS_CSV)
     rh = _rankings_cache
-    name_lower = fighter_name.lower()
-    rh_lower = rh["fighter"].str.lower()
-    mask = rh_lower == name_lower
+    rh = rh[~rh["weightclass"].str.contains("Pound-for-Pound", case=False, na=False)]
+    key = fighter_name.lower().strip()
+    name_lower = NAME_ALIASES.get(key, key).lower()
+    mask = rh["fighter"].str.lower().str.strip() == name_lower
     if not mask.any():
         return _UNRANKED
     matches = rh[mask].copy()
-    # Filter by division weightclass if provided
+    if as_of:
+        matches = matches[matches["date"].astype(str).str[:10] <= as_of[:10]]
+        if matches.empty:
+            return _UNRANKED
+    # Ranked in the fight's own division only, exactly like training
+    # (add_rankings_to_csv.py): a fighter ranked elsewhere -- or any catch-weight
+    # bout -- is unranked here. This used to fall back to another division.
     if division:
-        div_norm = division.lower().replace("-", " ")
-        div_mask = matches["weightclass"].str.lower().str.replace("-", " ").str.contains(div_norm)
-        if div_mask.any():
-            matches = matches[div_mask]
+        div_norm = division.lower().strip()
+        matches = matches[matches["weightclass"].str.lower().str.strip() == div_norm]
+        if matches.empty:
+            return _UNRANKED
     # Most recent row
     matches = matches.sort_values("date", ascending=False)
     rank = matches.iloc[0]["rank"]
@@ -509,32 +517,10 @@ def _expected_score(rating_a: float, rating_b: float) -> float:
 def compute_current_elo(conn: sqlite3.Connection) -> dict[str, float]:
     """
     Replay every fight in chronological order and return each fighter's ELO
-    rating *after* their most recent bout.
+    rating *after* their most recent bout -- ELO_calculator's global replay,
+    the same one add_computed_features_to_csv.py trains on.
     """
-    df = pd.read_sql_query(
-        "SELECT r_fighter_id, b_fighter_id, winner_id FROM fights ORDER BY date ASC",
-        conn,
-    )
-    ratings: dict[str, float] = {}
-    counts:  dict[str, int]   = {}
-
-    for _, row in df.iterrows():
-        r_id, b_id, winner = row["r_fighter_id"], row["b_fighter_id"], row["winner_id"]
-
-        r_elo = ratings.get(r_id, STARTING_ELO)
-        b_elo = ratings.get(b_id, STARTING_ELO)
-        k_r   = K_FACTOR_PROVISIONAL if counts.get(r_id, 0) < PROVISIONAL_LIMIT else K_FACTOR_NORMAL
-        k_b   = K_FACTOR_PROVISIONAL if counts.get(b_id, 0) < PROVISIONAL_LIMIT else K_FACTOR_NORMAL
-
-        exp_r   = _expected_score(r_elo, b_elo)
-        score_r = 1.0 if winner == r_id else (0.0 if winner == b_id else 0.5)
-
-        ratings[r_id] = r_elo + k_r * (score_r - exp_r)
-        ratings[b_id] = b_elo + k_b * ((1 - score_r) - (1 - exp_r))
-        counts[r_id]  = counts.get(r_id, 0) + 1
-        counts[b_id]  = counts.get(b_id, 0) + 1
-
-    return ratings
+    return get_current_ratings(conn)
 
 
 # ── Recent Form ───────────────────────────────────────────────────────────────
@@ -549,9 +535,11 @@ def compute_recent_form(
     conn: sqlite3.Connection,
     fighter_id: str,
     window: int = RECENT_FORM_WINDOW,
+    before_date: str | None = None,
 ) -> dict[str, float]:
     """
-    Compute recent form stats for a single fighter from their full fight history.
+    Compute recent form stats for a single fighter from their fight history
+    (fights before *before_date* only, when given -- see compute_live_career_stats).
     Returns: {recent_win_rate, recent_finish_rate, win_streak}
     """
     df = pd.read_sql_query(
@@ -559,11 +547,11 @@ def compute_recent_form(
         SELECT f.date, f.winner_id, f.method,
                f.r_fighter_id, f.b_fighter_id
         FROM fights f
-        WHERE f.r_fighter_id = ? OR f.b_fighter_id = ?
+        WHERE (f.r_fighter_id = ? OR f.b_fighter_id = ?) AND (? IS NULL OR f.date < ?)
         ORDER BY f.date ASC, f.fight_id ASC
         """,
         conn,
-        params=(fighter_id, fighter_id),
+        params=(fighter_id, fighter_id, before_date, before_date),
     )
 
     if df.empty:
@@ -619,17 +607,17 @@ def get_fighter_bio(conn: sqlite3.Connection, fighter_id: str) -> dict[str, obje
 
 
 def compute_finish_rates_single(
-    conn: sqlite3.Connection, fighter_id: str
+    conn: sqlite3.Connection, fighter_id: str, before_date: str | None = None
 ) -> dict[str, float]:
-    """Return career KO/sub/dec win rates for a fighter (all prior fights)."""
+    """Return career KO/sub/dec win rates for a fighter (fights before *before_date*, default all)."""
     df = pd.read_sql_query(
         """
         SELECT winner_id, method FROM fights
-        WHERE r_fighter_id = ? OR b_fighter_id = ?
+        WHERE (r_fighter_id = ? OR b_fighter_id = ?) AND (? IS NULL OR date < ?)
         ORDER BY date ASC, fight_id ASC
         """,
         conn,
-        params=(fighter_id, fighter_id),
+        params=(fighter_id, fighter_id, before_date, before_date),
     )
     if df.empty:
         return {"ko_rate": 0.0, "sub_rate": 0.0, "dec_rate": 0.0}
@@ -655,24 +643,26 @@ def compute_finish_rates_single(
 
 
 def compute_inactivity_single(
-    conn: sqlite3.Connection, fighter_id: str
+    conn: sqlite3.Connection, fighter_id: str, as_of: str | None = None
 ) -> dict[str, float]:
-    """Return days since the fighter's most recent fight relative to today."""
+    """Return days since the fighter's most recent fight before *as_of* (default today)."""
     df = pd.read_sql_query(
         """
         SELECT date FROM fights
-        WHERE r_fighter_id = ? OR b_fighter_id = ?
+        WHERE (r_fighter_id = ? OR b_fighter_id = ?) AND (? IS NULL OR date < ?)
         ORDER BY date DESC
         LIMIT 1
         """,
         conn,
-        params=(fighter_id, fighter_id),
+        params=(fighter_id, fighter_id, as_of, as_of),
     )
     if df.empty:
         return {"days_since_last": 365.0}
 
     last_fight = pd.to_datetime(df.iloc[0]["date"])
-    today = pd.Timestamp.now().normalize()
+    # Training measures the layoff up to the fight date; predict_event passes
+    # the event date so a Friday run doesn't come out one day short.
+    today = pd.Timestamp(as_of) if as_of else pd.Timestamp.now().normalize()
     days = max(0, (today - last_fight).days)
     return {"days_since_last": float(days)}
 
@@ -680,33 +670,22 @@ def compute_inactivity_single(
 def compute_sos_single(
     conn: sqlite3.Connection,
     fighter_id: str,
-    global_elo: dict[str, float],
+    elo_history: pd.DataFrame,
     window: int = SOS_WINDOW,
 ) -> dict[str, float]:
-    """Return average ELO of the last `window` opponents (strength of schedule).
+    """Return the average pre-fight ELO of the last `window` opponents (strength of schedule).
 
-    Uses global ELO (not per-division) to match the training-time computation in
-    scripts/add_computed_features_to_csv.py where opponent ELO comes from
-    build_elo_features() which uses _replay_fights() (global, single rating per fighter).
+    *elo_history* is build_elo_features() joined with the fights' corners and
+    dates (see compute_prediction) -- each opponent counts at the rating they
+    had going into that fight, exactly as compute_sos_features() does in
+    training. Using opponents' *current* ELO here drifted ~17% from training.
     """
-    df = pd.read_sql_query(
-        """
-        SELECT CASE WHEN f.r_fighter_id = ? THEN f.b_fighter_id
-                    ELSE f.r_fighter_id END AS opp_id
-        FROM fights f
-        WHERE (f.r_fighter_id = ? OR f.b_fighter_id = ?)
-        ORDER BY f.date DESC
-        LIMIT ?
-        """,
-        conn,
-        params=(fighter_id, fighter_id, fighter_id, window),
-    )
-    if df.empty:
+    h = elo_history[(elo_history["r_fighter_id"] == fighter_id) | (elo_history["b_fighter_id"] == fighter_id)]
+    if h.empty:
         return {"sos": float(STARTING_ELO)}
-
-    elo_vals = [global_elo.get(row["opp_id"], STARTING_ELO) for _, row in df.iterrows()]
-
-    return {"sos": float(np.mean(elo_vals))}
+    h = h.sort_values(["date", "fight_id"]).tail(window)
+    opp_elo = np.where(h["r_fighter_id"] == fighter_id, h["elo_blue"], h["elo_red"])
+    return {"sos": float(np.mean(opp_elo))}
 
 
 def compute_ko_vulnerability_single(
@@ -1338,9 +1317,14 @@ def compute_prediction(
     models_dir:  Path | None = None,
     r_fighter_id: str | None = None,
     b_fighter_id: str | None = None,
+    as_of:        str | None = None,
 ) -> dict:
     """
     Compute a fight prediction and return a result dict.
+
+    *as_of* ('YYYY-MM-DD', normally the event date) makes age, layoff,
+    career stats and rankings be taken as of that date, matching how the
+    training features are built. Default: today.
 
     Returns keys: red_name, blue_name, winner, red_prob, blue_prob,
                   confidence, elo_red, elo_blue, form_red, form_blue.
@@ -1440,7 +1424,10 @@ def compute_prediction(
         div_lower = (division or "").lower().strip()
 
         _excluded    = set(EXCLUDED_FEATURES)
-        _need_glicko = ("glicko_diff" not in _excluded or "glicko_rd_diff" not in _excluded)
+        # The win models exclude Glicko, but the finish-type model uses it --
+        # skipping it here left glicko_diff / glicko_rd_diff at 0 for that model.
+        _glicko_feats = {"glicko_diff", "glicko_rd_diff"}
+        _need_glicko = bool(_glicko_feats - _excluded) or bool(finish_feats and _glicko_feats & set(finish_feats))
         _def_glicko_t = (GLICKO_START_R, GLICKO_START_RD, 0.06)
 
         # UFCStats hex IDs (used for all history-replay queries on conn_v2)
@@ -1457,8 +1444,8 @@ def compute_prediction(
         # ── Career stats ──────────────────────────────────────────────────────
         # compute_live_career_stats recomputes from raw UFCStats data (always
         # includes the fighter's latest fight; v2 snapshot lags one event).
-        _live_r = compute_live_career_stats(conn_v2, r_name) if conn_v2 else None
-        _live_b = compute_live_career_stats(conn_v2, b_name) if conn_v2 else None
+        _live_r = compute_live_career_stats(conn_v2, r_name, before_date=as_of) if conn_v2 else None
+        _live_b = compute_live_career_stats(conn_v2, b_name, before_date=as_of) if conn_v2 else None
 
         if _live_r:
             red_stats = pd.Series(_live_r)
@@ -1488,7 +1475,12 @@ def compute_prediction(
         elo_ratings = compute_current_elo(_elo_conn)
         elo_r = elo_ratings.get(_elo_r_id, STARTING_ELO)
         elo_b = elo_ratings.get(_elo_b_id, STARTING_ELO)
-        div_elo = elo_ratings
+        # Pre-fight ELO of every past fight, for SOS (opponents at the rating
+        # they had going into each fight, as in training)
+        elo_history = build_elo_features(_elo_conn).merge(
+            pd.read_sql_query("SELECT fight_id, date, r_fighter_id, b_fighter_id FROM fights", _elo_conn),
+            on="fight_id",
+        )
 
         # ── Glicko-2 ──────────────────────────────────────────────────────────
         glicko_r_tuple = glicko_b_tuple = _def_glicko_t
@@ -1497,26 +1489,28 @@ def compute_prediction(
             _glicko_conn = conn_v2 if conn_v2 else conn
             _gr_id = r_fid_v2 if r_fid_v2 else r_id
             _gb_id = b_fid_v2 if b_fid_v2 else b_id
-            div_glicko = get_current_glicko_by_division(_glicko_conn)
+            div_glicko = get_current_glicko_by_division(_glicko_conn, as_of=as_of)
             r_gid_divs = [(k, v) for k, v in div_glicko.items() if k[0] == _gr_id]
             b_gid_divs = [(k, v) for k, v in div_glicko.items() if k[0] == _gb_id]
             if div_lower:
-                glicko_r_tuple = div_glicko.get((_gr_id, div_lower)) or (r_gid_divs[0][1] if r_gid_divs else _def_glicko_t)
-                glicko_b_tuple = div_glicko.get((_gb_id, div_lower)) or (b_gid_divs[0][1] if b_gid_divs else _def_glicko_t)
+                # Ratings are per division: a fighter new to this division starts
+                # from the default, as in training (not another division's rating)
+                glicko_r_tuple = div_glicko.get((_gr_id, div_lower), _def_glicko_t)
+                glicko_b_tuple = div_glicko.get((_gb_id, div_lower), _def_glicko_t)
             else:
                 glicko_r_tuple = r_gid_divs[0][1] if r_gid_divs else _def_glicko_t
                 glicko_b_tuple = b_gid_divs[0][1] if b_gid_divs else _def_glicko_t
 
         # ── Recent form + extra features ──────────────────────────────────────
         log.info("Computing recent form and extra features...")
-        form_r   = compute_recent_form(_r_conn, _r_fid)
-        form_b   = compute_recent_form(_b_conn, _b_fid)
-        finish_r = compute_finish_rates_single(_r_conn, _r_fid)
-        finish_b = compute_finish_rates_single(_b_conn, _b_fid)
-        inact_r  = compute_inactivity_single(_r_conn, _r_fid)
-        inact_b  = compute_inactivity_single(_b_conn, _b_fid)
-        sos_r    = compute_sos_single(_r_conn, _r_fid, div_elo)
-        sos_b    = compute_sos_single(_b_conn, _b_fid, div_elo)
+        form_r   = compute_recent_form(_r_conn, _r_fid, before_date=as_of)
+        form_b   = compute_recent_form(_b_conn, _b_fid, before_date=as_of)
+        finish_r = compute_finish_rates_single(_r_conn, _r_fid, before_date=as_of)
+        finish_b = compute_finish_rates_single(_b_conn, _b_fid, before_date=as_of)
+        inact_r  = compute_inactivity_single(_r_conn, _r_fid, as_of=as_of)
+        inact_b  = compute_inactivity_single(_b_conn, _b_fid, as_of=as_of)
+        sos_r    = compute_sos_single(_r_conn, _r_fid, elo_history)
+        sos_b    = compute_sos_single(_b_conn, _b_fid, elo_history)
         kovuln_r = compute_ko_vulnerability_single(_r_conn, _r_fid)
         kovuln_b = compute_ko_vulnerability_single(_b_conn, _b_fid)
         ewma_r   = compute_ewma_stats_single(_r_conn, _r_fid)
@@ -1534,11 +1528,8 @@ def compute_prediction(
             extra_r["sapm"]    = _live_r["sapm"]
             extra_r["str_def"] = _live_r["str_def"]
             extra_r["td_def"]  = _live_r["td_def"]
-            if r_fid_v2:
-                extra_r.update(_get_strike_zone_accs(conn_v2, r_fid_v2))
-            elif conn_v2:
-                zone_r = _get_v2_defensive_stats(conn_v2, r_name)
-                extra_r.update({k: zone_r[k] for k in _ZONE_STAT_ZEROS if k in zone_r})
+            for k in _ZONE_KEYS:
+                extra_r[k] = _live_r[k]
         elif conn_v2:
             extra_r.update(_get_v2_defensive_stats(conn_v2, r_name))
 
@@ -1546,11 +1537,8 @@ def compute_prediction(
             extra_b["sapm"]    = _live_b["sapm"]
             extra_b["str_def"] = _live_b["str_def"]
             extra_b["td_def"]  = _live_b["td_def"]
-            if b_fid_v2:
-                extra_b.update(_get_strike_zone_accs(conn_v2, b_fid_v2))
-            elif conn_v2:
-                zone_b = _get_v2_defensive_stats(conn_v2, b_name)
-                extra_b.update({k: zone_b[k] for k in _ZONE_STAT_ZEROS if k in zone_b})
+            for k in _ZONE_KEYS:
+                extra_b[k] = _live_b[k]
         elif conn_v2:
             extra_b.update(_get_v2_defensive_stats(conn_v2, b_name))
 
@@ -1580,8 +1568,8 @@ def compute_prediction(
             conn_v2.close()
 
     # ── Live rankings (always from rankings_history.csv) ─────────────────────
-    extra_r["weightclass_rank"] = _get_current_rank(r_name, division)
-    extra_b["weightclass_rank"] = _get_current_rank(b_name, division)
+    extra_r["weightclass_rank"] = _get_current_rank(r_name, division, as_of=as_of)
+    extra_b["weightclass_rank"] = _get_current_rank(b_name, division, as_of=as_of)
 
     # ── Build & predict ───────────────────────────────────────────────────────
     if model_type == "ensemble":

@@ -228,6 +228,10 @@ def nc_db():
             sig_str_landed REAL, sig_str_atmpted REAL,
             td_landed REAL, td_atmpted REAL,
             sub_att REAL, total_fight_time REAL,
+            -- zone columns read by compute_live_career_stats (NULL here -> 0.0)
+            head_landed REAL, head_atmpted REAL, body_landed REAL, body_atmpted REAL,
+            leg_landed REAL, leg_atmpted REAL, dist_landed REAL, dist_atmpted REAL,
+            ground_landed REAL, ground_atmpted REAL,
             PRIMARY KEY (fight_id, fighter_id)
         );
 
@@ -245,7 +249,8 @@ def nc_db():
             ('f2','e2','2023-06-01','lightweight','aaa','ccc',NULL,'CNC',0,3,300),
             ('f3','e3','2024-01-01','lightweight','aaa','ddd','aaa','Decision - Unanimous',0,3,300);
 
-        INSERT INTO fight_stats VALUES
+        INSERT INTO fight_stats (fight_id, fighter_id, corner, sig_str_landed, sig_str_atmpted,
+                                 td_landed, td_atmpted, sub_att, total_fight_time) VALUES
             ('f1','aaa','r',40,80,2,4,0,0),
             ('f1','bbb','b',20,60,0,2,0,0),
             ('f2','aaa','r',30,70,1,3,0,300),
