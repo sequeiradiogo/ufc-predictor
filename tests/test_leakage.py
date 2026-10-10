@@ -139,3 +139,16 @@ class TestStoredCareerStatsArePreFight:
         conn.close()
         assert checked >= 100
         assert mismatched / checked <= 0.02, f"{mismatched}/{checked} rows differ from the pre-fight value"
+
+
+class TestUfcstatsName:
+    def test_prefers_existing_ufcstats_spelling(self):
+        from predict import _ufcstats_name
+        conn = sqlite3.connect(":memory:")
+        conn.execute("CREATE TABLE fighters (fighter_id TEXT, name TEXT)")
+        conn.execute("INSERT INTO fighters VALUES ('k', 'Kai Kamaka III')")
+        # ufc_v2.db spells it "Kai Kamaka"; the caller's UFCStats name must win
+        assert _ufcstats_name(conn, "Kai Kamaka III", "Kai Kamaka") == "Kai Kamaka III"
+        assert _ufcstats_name(conn, "kai kamaka iii") == "Kai Kamaka III"
+        assert _ufcstats_name(conn, "Kai Kamaka") == "Kai Kamaka III"   # via config.NAME_ALIASES
+        assert _ufcstats_name(conn, "Nobody Atall") is None

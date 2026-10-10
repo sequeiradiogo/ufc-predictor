@@ -119,6 +119,29 @@ _ZONE_KEYS = ("head_acc", "body_acc", "leg_acc", "dist_acc", "head_def", "body_d
 
 # ── Live career stat refresh from UFCStats DB ─────────────────────────────────
 
+def _ufcstats_name(conn_v2: sqlite3.Connection, *candidates: str | None) -> str | None:
+    """
+    Return the UFCStats fighters-table spelling of the first candidate that
+    exists there (exact, NAME_ALIASES, then case-insensitive).
+
+    compute_prediction() resolves names against ufc_v2.db, whose Kaggle-era
+    spelling can differ from UFCStats ("Kai Kamaka" vs "Kai Kamaka III"); the
+    live stats then silently fell back to the stale mdabbert snapshot.
+    """
+    for name in candidates:
+        if not name:
+            continue
+        for cand in (name, NAME_ALIASES.get(name.lower().strip())):
+            if not cand:
+                continue
+            row = conn_v2.execute(
+                "SELECT name FROM fighters WHERE name = ? COLLATE NOCASE LIMIT 1", (cand,)
+            ).fetchone()
+            if row:
+                return row[0]
+    return None
+
+
 def _resolve_ufcstats_id(conn_v2: sqlite3.Connection, name: str) -> str | None:
     """Return the UFCStats hex fighter_id for an exact name match, or None."""
     row = conn_v2.execute(
@@ -1431,8 +1454,12 @@ def compute_prediction(
         _def_glicko_t = (GLICKO_START_R, GLICKO_START_RD, 0.06)
 
         # UFCStats hex IDs (used for all history-replay queries on conn_v2)
-        r_fid_v2 = _resolve_ufcstats_id(conn_v2, r_name) if conn_v2 else None
-        b_fid_v2 = _resolve_ufcstats_id(conn_v2, b_name) if conn_v2 else None
+        # UFCStats spelling: try the caller's name first (predict_event passes
+        # UFCStats names), then the ufc_v2.db one.
+        r_us_name = (_ufcstats_name(conn_v2, red_name, r_name) or r_name) if conn_v2 else r_name
+        b_us_name = (_ufcstats_name(conn_v2, blue_name, b_name) or b_name) if conn_v2 else b_name
+        r_fid_v2 = _resolve_ufcstats_id(conn_v2, r_us_name) if conn_v2 else None
+        b_fid_v2 = _resolve_ufcstats_id(conn_v2, b_us_name) if conn_v2 else None
 
         # Per-fighter stat connection / ID: prefer UFCStats (always fresh),
         # fall back to v2 snapshot when UFCStats ID not found.
@@ -1444,8 +1471,8 @@ def compute_prediction(
         # ── Career stats ──────────────────────────────────────────────────────
         # compute_live_career_stats recomputes from raw UFCStats data (always
         # includes the fighter's latest fight; v2 snapshot lags one event).
-        _live_r = compute_live_career_stats(conn_v2, r_name, before_date=as_of) if conn_v2 else None
-        _live_b = compute_live_career_stats(conn_v2, b_name, before_date=as_of) if conn_v2 else None
+        _live_r = compute_live_career_stats(conn_v2, r_us_name, before_date=as_of) if conn_v2 else None
+        _live_b = compute_live_career_stats(conn_v2, b_us_name, before_date=as_of) if conn_v2 else None
 
         if _live_r:
             red_stats = pd.Series(_live_r)
@@ -1531,7 +1558,7 @@ def compute_prediction(
             for k in _ZONE_KEYS:
                 extra_r[k] = _live_r[k]
         elif conn_v2:
-            extra_r.update(_get_v2_defensive_stats(conn_v2, r_name))
+            extra_r.update(_get_v2_defensive_stats(conn_v2, r_us_name))
 
         if _live_b:
             extra_b["sapm"]    = _live_b["sapm"]
@@ -1540,7 +1567,7 @@ def compute_prediction(
             for k in _ZONE_KEYS:
                 extra_b[k] = _live_b[k]
         elif conn_v2:
-            extra_b.update(_get_v2_defensive_stats(conn_v2, b_name))
+            extra_b.update(_get_v2_defensive_stats(conn_v2, b_us_name))
 
         # ── Opponent-adjusted stats (needs own splm/td_avg/zone accs above) ────
         if conn_v2 and r_fid_v2:
