@@ -1,8 +1,11 @@
 # UFC Fight Night: Allen vs. Duncan -- October 10, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-10-10
+Model: Ensemble (Soft Vote) | Generated: 2026-10-10 | Scored: 2026-10-12
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
+
+**Result: 6/12 (50.0%)**
+*High-confidence (>=55%) picks: 5/10 (50.0%)*
 
 > Interactive fighter comparison: [2026-10-10-ufc-fight-night-allen-vs-duncan.html](./2026-10-10-ufc-fight-night-allen-vs-duncan.html)
 
@@ -10,22 +13,45 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 
 ## Predictions
 
-| Fight | Predicted Winner | Confidence | Likely Method |
-|---|---|---|---|
-| Brendan Allen vs Christian Leroy Duncan | Christian Leroy Duncan | 52.8% | Decision (50%) / KO/TKO (36%) |
-| Matheus Camilo vs Jai Herbert | Matheus Camilo | 79.0% | Decision (53%) / KO/TKO (24%) |
-| Loopy Godinez vs Ketlen Souza | Loopy Godinez | 69.6% | Decision (77%) / KO/TKO (12%) |
-| Andre Fili vs Kai Kamaka | Kai Kamaka | 68.7% | Decision (54%) / KO/TKO (33%) |
-| Malcolm Wellmaker vs Otari Tanzilovi | Otari Tanzilovi | 70.1% | Decision (61%) / KO/TKO (27%) |
-| Julius Walker vs Gerald Meerschaert | Julius Walker | 87.2% | Submission (38%) / KO/TKO (32%) |
-| Francisco Prado vs Ismael Bonfim | Francisco Prado | 50.5% | Decision (43%) / KO/TKO (31%) |
-| Niko Price vs Leon Shahbazyan | Niko Price | 69.8% | KO/TKO (51%) / Decision (37%) |
-| Felipe Franco vs Brendson Ribeiro | Felipe Franco | 70.3% | Decision (49%) / KO/TKO (32%) |
-| Allen Frye Jr. vs RJ Harris | RJ Harris | 68.5% | KO/TKO (69%) / Decision (19%) |
-| Alice Pereira vs Daria Zhelezniakova | Alice Pereira | 69.7% | Decision (66%) / KO/TKO (23%) |
-| Ernesta Kareckaite vs Melissa Gatto | Melissa Gatto | 67.7% | Decision (66%) / Submission (25%) |
+| Fight | Predicted Winner | Confidence | Likely Method | Odds (Red / Blue) | Actual Result | Correct? |
+|---|---|---|---|---|---|---|
+| Brendan Allen vs Christian Leroy Duncan | Christian Leroy Duncan | 52.8% | Decision (50%) / KO/TKO (36%) | -116 / -102 | Brendan Allen (Sub R5) | NO |
+| Matheus Camilo vs Jai Herbert | Matheus Camilo | 79.0% | Decision (53%) / KO/TKO (24%) | -190 / +162 | Jai Herbert (Dec) | NO |
+| Loopy Godinez vs Ketlen Souza | Loopy Godinez | 69.6% | Decision (77%) / KO/TKO (12%) | -240 / +198 | Loopy Godinez (Dec) | YES |
+| Andre Fili vs Kai Kamaka | Kai Kamaka | 68.7% | Decision (54%) / KO/TKO (33%) | -136 / +116 | Andre Fili (KO R2) | NO |
+| Malcolm Wellmaker vs Otari Tanzilovi | Otari Tanzilovi | 70.1% | Decision (61%) / KO/TKO (27%) | -198 / +166 | Otari Tanzilovi (KO R2) | YES |
+| Julius Walker vs Gerald Meerschaert | Julius Walker | 87.2% | Submission (38%) / KO/TKO (32%) | -310 / +250 | Julius Walker (KO R2) | YES |
+| Francisco Prado vs Ismael Bonfim | Francisco Prado | 50.5% | Decision (43%) / KO/TKO (31%) | -164 / +138 | Francisco Prado (KO R1) | YES |
+| Niko Price vs Leon Shahbazyan | Niko Price | 69.8% | KO/TKO (51%) / Decision (37%) | +116 / -136 | Niko Price (KO R1) | YES |
+| Felipe Franco vs Brendson Ribeiro | Felipe Franco | 70.3% | Decision (49%) / KO/TKO (32%) | -390 / +310 | Brendson Ribeiro (Sub R1) | NO |
+| Allen Frye Jr. vs RJ Harris | RJ Harris | 68.5% | KO/TKO (69%) / Decision (19%) | +295 / -370 | Allen Frye Jr. (KO R1) | NO |
+| Alice Pereira vs Daria Zhelezniakova | Alice Pereira | 69.7% | Decision (66%) / KO/TKO (23%) | -138 / +118 | Alice Pereira (KO R1) | YES |
+| Ernesta Kareckaite vs Melissa Gatto | Melissa Gatto | 67.7% | Decision (66%) / Submission (25%) | +102 / -120 | Ernesta Kareckaite (Dec (Majority)) | NO |
 
 ---
+
+## Post-Event Summary
+
+- Fights predicted: 12
+- Correct: 6/12 (50.0%)
+- High-confidence (>=55%) picks: 5/10 (50.0%)
+
+### P/L (EUR 1 flat on picks >=55% confidence)
+
+| Fight | Model Pick | Odds (dec) | Result | P/L |
+|---|---|---|---|---|
+| Matheus Camilo vs Jai Herbert | Matheus Camilo | 1.53 | Loss | -EUR 1.00 |
+| Loopy Godinez vs Ketlen Souza | Loopy Godinez | 1.42 | Win | +EUR 0.42 |
+| Andre Fili vs Kai Kamaka | Kai Kamaka | 2.16 | Loss | -EUR 1.00 |
+| Malcolm Wellmaker vs Otari Tanzilovi | Otari Tanzilovi | 2.66 | Win | +EUR 1.66 |
+| Julius Walker vs Gerald Meerschaert | Julius Walker | 1.32 | Win | +EUR 0.32 |
+| Niko Price vs Leon Shahbazyan | Niko Price | 2.16 | Win | +EUR 1.16 |
+| Felipe Franco vs Brendson Ribeiro | Felipe Franco | 1.26 | Loss | -EUR 1.00 |
+| Allen Frye Jr. vs RJ Harris | RJ Harris | 1.27 | Loss | -EUR 1.00 |
+| Alice Pereira vs Daria Zhelezniakova | Alice Pereira | 1.73 | Win | +EUR 0.73 |
+| Ernesta Kareckaite vs Melissa Gatto | Melissa Gatto | 1.83 | Loss | -EUR 1.00 |
+
+**Net P/L: -EUR 0.71 on EUR 10 staked (-7.1% ROI)**
 
 ## Raw Model Output
 
