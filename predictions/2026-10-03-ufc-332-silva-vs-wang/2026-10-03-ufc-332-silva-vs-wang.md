@@ -1,11 +1,12 @@
 # UFC 332: Silva vs. Wang -- October 3, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-10-02 | Scored: 2026-10-07
+Model: Ensemble (Soft Vote) | Generated: 2026-10-02 | Scored: 2026-10-14
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
 
 **Result: 5/10 (50.0%)**
 *High-confidence (>=55%) picks: 5/8 (62.5%)*
+*Bookmaker favorite: 9/10 (90.0%) vs model 5/10 (50.0%) on the same fights*
 
 > Interactive fighter comparison: [2026-10-03-ufc-332-silva-vs-wang.html](./2026-10-03-ufc-332-silva-vs-wang.html)
 
@@ -33,21 +34,26 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 - Fights predicted: 10
 - Correct: 5/10 (50.0%)
 - High-confidence (>=55%) picks: 5/8 (62.5%)
+- Bookmaker favorite on the same 10 fights: 9/10 (90.0%) -- model 5/10 (50.0%)
+- Model picked against the favorite in 4 fight(s), right in 0
+- Always backing the favorite (EUR 1 on all 10 fights with odds): +EUR 3.56 on EUR 10 staked (+35.6% ROI)
 
 ### P/L (EUR 1 flat on picks >=55% confidence)
 
-| Fight | Model Pick | Odds (dec) | Result | P/L |
-|---|---|---|---|---|
-| Natalia Silva vs Wang Cong | Natalia Silva | 1.50 | Win | +EUR 0.50 |
-| Deiveson Figueiredo vs Payton Talbott | Payton Talbott | 1.15 | Win | +EUR 0.15 |
-| Ateba Gautier vs Roman Kopylov | Ateba Gautier | 1.44 | Loss | -EUR 1.00 |
-| Imanol Rodriguez vs Alden Coria | Imanol Rodriguez | 1.73 | Win | +EUR 0.73 |
-| Damian Pinas vs Andrey Pulyaev | Damian Pinas | 1.17 | Win | +EUR 0.17 |
-| Johnny Walker vs Mick Parkin | Mick Parkin | 1.96 | Loss | -EUR 1.00 |
-| Marvin Vettori vs Ismail Naurdiev | Ismail Naurdiev | 1.81 | Win | +EUR 0.81 |
-| Court McGee vs Eric Nolan | Court McGee | 2.90 | Loss | -EUR 1.00 |
+| Fight | Model Pick | Odds (dec) | Result | P/L | Favorite (dec) | Favorite P/L |
+|---|---|---|---|---|---|---|
+| Natalia Silva vs Wang Cong | Natalia Silva | 1.50 | Win | +EUR 0.50 | Natalia Silva (1.50) | +EUR 0.50 |
+| Deiveson Figueiredo vs Payton Talbott | Payton Talbott | 1.15 | Win | +EUR 0.15 | Payton Talbott (1.15) | +EUR 0.15 |
+| Ateba Gautier vs Roman Kopylov | Ateba Gautier | 1.44 | Loss | -EUR 1.00 | Ateba Gautier (1.44) | -EUR 1.00 |
+| Imanol Rodriguez vs Alden Coria | Imanol Rodriguez | 1.73 | Win | +EUR 0.73 | Imanol Rodriguez (1.73) | +EUR 0.73 |
+| Damian Pinas vs Andrey Pulyaev | Damian Pinas | 1.17 | Win | +EUR 0.17 | Damian Pinas (1.17) | +EUR 0.17 |
+| Johnny Walker vs Mick Parkin | Mick Parkin | 1.96 | Loss | -EUR 1.00 | Johnny Walker (1.89) | +EUR 0.89 |
+| Marvin Vettori vs Ismail Naurdiev | Ismail Naurdiev | 1.81 | Win | +EUR 0.81 | Ismail Naurdiev (1.81) | +EUR 0.81 |
+| Court McGee vs Eric Nolan | Court McGee | 2.90 | Loss | -EUR 1.00 | Eric Nolan (1.44) | +EUR 0.44 |
 
 **Net P/L: -EUR 0.64 on EUR 8 staked (-8.0% ROI)**
+
+**Favorite on the same fights: +EUR 2.69 on EUR 8 staked (+33.6% ROI)**
 
 ## Raw Model Output
 

@@ -1,11 +1,12 @@
 # UFC Fight Night: Allen vs. Duncan -- October 10, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-10-10 | Scored: 2026-10-12
+Model: Ensemble (Soft Vote) | Generated: 2026-10-10 | Scored: 2026-10-14
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
 
-**Result: 6/12 (50.0%)**
-*High-confidence (>=55%) picks: 5/10 (50.0%)*
+**Result: 6/11 (54.5%)** *(1 excluded: draw/NC)*
+*High-confidence (>=55%) picks: 5/9 (55.6%)*
+*Bookmaker favorite: 6/11 (54.5%) vs model 6/11 (54.5%) on the same fights*
 
 > Interactive fighter comparison: [2026-10-10-ufc-fight-night-allen-vs-duncan.html](./2026-10-10-ufc-fight-night-allen-vs-duncan.html)
 
@@ -26,32 +27,37 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 | Felipe Franco vs Brendson Ribeiro | Felipe Franco | 70.3% | Decision (49%) / KO/TKO (32%) | -390 / +310 | Brendson Ribeiro (Sub R1) | NO |
 | Allen Frye Jr. vs RJ Harris | RJ Harris | 68.5% | KO/TKO (69%) / Decision (19%) | +295 / -370 | Allen Frye Jr. (KO R1) | NO |
 | Alice Pereira vs Daria Zhelezniakova | Alice Pereira | 69.7% | Decision (66%) / KO/TKO (23%) | -138 / +118 | Alice Pereira (KO R1) | YES |
-| Ernesta Kareckaite vs Melissa Gatto | Melissa Gatto | 67.7% | Decision (66%) / Submission (25%) | +102 / -120 | Ernesta Kareckaite (Dec (Majority)) | NO |
+| Ernesta Kareckaite vs Melissa Gatto | Melissa Gatto | 67.7% | Decision (66%) / Submission (25%) | +102 / -120 | Draw | PUSH |
 
 ---
 
 ## Post-Event Summary
 
-- Fights predicted: 12
-- Correct: 6/12 (50.0%)
-- High-confidence (>=55%) picks: 5/10 (50.0%)
+- Fights predicted: 12 (1 excluded: draw/NC)
+- Correct: 6/11 (54.5%)
+- High-confidence (>=55%) picks: 5/9 (55.6%)
+- Bookmaker favorite on the same 11 fights: 6/11 (54.5%) -- model 6/11 (54.5%)
+- Model picked against the favorite in 4 fight(s), right in 2
+- Always backing the favorite (EUR 1 on all 12 fights with odds): -EUR 1.32 on EUR 11 staked (-12.0% ROI)
 
 ### P/L (EUR 1 flat on picks >=55% confidence)
 
-| Fight | Model Pick | Odds (dec) | Result | P/L |
-|---|---|---|---|---|
-| Matheus Camilo vs Jai Herbert | Matheus Camilo | 1.53 | Loss | -EUR 1.00 |
-| Loopy Godinez vs Ketlen Souza | Loopy Godinez | 1.42 | Win | +EUR 0.42 |
-| Andre Fili vs Kai Kamaka | Kai Kamaka | 2.16 | Loss | -EUR 1.00 |
-| Malcolm Wellmaker vs Otari Tanzilovi | Otari Tanzilovi | 2.66 | Win | +EUR 1.66 |
-| Julius Walker vs Gerald Meerschaert | Julius Walker | 1.32 | Win | +EUR 0.32 |
-| Niko Price vs Leon Shahbazyan | Niko Price | 2.16 | Win | +EUR 1.16 |
-| Felipe Franco vs Brendson Ribeiro | Felipe Franco | 1.26 | Loss | -EUR 1.00 |
-| Allen Frye Jr. vs RJ Harris | RJ Harris | 1.27 | Loss | -EUR 1.00 |
-| Alice Pereira vs Daria Zhelezniakova | Alice Pereira | 1.73 | Win | +EUR 0.73 |
-| Ernesta Kareckaite vs Melissa Gatto | Melissa Gatto | 1.83 | Loss | -EUR 1.00 |
+| Fight | Model Pick | Odds (dec) | Result | P/L | Favorite (dec) | Favorite P/L |
+|---|---|---|---|---|---|---|
+| Matheus Camilo vs Jai Herbert | Matheus Camilo | 1.53 | Loss | -EUR 1.00 | Matheus Camilo (1.53) | -EUR 1.00 |
+| Loopy Godinez vs Ketlen Souza | Loopy Godinez | 1.42 | Win | +EUR 0.42 | Loopy Godinez (1.42) | +EUR 0.42 |
+| Andre Fili vs Kai Kamaka | Kai Kamaka | 2.16 | Loss | -EUR 1.00 | Andre Fili (1.74) | +EUR 0.74 |
+| Malcolm Wellmaker vs Otari Tanzilovi | Otari Tanzilovi | 2.66 | Win | +EUR 1.66 | Malcolm Wellmaker (1.50) | -EUR 1.00 |
+| Julius Walker vs Gerald Meerschaert | Julius Walker | 1.32 | Win | +EUR 0.32 | Julius Walker (1.32) | +EUR 0.32 |
+| Niko Price vs Leon Shahbazyan | Niko Price | 2.16 | Win | +EUR 1.16 | Leon Shahbazyan (1.74) | -EUR 1.00 |
+| Felipe Franco vs Brendson Ribeiro | Felipe Franco | 1.26 | Loss | -EUR 1.00 | Felipe Franco (1.26) | -EUR 1.00 |
+| Allen Frye Jr. vs RJ Harris | RJ Harris | 1.27 | Loss | -EUR 1.00 | RJ Harris (1.27) | -EUR 1.00 |
+| Alice Pereira vs Daria Zhelezniakova | Alice Pereira | 1.73 | Win | +EUR 0.73 | Alice Pereira (1.73) | +EUR 0.73 |
+| Ernesta Kareckaite vs Melissa Gatto | Melissa Gatto | 1.83 | Push | +EUR 0.00 | Melissa Gatto (1.83) | +EUR 0.00 |
 
-**Net P/L: -EUR 0.71 on EUR 10 staked (-7.1% ROI)**
+**Net P/L: +EUR 0.29 on EUR 9 staked (+3.2% ROI)**
+
+**Favorite on the same fights: -EUR 2.79 on EUR 9 staked (-31.0% ROI)**
 
 ## Raw Model Output
 

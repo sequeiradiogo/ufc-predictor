@@ -1,11 +1,12 @@
 # UFC Fight Night: Du Plessis vs. Usman -- July 18, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-07-17 | Scored: 2026-10-07
+Model: Ensemble (Soft Vote) | Generated: 2026-07-17 | Scored: 2026-10-14
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
 
 **Result: 6/8 (75.0%)**
 *High-confidence (>=55%) picks: 6/6 (100.0%)*
+*Bookmaker favorite: 6/8 (75.0%) vs model 6/8 (75.0%) on the same fights*
 
 > Interactive fighter comparison: [2026-07-18-ufc-fight-night-du-plessis-vs-usman.html](./2026-07-18-ufc-fight-night-du-plessis-vs-usman.html)
 
@@ -31,19 +32,24 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 - Fights predicted: 8
 - Correct: 6/8 (75.0%)
 - High-confidence (>=55%) picks: 6/6 (100.0%)
+- Bookmaker favorite on the same 8 fights: 6/8 (75.0%) -- model 6/8 (75.0%)
+- Model picked against the favorite in 2 fight(s), right in 1
+- Always backing the favorite (EUR 1 on all 8 fights with odds): -EUR 0.17 on EUR 8 staked (-2.1% ROI)
 
 ### P/L (EUR 1 flat on picks >=55% confidence)
 
-| Fight | Model Pick | Odds (dec) | Result | P/L |
-|---|---|---|---|---|
-| Jared Cannonier vs Christian Leroy Duncan | Christian Leroy Duncan | 1.33 | Win | +EUR 0.33 |
-| Chase Hooper vs Mitch Ramirez | Chase Hooper | 1.27 | Win | +EUR 0.27 |
-| Tabatha Ricci vs Fatima Kline | Fatima Kline | 1.20 | Win | +EUR 0.20 |
-| Tommy McMillen vs Alberto Montes | Tommy McMillen | 1.47 | Win | +EUR 0.47 |
-| Austin Bashi vs Jose Delgado | Jose Delgado | 2.16 | Win | +EUR 1.16 |
-| Alden Coria vs Stewart Nicoll | Alden Coria | 1.09 | Win | +EUR 0.09 |
+| Fight | Model Pick | Odds (dec) | Result | P/L | Favorite (dec) | Favorite P/L |
+|---|---|---|---|---|---|---|
+| Jared Cannonier vs Christian Leroy Duncan | Christian Leroy Duncan | 1.33 | Win | +EUR 0.33 | Christian Leroy Duncan (1.33) | +EUR 0.33 |
+| Chase Hooper vs Mitch Ramirez | Chase Hooper | 1.27 | Win | +EUR 0.27 | Chase Hooper (1.27) | +EUR 0.27 |
+| Tabatha Ricci vs Fatima Kline | Fatima Kline | 1.20 | Win | +EUR 0.20 | Fatima Kline (1.20) | +EUR 0.20 |
+| Tommy McMillen vs Alberto Montes | Tommy McMillen | 1.47 | Win | +EUR 0.47 | Tommy McMillen (1.47) | +EUR 0.47 |
+| Austin Bashi vs Jose Delgado | Jose Delgado | 2.16 | Win | +EUR 1.16 | Austin Bashi (1.74) | -EUR 1.00 |
+| Alden Coria vs Stewart Nicoll | Alden Coria | 1.09 | Win | +EUR 0.09 | Alden Coria (1.09) | +EUR 0.09 |
 
 **Net P/L: +EUR 2.52 on EUR 6 staked (+42.0% ROI)**
+
+**Favorite on the same fights: +EUR 0.36 on EUR 6 staked (+6.0% ROI)**
 
 ## Raw Model Output
 

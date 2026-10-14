@@ -1,11 +1,12 @@
 # UFC Fight Night: Hernandez vs. Rodrigues -- August 22, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-08-21 | Scored: 2026-10-07
+Model: Ensemble (Soft Vote) | Generated: 2026-08-21 | Scored: 2026-10-14
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
 
 **Result: 6/10 (60.0%)**
 *High-confidence (>=55%) picks: 6/10 (60.0%)*
+*Bookmaker favorite: 7/10 (70.0%) vs model 6/10 (60.0%) on the same fights*
 
 > Interactive fighter comparison: [2026-08-22-ufc-fight-night-hernandez-vs-rodrigues.html](./2026-08-22-ufc-fight-night-hernandez-vs-rodrigues.html)
 
@@ -33,23 +34,28 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 - Fights predicted: 10
 - Correct: 6/10 (60.0%)
 - High-confidence (>=55%) picks: 6/10 (60.0%)
+- Bookmaker favorite on the same 10 fights: 7/10 (70.0%) -- model 6/10 (60.0%)
+- Model picked against the favorite in 1 fight(s), right in 0
+- Always backing the favorite (EUR 1 on all 10 fights with odds): +EUR 0.42 on EUR 10 staked (+4.2% ROI)
 
 ### P/L (EUR 1 flat on picks >=55% confidence)
 
-| Fight | Model Pick | Odds (dec) | Result | P/L |
-|---|---|---|---|---|
-| Anthony Hernandez vs Gregory Rodrigues | Anthony Hernandez | 1.47 | Loss | -EUR 1.00 |
-| Serghei Spivac vs Vitor Petrino | Vitor Petrino | 1.69 | Win | +EUR 0.69 |
-| Reinier de Ridder vs Roman Dolidze | Reinier de Ridder | 1.26 | Win | +EUR 0.26 |
-| MarQuel Mederos vs Mason Jones | Mason Jones | 1.29 | Loss | -EUR 1.00 |
-| Carli Judice vs Jeisla Chaves | Carli Judice | 1.17 | Win | +EUR 0.17 |
-| Jamall Emmers vs Lerryan Douglas | Lerryan Douglas | 1.25 | Loss | -EUR 1.00 |
-| Kennedy Nzechukwu vs Shamil Gaziev | Kennedy Nzechukwu | 2.08 | Loss | -EUR 1.00 |
-| Chris Padilla vs Nasrat Haqparast | Chris Padilla | 1.81 | Win | +EUR 0.81 |
-| Wes Schultz vs Jackson McVey | Jackson McVey | 1.58 | Win | +EUR 0.58 |
-| Shanelle Dyer vs Elise Reed | Shanelle Dyer | 1.12 | Win | +EUR 0.12 |
+| Fight | Model Pick | Odds (dec) | Result | P/L | Favorite (dec) | Favorite P/L |
+|---|---|---|---|---|---|---|
+| Anthony Hernandez vs Gregory Rodrigues | Anthony Hernandez | 1.47 | Loss | -EUR 1.00 | Anthony Hernandez (1.47) | -EUR 1.00 |
+| Serghei Spivac vs Vitor Petrino | Vitor Petrino | 1.69 | Win | +EUR 0.69 | Vitor Petrino (1.69) | +EUR 0.69 |
+| Reinier de Ridder vs Roman Dolidze | Reinier de Ridder | 1.26 | Win | +EUR 0.26 | Reinier de Ridder (1.26) | +EUR 0.26 |
+| MarQuel Mederos vs Mason Jones | Mason Jones | 1.29 | Loss | -EUR 1.00 | Mason Jones (1.29) | -EUR 1.00 |
+| Carli Judice vs Jeisla Chaves | Carli Judice | 1.17 | Win | +EUR 0.17 | Carli Judice (1.17) | +EUR 0.17 |
+| Jamall Emmers vs Lerryan Douglas | Lerryan Douglas | 1.25 | Loss | -EUR 1.00 | Lerryan Douglas (1.25) | -EUR 1.00 |
+| Kennedy Nzechukwu vs Shamil Gaziev | Kennedy Nzechukwu | 2.08 | Loss | -EUR 1.00 | Shamil Gaziev (1.79) | +EUR 0.79 |
+| Chris Padilla vs Nasrat Haqparast | Chris Padilla | 1.81 | Win | +EUR 0.81 | Chris Padilla (1.81) | +EUR 0.81 |
+| Wes Schultz vs Jackson McVey | Jackson McVey | 1.58 | Win | +EUR 0.58 | Jackson McVey (1.58) | +EUR 0.58 |
+| Shanelle Dyer vs Elise Reed | Shanelle Dyer | 1.12 | Win | +EUR 0.12 | Shanelle Dyer (1.12) | +EUR 0.12 |
 
 **Net P/L: -EUR 1.37 on EUR 10 staked (-13.7% ROI)**
+
+**Favorite on the same fights: +EUR 0.42 on EUR 10 staked (+4.2% ROI)**
 
 ## Raw Model Output
 

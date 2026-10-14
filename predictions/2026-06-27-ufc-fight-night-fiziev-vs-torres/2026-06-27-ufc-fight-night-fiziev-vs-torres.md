@@ -1,11 +1,12 @@
 # UFC Fight Night: Fiziev vs. Torres -- June 27, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-06-25 | Scored: 2026-10-07
+Model: Ensemble (Soft Vote) | Generated: 2026-06-25 | Scored: 2026-10-14
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
 
 **Result: 5/9 (55.6%)** *(1 fight excluded: 50/50 pick)*
 *High-confidence (>=55%) picks: 5/9 (55.6%)*
+*Bookmaker favorite: 6/8 (75.0%) vs model 5/8 (62.5%) on the same fights*
 
 ---
 
@@ -31,22 +32,27 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 - Fights predicted: 10 (1 excluded: 50/50 pick)
 - Correct: 5/9 (55.6%)
 - High-confidence (>=55%) picks: 5/9 (55.6%)
+- Bookmaker favorite on the same 8 fights: 6/8 (75.0%) -- model 5/8 (62.5%)
+- Model picked against the favorite in 1 fight(s), right in 0
+- Always backing the favorite (EUR 1 on all 9 fights with odds): -EUR 0.74 on EUR 9 staked (-8.2% ROI)
 
 ### P/L (EUR 1 flat on picks >=55% confidence)
 
-| Fight | Model Pick | Odds (dec) | Result | P/L |
-|---|---|---|---|---|
-| Rafael Fiziev vs Manuel Torres | Manuel Torres | 1.93 | Loss | -EUR 1.00 |
-| Shara Magomedov vs Michel Pereira | Shara Magomedov | 1.26 | Win | +EUR 0.26 |
-| Asu Almabayev vs Charles Johnson | Asu Almabayev | 1.34 | Win | +EUR 0.34 |
-| Ikram Aliskerov vs Brunno Ferreira | Ikram Aliskerov | 1.39 | Win | +EUR 0.39 |
-| Abus Magomedov vs Michal Oleksiejczuk | Michal Oleksiejczuk | 1.83 | Loss | -EUR 1.00 |
-| Abdul Rakhman Yakhyaev vs Julius Walker | Julius Walker | 6.30 | Loss | -EUR 1.00 |
-| Nursulton Ruziboev vs Andrey Pulyaev | Nursulton Ruziboev | 1.57 | Win | +EUR 0.57 |
-| Kaan Ofli vs Javier Reyes | Javier Reyes | 1.40 | Loss | -EUR 1.00 |
-| Bekzat Almakhan vs Jean Matsumoto | Jean Matsumoto | 1.57 | Win | +EUR 0.57 |
+| Fight | Model Pick | Odds (dec) | Result | P/L | Favorite (dec) | Favorite P/L |
+|---|---|---|---|---|---|---|
+| Rafael Fiziev vs Manuel Torres | Manuel Torres | 1.93 | Loss | -EUR 1.00 | -- | -- |
+| Shara Magomedov vs Michel Pereira | Shara Magomedov | 1.26 | Win | +EUR 0.26 | Shara Magomedov (1.26) | +EUR 0.26 |
+| Asu Almabayev vs Charles Johnson | Asu Almabayev | 1.34 | Win | +EUR 0.34 | Asu Almabayev (1.34) | +EUR 0.34 |
+| Ikram Aliskerov vs Brunno Ferreira | Ikram Aliskerov | 1.39 | Win | +EUR 0.39 | Ikram Aliskerov (1.39) | +EUR 0.39 |
+| Abus Magomedov vs Michal Oleksiejczuk | Michal Oleksiejczuk | 1.83 | Loss | -EUR 1.00 | Michal Oleksiejczuk (1.83) | -EUR 1.00 |
+| Abdul Rakhman Yakhyaev vs Julius Walker | Julius Walker | 6.30 | Loss | -EUR 1.00 | Abdul Rakhman Yakhyaev (1.13) | +EUR 0.13 |
+| Nursulton Ruziboev vs Andrey Pulyaev | Nursulton Ruziboev | 1.57 | Win | +EUR 0.57 | Nursulton Ruziboev (1.57) | +EUR 0.57 |
+| Kaan Ofli vs Javier Reyes | Javier Reyes | 1.40 | Loss | -EUR 1.00 | Javier Reyes (1.40) | -EUR 1.00 |
+| Bekzat Almakhan vs Jean Matsumoto | Jean Matsumoto | 1.57 | Win | +EUR 0.57 | Jean Matsumoto (1.57) | +EUR 0.57 |
 
 **Net P/L: -EUR 1.87 on EUR 9 staked (-20.8% ROI)**
+
+**Favorite on the same fights: +EUR 0.26 on EUR 8 staked (+3.2% ROI)**
 
 ## Raw Model Output
 

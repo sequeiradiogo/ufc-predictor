@@ -1,11 +1,12 @@
 # UFC Fight Night: Rosas Jr. vs. Barcelos -- September 26, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-09-25 | Scored: 2026-10-07
+Model: Ensemble (Soft Vote) | Generated: 2026-09-25 | Scored: 2026-10-14
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
 
 **Result: 7/9 (77.8%)**
 *High-confidence (>=55%) picks: 6/8 (75.0%)*
+*Bookmaker favorite: 5/9 (55.6%) vs model 7/9 (77.8%) on the same fights*
 
 > Interactive fighter comparison: [2026-09-26-ufc-fight-night-rosas-jr-vs-barcelos.html](./2026-09-26-ufc-fight-night-rosas-jr-vs-barcelos.html)
 
@@ -32,21 +33,26 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 - Fights predicted: 9
 - Correct: 7/9 (77.8%)
 - High-confidence (>=55%) picks: 6/8 (75.0%)
+- Bookmaker favorite on the same 9 fights: 5/9 (55.6%) -- model 7/9 (77.8%)
+- Model picked against the favorite in 2 fight(s), right in 2
+- Always backing the favorite (EUR 1 on all 9 fights with odds): -EUR 1.64 on EUR 9 staked (-18.2% ROI)
 
 ### P/L (EUR 1 flat on picks >=55% confidence)
 
-| Fight | Model Pick | Odds (dec) | Result | P/L |
-|---|---|---|---|---|
-| Raul Rosas Jr. vs Raoni Barcelos | Raul Rosas Jr. | 1.69 | Win | +EUR 0.69 |
-| Norma Dumont vs Ailin Perez | Ailin Perez | 1.60 | Win | +EUR 0.60 |
-| Rodolfo Vieira vs Robert Bryczek | Rodolfo Vieira | 1.57 | Win | +EUR 0.57 |
-| Rodolfo Bellato vs Christian Edwards | Rodolfo Bellato | 1.47 | Loss | -EUR 1.00 |
-| Elves Brener vs Josiah Harrell | Elves Brener | 2.04 | Win | +EUR 1.04 |
-| Montel Jackson vs Ricky Simon | Montel Jackson | 1.42 | Win | +EUR 0.42 |
-| John Castaneda vs Alatengheili | John Castaneda | 1.27 | Loss | -EUR 1.00 |
-| Vanessa Demopoulos vs Yazmin Jauregui | Yazmin Jauregui | 1.08 | Win | +EUR 0.08 |
+| Fight | Model Pick | Odds (dec) | Result | P/L | Favorite (dec) | Favorite P/L |
+|---|---|---|---|---|---|---|
+| Raul Rosas Jr. vs Raoni Barcelos | Raul Rosas Jr. | 1.69 | Win | +EUR 0.69 | Raul Rosas Jr. (1.69) | +EUR 0.69 |
+| Norma Dumont vs Ailin Perez | Ailin Perez | 1.60 | Win | +EUR 0.60 | Ailin Perez (1.60) | +EUR 0.60 |
+| Rodolfo Vieira vs Robert Bryczek | Rodolfo Vieira | 1.57 | Win | +EUR 0.57 | Rodolfo Vieira (1.57) | +EUR 0.57 |
+| Rodolfo Bellato vs Christian Edwards | Rodolfo Bellato | 1.47 | Loss | -EUR 1.00 | Rodolfo Bellato (1.47) | -EUR 1.00 |
+| Elves Brener vs Josiah Harrell | Elves Brener | 2.04 | Win | +EUR 1.04 | Josiah Harrell (1.82) | -EUR 1.00 |
+| Montel Jackson vs Ricky Simon | Montel Jackson | 1.42 | Win | +EUR 0.42 | Montel Jackson (1.42) | +EUR 0.42 |
+| John Castaneda vs Alatengheili | John Castaneda | 1.27 | Loss | -EUR 1.00 | John Castaneda (1.27) | -EUR 1.00 |
+| Vanessa Demopoulos vs Yazmin Jauregui | Yazmin Jauregui | 1.08 | Win | +EUR 0.08 | Yazmin Jauregui (1.08) | +EUR 0.08 |
 
 **Net P/L: +EUR 1.40 on EUR 8 staked (+17.5% ROI)**
+
+**Favorite on the same fights: -EUR 0.64 on EUR 8 staked (-8.0% ROI)**
 
 ## Raw Model Output
 

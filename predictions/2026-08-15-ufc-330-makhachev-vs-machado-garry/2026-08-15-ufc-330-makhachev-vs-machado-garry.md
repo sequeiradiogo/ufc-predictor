@@ -1,11 +1,12 @@
 # UFC 330: Makhachev vs. Machado Garry -- August 15, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-08-14 | Scored: 2026-10-07
+Model: Ensemble (Soft Vote) | Generated: 2026-08-14 | Scored: 2026-10-14
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
 
 **Result: 4/10 (40.0%)**
 *High-confidence (>=55%) picks: 4/10 (40.0%)*
+*Bookmaker favorite: 6/10 (60.0%) vs model 4/10 (40.0%) on the same fights*
 
 > Interactive fighter comparison: [2026-08-15-ufc-330-makhachev-vs-machado-garry.html](./2026-08-15-ufc-330-makhachev-vs-machado-garry.html)
 
@@ -33,23 +34,28 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 - Fights predicted: 10
 - Correct: 4/10 (40.0%)
 - High-confidence (>=55%) picks: 4/10 (40.0%)
+- Bookmaker favorite on the same 10 fights: 6/10 (60.0%) -- model 4/10 (40.0%)
+- Model picked against the favorite in 4 fight(s), right in 1
+- Always backing the favorite (EUR 1 on all 10 fights with odds): -EUR 1.07 on EUR 10 staked (-10.7% ROI)
 
 ### P/L (EUR 1 flat on picks >=55% confidence)
 
-| Fight | Model Pick | Odds (dec) | Result | P/L |
-|---|---|---|---|---|
-| Islam Makhachev vs Ian Machado Garry | Islam Makhachev | 1.30 | Win | +EUR 0.30 |
-| Mackenzie Dern vs Gillian Robertson | Gillian Robertson | 2.80 | Loss | -EUR 1.00 |
-| Jalin Turner vs Kaue Fernandes | Kaue Fernandes | 2.04 | Loss | -EUR 1.00 |
-| Mansur Abdul-Malik vs Dustin Stoltzfus | Mansur Abdul-Malik | 1.15 | Loss | -EUR 1.00 |
-| Edson Barboza vs Esteban Ribovics | Esteban Ribovics | 1.14 | Win | +EUR 0.14 |
-| Chidi Njokuani vs Joel Alvarez | Joel Alvarez | 1.27 | Loss | -EUR 1.00 |
-| Donte Johnson vs Eric McConico | Donte Johnson | 1.29 | Win | +EUR 0.29 |
-| Vicente Luque vs Tresean Gore | Vicente Luque | 1.94 | Loss | -EUR 1.00 |
-| Neil Magny vs Ramiz Brahimaj | Neil Magny | 2.30 | Win | +EUR 1.30 |
-| Jeremiah Wells vs Myktybek Orolbai | Myktybek Orolbai | 1.08 | Loss | -EUR 1.00 |
+| Fight | Model Pick | Odds (dec) | Result | P/L | Favorite (dec) | Favorite P/L |
+|---|---|---|---|---|---|---|
+| Islam Makhachev vs Ian Machado Garry | Islam Makhachev | 1.30 | Win | +EUR 0.30 | Islam Makhachev (1.30) | +EUR 0.30 |
+| Mackenzie Dern vs Gillian Robertson | Gillian Robertson | 2.80 | Loss | -EUR 1.00 | Mackenzie Dern (1.47) | +EUR 0.47 |
+| Jalin Turner vs Kaue Fernandes | Kaue Fernandes | 2.04 | Loss | -EUR 1.00 | Jalin Turner (1.82) | +EUR 0.82 |
+| Mansur Abdul-Malik vs Dustin Stoltzfus | Mansur Abdul-Malik | 1.15 | Loss | -EUR 1.00 | Mansur Abdul-Malik (1.15) | -EUR 1.00 |
+| Edson Barboza vs Esteban Ribovics | Esteban Ribovics | 1.14 | Win | +EUR 0.14 | Esteban Ribovics (1.14) | +EUR 0.14 |
+| Chidi Njokuani vs Joel Alvarez | Joel Alvarez | 1.27 | Loss | -EUR 1.00 | Joel Alvarez (1.27) | -EUR 1.00 |
+| Donte Johnson vs Eric McConico | Donte Johnson | 1.29 | Win | +EUR 0.29 | Donte Johnson (1.29) | +EUR 0.29 |
+| Vicente Luque vs Tresean Gore | Vicente Luque | 1.94 | Loss | -EUR 1.00 | Tresean Gore (1.91) | +EUR 0.91 |
+| Neil Magny vs Ramiz Brahimaj | Neil Magny | 2.30 | Win | +EUR 1.30 | Ramiz Brahimaj (1.65) | -EUR 1.00 |
+| Jeremiah Wells vs Myktybek Orolbai | Myktybek Orolbai | 1.08 | Loss | -EUR 1.00 | Myktybek Orolbai (1.08) | -EUR 1.00 |
 
 **Net P/L: -EUR 3.97 on EUR 10 staked (-39.7% ROI)**
+
+**Favorite on the same fights: -EUR 1.07 on EUR 10 staked (-10.7% ROI)**
 
 ## Raw Model Output
 

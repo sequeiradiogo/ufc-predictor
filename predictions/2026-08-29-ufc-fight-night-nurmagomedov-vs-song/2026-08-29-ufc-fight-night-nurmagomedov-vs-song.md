@@ -1,11 +1,12 @@
 # UFC Fight Night: Nurmagomedov vs. Song -- August 29, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-08-28 | Scored: 2026-10-07
+Model: Ensemble (Soft Vote) | Generated: 2026-08-28 | Scored: 2026-10-14
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
 
 **Result: 4/7 (57.1%)**
 *High-confidence (>=55%) picks: 4/7 (57.1%)*
+*Bookmaker favorite: 5/7 (71.4%) vs model 4/7 (57.1%) on the same fights*
 
 > Interactive fighter comparison: [2026-08-29-ufc-fight-night-nurmagomedov-vs-song.html](./2026-08-29-ufc-fight-night-nurmagomedov-vs-song.html)
 
@@ -30,20 +31,25 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 - Fights predicted: 7
 - Correct: 4/7 (57.1%)
 - High-confidence (>=55%) picks: 4/7 (57.1%)
+- Bookmaker favorite on the same 7 fights: 5/7 (71.4%) -- model 4/7 (57.1%)
+- Model picked against the favorite in 3 fight(s), right in 1
+- Always backing the favorite (EUR 1 on all 7 fights with odds): -EUR 0.13 on EUR 7 staked (-1.9% ROI)
 
 ### P/L (EUR 1 flat on picks >=55% confidence)
 
-| Fight | Model Pick | Odds (dec) | Result | P/L |
-|---|---|---|---|---|
-| Umar Nurmagomedov vs Song Yadong | Umar Nurmagomedov | 1.16 | Loss | -EUR 1.00 |
-| Yan Xiaonan vs Denise Gomes | Denise Gomes | 2.28 | Win | +EUR 1.28 |
-| Aoriqileng vs Kai Asakura | Aoriqileng | 4.85 | Loss | -EUR 1.00 |
-| Alex Perez vs Sumudaerji | Sumudaerji | 1.44 | Win | +EUR 0.44 |
-| Rei Tsuruya vs Kevin Borjas | Rei Tsuruya | 1.12 | Win | +EUR 0.12 |
-| Jack Jenkins vs Sean Woodson | Jack Jenkins | 2.24 | Loss | -EUR 1.00 |
-| Xiong Jingnan vs Julia Polastri | Julia Polastri | 1.42 | Win | +EUR 0.42 |
+| Fight | Model Pick | Odds (dec) | Result | P/L | Favorite (dec) | Favorite P/L |
+|---|---|---|---|---|---|---|
+| Umar Nurmagomedov vs Song Yadong | Umar Nurmagomedov | 1.16 | Loss | -EUR 1.00 | Umar Nurmagomedov (1.16) | -EUR 1.00 |
+| Yan Xiaonan vs Denise Gomes | Denise Gomes | 2.28 | Win | +EUR 1.28 | Yan Xiaonan (1.66) | -EUR 1.00 |
+| Aoriqileng vs Kai Asakura | Aoriqileng | 4.85 | Loss | -EUR 1.00 | Kai Asakura (1.20) | +EUR 0.20 |
+| Alex Perez vs Sumudaerji | Sumudaerji | 1.44 | Win | +EUR 0.44 | Sumudaerji (1.44) | +EUR 0.44 |
+| Rei Tsuruya vs Kevin Borjas | Rei Tsuruya | 1.12 | Win | +EUR 0.12 | Rei Tsuruya (1.12) | +EUR 0.12 |
+| Jack Jenkins vs Sean Woodson | Jack Jenkins | 2.24 | Loss | -EUR 1.00 | Sean Woodson (1.69) | +EUR 0.69 |
+| Xiong Jingnan vs Julia Polastri | Julia Polastri | 1.42 | Win | +EUR 0.42 | Julia Polastri (1.42) | +EUR 0.42 |
 
 **Net P/L: -EUR 0.74 on EUR 7 staked (-10.6% ROI)**
+
+**Favorite on the same fights: -EUR 0.13 on EUR 7 staked (-1.9% ROI)**
 
 ## Raw Model Output
 

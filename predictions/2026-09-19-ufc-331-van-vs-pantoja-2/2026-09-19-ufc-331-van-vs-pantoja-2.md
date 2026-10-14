@@ -1,11 +1,12 @@
 # UFC 331: Van vs. Pantoja 2 -- September 19, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-09-18 | Scored: 2026-10-07
+Model: Ensemble (Soft Vote) | Generated: 2026-09-18 | Scored: 2026-10-14
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
 
 **Result: 7/11 (63.6%)**
 *High-confidence (>=55%) picks: 6/10 (60.0%)*
+*Bookmaker favorite: 7/11 (63.6%) vs model 7/11 (63.6%) on the same fights*
 
 > Interactive fighter comparison: [2026-09-19-ufc-331-van-vs-pantoja-2.html](./2026-09-19-ufc-331-van-vs-pantoja-2.html)
 
@@ -34,23 +35,28 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 - Fights predicted: 11
 - Correct: 7/11 (63.6%)
 - High-confidence (>=55%) picks: 6/10 (60.0%)
+- Bookmaker favorite on the same 11 fights: 7/11 (63.6%) -- model 7/11 (63.6%)
+- Model picked against the favorite in 2 fight(s), right in 1
+- Always backing the favorite (EUR 1 on all 11 fights with odds): -EUR 1.34 on EUR 11 staked (-12.2% ROI)
 
 ### P/L (EUR 1 flat on picks >=55% confidence)
 
-| Fight | Model Pick | Odds (dec) | Result | P/L |
-|---|---|---|---|---|
-| Joshua Van vs Alexandre Pantoja | Joshua Van | 1.65 | Win | +EUR 0.65 |
-| Arman Tsarukyan vs Mauricio Ruffy | Arman Tsarukyan | 1.36 | Win | +EUR 0.36 |
-| Gable Steveson vs Sean Sharaf | Gable Steveson | 1.07 | Loss | -EUR 1.00 |
-| Alonzo Menifield vs Iwo Baraniewski | Iwo Baraniewski | 1.34 | Loss | -EUR 1.00 |
-| Marlon Vera vs Charles Jourdain | Charles Jourdain | 1.50 | Loss | -EUR 1.00 |
-| Michael Aswell Jr. vs JooSang Yoo | Michael Aswell Jr. | 2.50 | Win | +EUR 1.50 |
-| Ryan Gandra vs Ozzy Diaz | Ozzy Diaz | 5.20 | Loss | -EUR 1.00 |
-| Edmen Shahbazyan vs Brunno Ferreira | Edmen Shahbazyan | 1.56 | Win | +EUR 0.56 |
-| Casey O'Neill vs Eduarda Moura | Casey O'Neill | 1.43 | Win | +EUR 0.43 |
-| Giga Chikadze vs Joanderson Brito | Joanderson Brito | 1.23 | Win | +EUR 0.23 |
+| Fight | Model Pick | Odds (dec) | Result | P/L | Favorite (dec) | Favorite P/L |
+|---|---|---|---|---|---|---|
+| Joshua Van vs Alexandre Pantoja | Joshua Van | 1.65 | Win | +EUR 0.65 | Joshua Van (1.65) | +EUR 0.65 |
+| Arman Tsarukyan vs Mauricio Ruffy | Arman Tsarukyan | 1.36 | Win | +EUR 0.36 | Arman Tsarukyan (1.36) | +EUR 0.36 |
+| Gable Steveson vs Sean Sharaf | Gable Steveson | 1.07 | Loss | -EUR 1.00 | Gable Steveson (1.07) | -EUR 1.00 |
+| Alonzo Menifield vs Iwo Baraniewski | Iwo Baraniewski | 1.34 | Loss | -EUR 1.00 | Iwo Baraniewski (1.34) | -EUR 1.00 |
+| Marlon Vera vs Charles Jourdain | Charles Jourdain | 1.50 | Loss | -EUR 1.00 | Charles Jourdain (1.50) | -EUR 1.00 |
+| Michael Aswell Jr. vs JooSang Yoo | Michael Aswell Jr. | 2.50 | Win | +EUR 1.50 | JooSang Yoo (1.56) | -EUR 1.00 |
+| Ryan Gandra vs Ozzy Diaz | Ozzy Diaz | 5.20 | Loss | -EUR 1.00 | Ryan Gandra (1.18) | +EUR 0.18 |
+| Edmen Shahbazyan vs Brunno Ferreira | Edmen Shahbazyan | 1.56 | Win | +EUR 0.56 | Edmen Shahbazyan (1.56) | +EUR 0.56 |
+| Casey O'Neill vs Eduarda Moura | Casey O'Neill | 1.43 | Win | +EUR 0.43 | Casey O'Neill (1.43) | +EUR 0.43 |
+| Giga Chikadze vs Joanderson Brito | Joanderson Brito | 1.23 | Win | +EUR 0.23 | Joanderson Brito (1.23) | +EUR 0.23 |
 
 **Net P/L: -EUR 0.27 on EUR 10 staked (-2.7% ROI)**
+
+**Favorite on the same fights: -EUR 1.59 on EUR 10 staked (-15.9% ROI)**
 
 ## Raw Model Output
 

@@ -1,11 +1,12 @@
 # Noche UFC: Silva vs. Delgado -- September 12, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-09-11 | Scored: 2026-10-07
+Model: Ensemble (Soft Vote) | Generated: 2026-09-11 | Scored: 2026-10-14
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
 
 **Result: 7/12 (58.3%)**
 *High-confidence (>=55%) picks: 6/10 (60.0%)*
+*Bookmaker favorite: 9/12 (75.0%) vs model 7/12 (58.3%) on the same fights*
 
 > Interactive fighter comparison: [2026-09-12-noche-ufc-silva-vs-delgado.html](./2026-09-12-noche-ufc-silva-vs-delgado.html)
 
@@ -35,23 +36,28 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 - Fights predicted: 12
 - Correct: 7/12 (58.3%)
 - High-confidence (>=55%) picks: 6/10 (60.0%)
+- Bookmaker favorite on the same 12 fights: 9/12 (75.0%) -- model 7/12 (58.3%)
+- Model picked against the favorite in 4 fight(s), right in 1
+- Always backing the favorite (EUR 1 on all 12 fights with odds): +EUR 0.49 on EUR 12 staked (+4.1% ROI)
 
 ### P/L (EUR 1 flat on picks >=55% confidence)
 
-| Fight | Model Pick | Odds (dec) | Result | P/L |
-|---|---|---|---|---|
-| Jean Silva vs Jose Delgado | Jean Silva | 1.23 | Win | +EUR 0.23 |
-| Brandon Moreno vs Joseph Morales | Brandon Moreno | 1.91 | Win | +EUR 0.91 |
-| Tommy McMillen vs Marwan Rahiki | Marwan Rahiki | 2.44 | Loss | -EUR 1.00 |
-| Manon Fiorot vs Alexa Grasso | Manon Fiorot | 1.37 | Loss | -EUR 1.00 |
-| Waldo Cortes Acosta vs Curtis Blaydes | Waldo Cortes Acosta | 1.51 | Loss | -EUR 1.00 |
-| David Martinez vs Dan Ige | David Martinez | 1.24 | Win | +EUR 0.24 |
-| Ignacio Bahamondes vs Muslim Salikhov | Ignacio Bahamondes | 1.17 | Win | +EUR 0.17 |
-| Yousri Belgaroui vs Djorden Santos | Yousri Belgaroui | 1.11 | Win | +EUR 0.11 |
-| Drakkar Klose vs Tommy Gantt | Tommy Gantt | 1.26 | Win | +EUR 0.26 |
-| JJ Aldrich vs Regina Tarin | JJ Aldrich | 3.40 | Loss | -EUR 1.00 |
+| Fight | Model Pick | Odds (dec) | Result | P/L | Favorite (dec) | Favorite P/L |
+|---|---|---|---|---|---|---|
+| Jean Silva vs Jose Delgado | Jean Silva | 1.23 | Win | +EUR 0.23 | Jean Silva (1.23) | +EUR 0.23 |
+| Brandon Moreno vs Joseph Morales | Brandon Moreno | 1.91 | Win | +EUR 0.91 | Brandon Moreno (1.91) | +EUR 0.91 |
+| Tommy McMillen vs Marwan Rahiki | Marwan Rahiki | 2.44 | Loss | -EUR 1.00 | Tommy McMillen (1.58) | +EUR 0.58 |
+| Manon Fiorot vs Alexa Grasso | Manon Fiorot | 1.37 | Loss | -EUR 1.00 | Manon Fiorot (1.37) | -EUR 1.00 |
+| Waldo Cortes Acosta vs Curtis Blaydes | Waldo Cortes Acosta | 1.51 | Loss | -EUR 1.00 | Waldo Cortes Acosta (1.51) | -EUR 1.00 |
+| David Martinez vs Dan Ige | David Martinez | 1.24 | Win | +EUR 0.24 | David Martinez (1.24) | +EUR 0.24 |
+| Ignacio Bahamondes vs Muslim Salikhov | Ignacio Bahamondes | 1.17 | Win | +EUR 0.17 | Ignacio Bahamondes (1.17) | +EUR 0.17 |
+| Yousri Belgaroui vs Djorden Santos | Yousri Belgaroui | 1.11 | Win | +EUR 0.11 | Yousri Belgaroui (1.11) | +EUR 0.11 |
+| Drakkar Klose vs Tommy Gantt | Tommy Gantt | 1.26 | Win | +EUR 0.26 | Tommy Gantt (1.26) | +EUR 0.26 |
+| JJ Aldrich vs Regina Tarin | JJ Aldrich | 3.40 | Loss | -EUR 1.00 | Regina Tarin (1.34) | +EUR 0.34 |
 
 **Net P/L: -EUR 2.08 on EUR 10 staked (-20.8% ROI)**
+
+**Favorite on the same fights: +EUR 0.84 on EUR 10 staked (+8.4% ROI)**
 
 ## Raw Model Output
 

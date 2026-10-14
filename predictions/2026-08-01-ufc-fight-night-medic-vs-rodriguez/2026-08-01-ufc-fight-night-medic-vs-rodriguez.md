@@ -1,11 +1,12 @@
 # UFC Fight Night: Medic vs. Rodriguez -- August 1, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-07-28 | Scored: 2026-10-07
+Model: Ensemble (Soft Vote) | Generated: 2026-07-28 | Scored: 2026-10-14
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
 
 **Result: 5/7 (71.4%)**
 *High-confidence (>=55%) picks: 5/7 (71.4%)*
+*Bookmaker favorite: 6/7 (85.7%) vs model 5/7 (71.4%) on the same fights*
 
 > Interactive fighter comparison: [2026-08-01-ufc-fight-night-medic-vs-rodriguez.html](./2026-08-01-ufc-fight-night-medic-vs-rodriguez.html)
 
@@ -31,20 +32,25 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 - Fights predicted: 8
 - Correct: 5/7 (71.4%)
 - High-confidence (>=55%) picks: 5/7 (71.4%)
+- Bookmaker favorite on the same 7 fights: 6/7 (85.7%) -- model 5/7 (71.4%)
+- Model picked against the favorite in 1 fight(s), right in 0
+- Always backing the favorite (EUR 1 on all 7 fights with odds): +EUR 0.98 on EUR 7 staked (+14.0% ROI)
 
 ### P/L (EUR 1 flat on picks >=55% confidence)
 
-| Fight | Model Pick | Odds (dec) | Result | P/L |
-|---|---|---|---|---|
-| Uros Medic vs Daniel Rodriguez | Uros Medic | 1.25 | Win | +EUR 0.25 |
-| Jan Blachowicz vs Navajo Stirling | Navajo Stirling | 1.28 | Win | +EUR 0.28 |
-| Aleksandar Rakic vs Marcin Tybura | Aleksandar Rakic | 1.26 | Win | +EUR 0.26 |
-| Dusko Todorovic vs Robert Valentin | Dusko Todorovic | 2.34 | Loss | -EUR 1.00 |
-| Ludovit Klein vs Tofiq Musayev | Ludovit Klein | 1.39 | Loss | -EUR 1.00 |
-| Dennis Buzukja vs Bogdan Grad | Bogdan Grad | 1.44 | Win | +EUR 0.44 |
-| Mateusz Rebecki vs Kyle Prepolec | Mateusz Rebecki | 1.12 | Win | +EUR 0.12 |
+| Fight | Model Pick | Odds (dec) | Result | P/L | Favorite (dec) | Favorite P/L |
+|---|---|---|---|---|---|---|
+| Uros Medic vs Daniel Rodriguez | Uros Medic | 1.25 | Win | +EUR 0.25 | Uros Medic (1.25) | +EUR 0.25 |
+| Jan Blachowicz vs Navajo Stirling | Navajo Stirling | 1.28 | Win | +EUR 0.28 | Navajo Stirling (1.28) | +EUR 0.28 |
+| Aleksandar Rakic vs Marcin Tybura | Aleksandar Rakic | 1.26 | Win | +EUR 0.26 | Aleksandar Rakic (1.26) | +EUR 0.26 |
+| Dusko Todorovic vs Robert Valentin | Dusko Todorovic | 2.34 | Loss | -EUR 1.00 | Robert Valentin (1.63) | +EUR 0.63 |
+| Ludovit Klein vs Tofiq Musayev | Ludovit Klein | 1.39 | Loss | -EUR 1.00 | Ludovit Klein (1.39) | -EUR 1.00 |
+| Dennis Buzukja vs Bogdan Grad | Bogdan Grad | 1.44 | Win | +EUR 0.44 | Bogdan Grad (1.44) | +EUR 0.44 |
+| Mateusz Rebecki vs Kyle Prepolec | Mateusz Rebecki | 1.12 | Win | +EUR 0.12 | Mateusz Rebecki (1.12) | +EUR 0.12 |
 
 **Net P/L: -EUR 0.65 on EUR 7 staked (-9.3% ROI)**
+
+**Favorite on the same fights: +EUR 0.98 on EUR 7 staked (+14.0% ROI)**
 
 ## Raw Model Output
 

@@ -1,11 +1,12 @@
 # UFC Fight Night: Kape vs. Horiguchi -- June 20, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-06-17 | Scored: 2026-10-07
+Model: Ensemble (Soft Vote) | Generated: 2026-06-17 | Scored: 2026-10-14
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
 
 **Result: 6/9 (66.7%)**
 *High-confidence (>=55%) picks: 4/6 (66.7%)*
+*Bookmaker favorite: 5/9 (55.6%) vs model 6/9 (66.7%) on the same fights*
 
 > Interactive fighter comparison: [2026-06-20-ufc-fight-night-kape-vs-horiguchi.html](./2026-06-20-ufc-fight-night-kape-vs-horiguchi.html)
 
@@ -32,19 +33,24 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 - Fights predicted: 9
 - Correct: 6/9 (66.7%)
 - High-confidence (>=55%) picks: 4/6 (66.7%)
+- Bookmaker favorite on the same 9 fights: 5/9 (55.6%) -- model 6/9 (66.7%)
+- Model picked against the favorite in 3 fight(s), right in 2
+- Always backing the favorite (EUR 1 on all 9 fights with odds): -EUR 2.21 on EUR 9 staked (-24.6% ROI)
 
 ### P/L (EUR 1 flat on picks >=55% confidence)
 
-| Fight | Model Pick | Odds (dec) | Result | P/L |
-|---|---|---|---|---|
-| Ion Cutelaba vs Navajo Stirling | Navajo Stirling | 1.26 | Win | +EUR 0.26 |
-| Vinicius Oliveira vs Andre Fili | Vinicius Oliveira | 1.37 | Win | +EUR 0.37 |
-| Andre Lima vs Kevin Borjas | Andre Lima | 1.13 | Loss | -EUR 1.00 |
-| Bia Mesquita vs Melissa Mullins | Bia Mesquita | 1.12 | Win | +EUR 0.12 |
-| Allan Nascimento vs Mitch Raposo | Allan Nascimento | 1.63 | Loss | -EUR 1.00 |
-| Karol Rosa vs Luana Santos | Luana Santos | 1.96 | Win | +EUR 0.96 |
+| Fight | Model Pick | Odds (dec) | Result | P/L | Favorite (dec) | Favorite P/L |
+|---|---|---|---|---|---|---|
+| Ion Cutelaba vs Navajo Stirling | Navajo Stirling | 1.26 | Win | +EUR 0.26 | Navajo Stirling (1.26) | +EUR 0.26 |
+| Vinicius Oliveira vs Andre Fili | Vinicius Oliveira | 1.37 | Win | +EUR 0.37 | Vinicius Oliveira (1.37) | +EUR 0.37 |
+| Andre Lima vs Kevin Borjas | Andre Lima | 1.13 | Loss | -EUR 1.00 | Andre Lima (1.13) | -EUR 1.00 |
+| Bia Mesquita vs Melissa Mullins | Bia Mesquita | 1.12 | Win | +EUR 0.12 | Bia Mesquita (1.12) | +EUR 0.12 |
+| Allan Nascimento vs Mitch Raposo | Allan Nascimento | 1.63 | Loss | -EUR 1.00 | Allan Nascimento (1.63) | -EUR 1.00 |
+| Karol Rosa vs Luana Santos | Luana Santos | 1.96 | Win | +EUR 0.96 | Karol Rosa (1.86) | -EUR 1.00 |
 
 **Net P/L: -EUR 0.29 on EUR 6 staked (-4.8% ROI)**
+
+**Favorite on the same fights: -EUR 2.25 on EUR 6 staked (-37.5% ROI)**
 
 ## Raw Model Output
 

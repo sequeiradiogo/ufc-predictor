@@ -1,11 +1,12 @@
 # UFC Fight Night: Ankalaev vs. Guskov -- July 25, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-07-24 | Scored: 2026-10-07
+Model: Ensemble (Soft Vote) | Generated: 2026-07-24 | Scored: 2026-10-14
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
 
 **Result: 4/7 (57.1%)**
 *High-confidence (>=55%) picks: 3/6 (50.0%)*
+*Bookmaker favorite: 6/7 (85.7%) vs model 4/7 (57.1%) on the same fights*
 
 > Interactive fighter comparison: [2026-07-25-ufc-fight-night-ankalaev-vs-guskov.html](./2026-07-25-ufc-fight-night-ankalaev-vs-guskov.html)
 
@@ -31,19 +32,24 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 - Fights predicted: 8
 - Correct: 4/7 (57.1%)
 - High-confidence (>=55%) picks: 3/6 (50.0%)
+- Bookmaker favorite on the same 7 fights: 6/7 (85.7%) -- model 4/7 (57.1%)
+- Model picked against the favorite in 2 fight(s), right in 0
+- Always backing the favorite (EUR 1 on all 7 fights with odds): +EUR 1.13 on EUR 7 staked (+16.1% ROI)
 
 ### P/L (EUR 1 flat on picks >=55% confidence)
 
-| Fight | Model Pick | Odds (dec) | Result | P/L |
-|---|---|---|---|---|
-| Magomed Ankalaev vs Bogdan Guskov | Magomed Ankalaev | 1.18 | Win | +EUR 0.18 |
-| Steve Erceg vs Ramazan Temirov | Steve Erceg | 1.89 | Loss | -EUR 1.00 |
-| Rizvan Kuniev vs Tyrell Fortune | Tyrell Fortune | 3.65 | Loss | -EUR 1.00 |
-| Valter Walker vs Thomas Petersen | Valter Walker | 1.51 | Win | +EUR 0.51 |
-| Santiago Ponzinibbio vs Sam Patterson | Sam Patterson | 1.20 | Win | +EUR 0.20 |
-| Ismael Bonfim vs Axel Sola | Ismael Bonfim | 2.66 | Loss | -EUR 1.00 |
+| Fight | Model Pick | Odds (dec) | Result | P/L | Favorite (dec) | Favorite P/L |
+|---|---|---|---|---|---|---|
+| Magomed Ankalaev vs Bogdan Guskov | Magomed Ankalaev | 1.18 | Win | +EUR 0.18 | Magomed Ankalaev (1.18) | +EUR 0.18 |
+| Steve Erceg vs Ramazan Temirov | Steve Erceg | 1.89 | Loss | -EUR 1.00 | Steve Erceg (1.89) | -EUR 1.00 |
+| Rizvan Kuniev vs Tyrell Fortune | Tyrell Fortune | 3.65 | Loss | -EUR 1.00 | Rizvan Kuniev (1.30) | +EUR 0.30 |
+| Valter Walker vs Thomas Petersen | Valter Walker | 1.51 | Win | +EUR 0.51 | Valter Walker (1.51) | +EUR 0.51 |
+| Santiago Ponzinibbio vs Sam Patterson | Sam Patterson | 1.20 | Win | +EUR 0.20 | Sam Patterson (1.20) | +EUR 0.20 |
+| Ismael Bonfim vs Axel Sola | Ismael Bonfim | 2.66 | Loss | -EUR 1.00 | Axel Sola (1.50) | +EUR 0.50 |
 
 **Net P/L: -EUR 2.11 on EUR 6 staked (-35.2% ROI)**
+
+**Favorite on the same fights: +EUR 0.69 on EUR 6 staked (+11.5% ROI)**
 
 ## Raw Model Output
 

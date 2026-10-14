@@ -571,3 +571,55 @@ class TestRefreshHelpers:
         ids = _existing_fighter_ids(conn)
         conn.close()
         assert len(ids) > 100
+
+
+class TestFavoriteBaseline:
+    def test_favorite_line_and_summary_counts(self, tmp_path):
+        from scripts.score_event import score_markdown, _event_record
+        md = tmp_path / "e.md"
+        md.write_text(_UNSCORED_MD, encoding="utf-8")
+        # Ann Red is the favorite (-198) and won; the model also picked her
+        score_markdown(md, _PREDICTIONS, _RESULTS, {"Ann Red vs Bea Blue": (-198, 166)})
+        text = md.read_text(encoding="utf-8")
+        assert "*Bookmaker favorite: 1/1 (100.0%) vs model 1/1 (100.0%) on the same fights*" in text
+        assert "Model picked against the favorite in 0 fight(s)" in text
+        rec = _event_record(text, 0.55)
+        assert (rec["n"], rec["model_ok"], rec["fav_n"], rec["fav_ok"], rec["against"]) == (1, 1, 1, 1, 0)
+
+        # re-scoring keeps exactly one favorite line
+        score_markdown(md, _PREDICTIONS, _RESULTS, {"Ann Red vs Bea Blue": (+150, -180)}, rescore=True)
+        text = md.read_text(encoding="utf-8")
+        assert text.count("*Bookmaker favorite:") == 1
+        assert "against the favorite in 1 fight(s), right in 1" in text
+
+    def test_favorite_pl_on_same_fights_and_all_fights(self, tmp_path):
+        from scripts.score_event import score_markdown, _event_record
+        md = tmp_path / "e.md"
+        md.write_text(_UNSCORED_MD, encoding="utf-8")
+        # model picks Ann Red (+150 underdog) and she wins; favorite Bea Blue loses
+        score_markdown(md, _PREDICTIONS, _RESULTS, {"Ann Red vs Bea Blue": (+150, -180)})
+        text = md.read_text(encoding="utf-8")
+        assert "| Bea Blue (1.56) | -EUR 1.00 |" in text
+        assert "**Net P/L: +EUR 1.50 on EUR 1 staked (+150.0% ROI)**" in text
+        assert "**Favorite on the same fights: -EUR 1.00 on EUR 1 staked (-100.0% ROI)**" in text
+        assert "Always backing the favorite (EUR 1 on all 1 fights with odds): -EUR 1.00" in text
+        rec = _event_record(text, 0.55)
+        assert (rec["pl"], rec["staked"], rec["fav_pl"], rec["fav_staked"]) == (1.5, 1.0, -1.0, 1.0)
+        assert (rec["all_fav_pl"], rec["all_fav_staked"]) == (-1.0, 1.0)
+
+
+class TestDrawScoring:
+    def test_draw_is_neutral(self, tmp_path):
+        from scripts.score_event import score_markdown, _event_record
+        md = tmp_path / "e.md"
+        md.write_text(_UNSCORED_MD, encoding="utf-8")
+        # UFCStats lists a draw with the first fighter in the "winner" slot
+        draw = [{"winner": "Bea Blue", "loser": "Ann Red", "method": "Draw", "round": 3}]
+        score_markdown(md, _PREDICTIONS, draw, {"Ann Red vs Bea Blue": (-198, 166)})
+        text = md.read_text(encoding="utf-8")
+        assert "| Draw | PUSH |" in text
+        assert "**Result: N/A** *(1 excluded: draw/NC)*" in text
+        assert "| Push | +EUR 0.00 | Ann Red (1.50) | +EUR 0.00 |" in text
+        assert "**Net P/L: +EUR 0.00 on EUR 0 staked (+0.0% ROI)**" in text
+        assert "*Bookmaker favorite:" not in text
+        assert _event_record(text, 0.55) is None  # nothing gradeable

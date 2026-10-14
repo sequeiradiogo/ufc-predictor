@@ -1,11 +1,12 @@
 # UFC Fight Night: Hooker vs. Parnasse -- September 5, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-09-04 | Scored: 2026-10-07
+Model: Ensemble (Soft Vote) | Generated: 2026-09-04 | Scored: 2026-10-14
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
 
 **Result: 4/9 (44.4%)**
 *High-confidence (>=55%) picks: 2/6 (33.3%)*
+*Bookmaker favorite: 6/9 (66.7%) vs model 4/9 (44.4%) on the same fights*
 
 > Interactive fighter comparison: [2026-09-05-ufc-fight-night-hooker-vs-parnasse.html](./2026-09-05-ufc-fight-night-hooker-vs-parnasse.html)
 
@@ -32,19 +33,24 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 - Fights predicted: 9
 - Correct: 4/9 (44.4%)
 - High-confidence (>=55%) picks: 2/6 (33.3%)
+- Bookmaker favorite on the same 9 fights: 6/9 (66.7%) -- model 4/9 (44.4%)
+- Model picked against the favorite in 2 fight(s), right in 0
+- Always backing the favorite (EUR 1 on all 9 fights with odds): -EUR 0.87 on EUR 9 staked (-9.7% ROI)
 
 ### P/L (EUR 1 flat on picks >=55% confidence)
 
-| Fight | Model Pick | Odds (dec) | Result | P/L |
-|---|---|---|---|---|
-| Fares Ziam vs Axel Sola | Fares Ziam | 1.65 | Loss | -EUR 1.00 |
-| Daniil Donchenko vs Punahele Soriano | Daniil Donchenko | 1.42 | Win | +EUR 0.42 |
-| Losene Keita vs Muhammad Naimov | Muhammad Naimov | 4.50 | Loss | -EUR 1.00 |
-| Mario Pinto vs Ryan Spann | Mario Pinto | 1.28 | Win | +EUR 0.28 |
-| Oumar Sy vs Modestas Bukauskas | Oumar Sy | 1.42 | Loss | -EUR 1.00 |
-| Nora Cornolle vs Klaudia Sygula | Klaudia Sygula | 1.81 | Loss | -EUR 1.00 |
+| Fight | Model Pick | Odds (dec) | Result | P/L | Favorite (dec) | Favorite P/L |
+|---|---|---|---|---|---|---|
+| Fares Ziam vs Axel Sola | Fares Ziam | 1.65 | Loss | -EUR 1.00 | Fares Ziam (1.65) | -EUR 1.00 |
+| Daniil Donchenko vs Punahele Soriano | Daniil Donchenko | 1.42 | Win | +EUR 0.42 | Daniil Donchenko (1.42) | +EUR 0.42 |
+| Losene Keita vs Muhammad Naimov | Muhammad Naimov | 4.50 | Loss | -EUR 1.00 | Losene Keita (1.22) | +EUR 0.22 |
+| Mario Pinto vs Ryan Spann | Mario Pinto | 1.28 | Win | +EUR 0.28 | Mario Pinto (1.28) | +EUR 0.28 |
+| Oumar Sy vs Modestas Bukauskas | Oumar Sy | 1.42 | Loss | -EUR 1.00 | Oumar Sy (1.42) | -EUR 1.00 |
+| Nora Cornolle vs Klaudia Sygula | Klaudia Sygula | 1.81 | Loss | -EUR 1.00 | Klaudia Sygula (1.81) | -EUR 1.00 |
 
 **Net P/L: -EUR 3.30 on EUR 6 staked (-55.0% ROI)**
+
+**Favorite on the same fights: -EUR 2.08 on EUR 6 staked (-34.7% ROI)**
 
 ## Raw Model Output
 

@@ -1,11 +1,12 @@
 # UFC 329: McGregor vs. Holloway 2 -- July 11, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-07-06 | Scored: 2026-10-07
+Model: Ensemble (Soft Vote) | Generated: 2026-07-06 | Scored: 2026-10-14
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
 
 **Result: 4/12 (33.3%)**
 *High-confidence (>=55%) picks: 3/11 (27.3%)*
+*Bookmaker favorite: 9/12 (75.0%) vs model 4/12 (33.3%) on the same fights*
 
 > Interactive fighter comparison: [2026-07-11-ufc-329-mcgregor-vs-holloway-2.html](./2026-07-11-ufc-329-mcgregor-vs-holloway-2.html)
 
@@ -36,24 +37,29 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 - Fights predicted: 13
 - Correct: 4/12 (33.3%)
 - High-confidence (>=55%) picks: 3/11 (27.3%)
+- Bookmaker favorite on the same 12 fights: 9/12 (75.0%) -- model 4/12 (33.3%)
+- Model picked against the favorite in 5 fight(s), right in 0
+- Always backing the favorite (EUR 1 on all 12 fights with odds): +EUR 2.03 on EUR 12 staked (+16.9% ROI)
 
 ### P/L (EUR 1 flat on picks >=55% confidence)
 
-| Fight | Model Pick | Odds (dec) | Result | P/L |
-|---|---|---|---|---|
-| Conor McGregor vs Max Holloway | Max Holloway | 1.34 | Win | +EUR 0.34 |
-| Benoit Saint Denis vs Paddy Pimblett | Benoit Saint Denis | 1.83 | Loss | -EUR 1.00 |
-| Cory Sandhagen vs Mario Bautista | Cory Sandhagen | 1.65 | Loss | -EUR 1.00 |
-| Brandon Royval vs Lone'er Kavanagh | Lone'er Kavanagh | 1.42 | Loss | -EUR 1.00 |
-| Nikita Krylov vs Robert Whittaker | Nikita Krylov | 2.08 | Loss | -EUR 1.00 |
-| Cody Garbrandt vs Adrian Yanez | Cody Garbrandt | 4.20 | Loss | -EUR 1.00 |
-| Luke Riley vs Kai Kamaka | Kai Kamaka | 3.15 | Loss | -EUR 1.00 |
-| Tracy Cortez vs Wang Cong | Wang Cong | 1.83 | Win | +EUR 0.83 |
-| Damian Pinas vs Cesar Almeida | Damian Pinas | 1.39 | Win | +EUR 0.39 |
-| Ryan Gandra vs Zach Reese | Zach Reese | 2.14 | Loss | -EUR 1.00 |
-| Alessandro Costa vs Cody Durden | Cody Durden | 2.90 | Loss | -EUR 1.00 |
+| Fight | Model Pick | Odds (dec) | Result | P/L | Favorite (dec) | Favorite P/L |
+|---|---|---|---|---|---|---|
+| Conor McGregor vs Max Holloway | Max Holloway | 1.34 | Win | +EUR 0.34 | Max Holloway (1.34) | +EUR 0.34 |
+| Benoit Saint Denis vs Paddy Pimblett | Benoit Saint Denis | 1.83 | Loss | -EUR 1.00 | Benoit Saint Denis (1.83) | -EUR 1.00 |
+| Cory Sandhagen vs Mario Bautista | Cory Sandhagen | 1.65 | Loss | -EUR 1.00 | Cory Sandhagen (1.65) | -EUR 1.00 |
+| Brandon Royval vs Lone'er Kavanagh | Lone'er Kavanagh | 1.42 | Loss | -EUR 1.00 | Lone'er Kavanagh (1.42) | -EUR 1.00 |
+| Nikita Krylov vs Robert Whittaker | Nikita Krylov | 2.08 | Loss | -EUR 1.00 | Robert Whittaker (1.79) | +EUR 0.79 |
+| Cody Garbrandt vs Adrian Yanez | Cody Garbrandt | 4.20 | Loss | -EUR 1.00 | Adrian Yanez (1.25) | +EUR 0.25 |
+| Luke Riley vs Kai Kamaka | Kai Kamaka | 3.15 | Loss | -EUR 1.00 | Luke Riley (1.39) | +EUR 0.39 |
+| Tracy Cortez vs Wang Cong | Wang Cong | 1.83 | Win | +EUR 0.83 | Wang Cong (1.83) | +EUR 0.83 |
+| Damian Pinas vs Cesar Almeida | Damian Pinas | 1.39 | Win | +EUR 0.39 | Damian Pinas (1.39) | +EUR 0.39 |
+| Ryan Gandra vs Zach Reese | Zach Reese | 2.14 | Loss | -EUR 1.00 | Ryan Gandra (1.75) | +EUR 0.75 |
+| Alessandro Costa vs Cody Durden | Cody Durden | 2.90 | Loss | -EUR 1.00 | Alessandro Costa (1.44) | +EUR 0.44 |
 
 **Net P/L: -EUR 6.44 on EUR 11 staked (-58.5% ROI)**
+
+**Favorite on the same fights: +EUR 1.18 on EUR 11 staked (+10.7% ROI)**
 
 ## Raw Model Output
 
