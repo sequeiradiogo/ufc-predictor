@@ -1,0 +1,596 @@
+{
+  "event": "UFC Fight Night: Buckley vs. Malott",
+  "date": "2026-10-17",
+  "event_url": "http://www.ufcstats.com/event-details/55e94a9b525dcf45",
+  "model_type": "ensemble",
+  "fights": [
+    {
+      "label": "Joaquin Buckley vs Mike Malott",
+      "red_name": "Joaquin Buckley",
+      "blue_name": "Mike Malott",
+      "winner": "Mike Malott",
+      "red_prob": 31.6,
+      "blue_prob": 68.4,
+      "elo_red": 1536.0,
+      "elo_blue": 1550.0,
+      "finish": [
+        0.6506941318511963,
+        0.23713018000125885,
+        0.11217571049928665
+      ],
+      "finish_str": "Decision (65%) / KO/TKO (24%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          36.4,
+          58.9,
+          45.2,
+          70.2,
+          47.1,
+          33.3
+        ],
+        "blue": [
+          52.3,
+          57.1,
+          57.1,
+          72.7,
+          37.5,
+          100.0
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          3.62,
+          3.1,
+          1.43,
+          0.0
+        ],
+        "blue": [
+          3.94,
+          2.83,
+          1.57,
+          4.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 0,
+        "blue_streak": 4,
+        "red_finish": 33.3,
+        "blue_finish": 66.7,
+        "red_sos": 1555.0,
+        "blue_sos": 1480.0
+      }
+    },
+    {
+      "label": "Erin Blanchfield vs Jasmine Jasudavicius",
+      "red_name": "Erin Blanchfield",
+      "blue_name": "Jasmine Jasudavicius",
+      "winner": "Erin Blanchfield",
+      "red_prob": 70.4,
+      "blue_prob": 29.6,
+      "elo_red": 1577.0,
+      "elo_blue": 1513.0,
+      "finish": [
+        0.665266752243042,
+        0.15806365013122559,
+        0.17666955292224884
+      ],
+      "finish_str": "Decision (67%) / Submission (18%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          44.4,
+          58.8,
+          34.0,
+          78.3,
+          0.0,
+          66.7
+        ],
+        "blue": [
+          44.5,
+          51.7,
+          44.6,
+          75.0,
+          0.0,
+          66.7
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          5.24,
+          4.25,
+          1.96,
+          2.0
+        ],
+        "blue": [
+          3.35,
+          3.38,
+          2.49,
+          1.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 2,
+        "blue_streak": 1,
+        "red_finish": 33.3,
+        "blue_finish": 66.7,
+        "red_sos": 1536.0,
+        "blue_sos": 1494.0
+      }
+    },
+    {
+      "label": "Marc-Andre Barriault vs Kyle Daukaus",
+      "red_name": "Marc-Andre Barriault",
+      "blue_name": "Kyle Daukaus",
+      "winner": "Kyle Daukaus",
+      "red_prob": 29.2,
+      "blue_prob": 70.8,
+      "elo_red": 1368.0,
+      "elo_blue": 1424.0,
+      "finish": [
+        0.36614179611206055,
+        0.4651045501232147,
+        0.16875362396240234
+      ],
+      "finish_str": "KO/TKO (47%) / Decision (37%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          47.0,
+          49.2,
+          28.6,
+          68.1,
+          18.8,
+          33.3
+        ],
+        "blue": [
+          49.5,
+          42.3,
+          23.7,
+          71.4,
+          11.1,
+          66.7
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          5.65,
+          5.94,
+          0.34,
+          0.0
+        ],
+        "blue": [
+          2.86,
+          3.23,
+          1.96,
+          0.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 0,
+        "blue_streak": 0,
+        "red_finish": 33.3,
+        "blue_finish": 100.0,
+        "red_sos": 1448.0,
+        "blue_sos": 1451.0
+      }
+    },
+    {
+      "label": "Mandel Nallo vs Nate Landwehr",
+      "red_name": "Mandel Nallo",
+      "blue_name": "Nate Landwehr",
+      "winner": "Mandel Nallo",
+      "red_prob": 69.2,
+      "blue_prob": 30.8,
+      "elo_red": 1358.0,
+      "elo_blue": 1397.0,
+      "finish": [
+        0.7043747305870056,
+        0.24729971587657928,
+        0.04832551255822182
+      ],
+      "finish_str": "Decision (70%) / KO/TKO (25%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          51.6,
+          32.1,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "blue": [
+          45.8,
+          51.2,
+          41.7,
+          71.9,
+          9.1,
+          0.0
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          7.68,
+          9.12,
+          0.0,
+          0.0
+        ],
+        "blue": [
+          5.55,
+          5.96,
+          0.73,
+          0.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 0,
+        "blue_streak": 0,
+        "red_finish": 100.0,
+        "blue_finish": 100.0,
+        "red_sos": 1411.0,
+        "blue_sos": 1460.0
+      }
+    },
+    {
+      "label": "Tanner Boser vs Jhonata Diniz",
+      "red_name": "Tanner Boser",
+      "blue_name": "Jhonata Diniz",
+      "winner": "Jhonata Diniz",
+      "red_prob": 47.3,
+      "blue_prob": 52.7,
+      "elo_red": 1393.0,
+      "elo_blue": 1442.0,
+      "finish": [
+        0.5312543511390686,
+        0.3912752866744995,
+        0.0774703323841095
+      ],
+      "finish_str": "Decision (53%) / KO/TKO (39%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          53.5,
+          57.5,
+          0.0,
+          69.6,
+          27.3,
+          33.3
+        ],
+        "blue": [
+          58.8,
+          58.4,
+          0.0,
+          69.2,
+          20.0,
+          33.3
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          4.82,
+          3.0,
+          0.0,
+          0.0
+        ],
+        "blue": [
+          3.67,
+          3.41,
+          0.0,
+          0.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 0,
+        "blue_streak": 0,
+        "red_finish": 66.7,
+        "blue_finish": 66.7,
+        "red_sos": 1396.0,
+        "blue_sos": 1434.0
+      }
+    },
+    {
+      "label": "Chad Anheliger vs Steven Koslow",
+      "red_name": "Chad Anheliger",
+      "blue_name": "Steven Koslow",
+      "winner": "Steven Koslow",
+      "red_prob": 33.1,
+      "blue_prob": 66.9,
+      "elo_red": 1343.0,
+      "elo_blue": 1355.0,
+      "finish": [
+        0.5975585579872131,
+        0.23060990869998932,
+        0.17183159291744232
+      ],
+      "finish_str": "Decision (60%) / KO/TKO (23%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          44.0,
+          54.1,
+          36.4,
+          27.3,
+          20.0,
+          33.3
+        ],
+        "blue": [
+          37.9,
+          40.4,
+          55.6,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          3.11,
+          2.9,
+          0.82,
+          0.0
+        ],
+        "blue": [
+          0.77,
+          3.73,
+          5.28,
+          0.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 0,
+        "blue_streak": 0,
+        "red_finish": 33.3,
+        "blue_finish": 100.0,
+        "red_sos": 1384.0,
+        "blue_sos": 1400.0
+      }
+    },
+    {
+      "label": "Melissa Croden vs Chelsea Chandler",
+      "red_name": "Melissa Croden",
+      "blue_name": "Chelsea Chandler",
+      "winner": "Melissa Croden",
+      "red_prob": 71.8,
+      "blue_prob": 28.2,
+      "elo_red": 1479.0,
+      "elo_blue": 1439.0,
+      "finish": [
+        0.6427120566368103,
+        0.14378072321414948,
+        0.21350722014904022
+      ],
+      "finish_str": "Decision (64%) / Submission (21%)",
+      "radar": {
+        "axes": [
+          "Str acc",
+          "Str def",
+          "TD acc",
+          "TD def",
+          "Finish rate",
+          "Recent W%"
+        ],
+        "units": [
+          "%",
+          "%",
+          "%",
+          "%",
+          "%",
+          "%"
+        ],
+        "red": [
+          47.3,
+          59.4,
+          50.0,
+          66.7,
+          33.3,
+          66.7
+        ],
+        "blue": [
+          45.0,
+          40.5,
+          60.0,
+          25.0,
+          16.7,
+          33.3
+        ]
+      },
+      "bars": {
+        "stats": [
+          "Strikes/min",
+          "Str absorbed/min",
+          "TD avg/15min",
+          "Win streak"
+        ],
+        "red": [
+          4.27,
+          2.13,
+          2.02,
+          1.0
+        ],
+        "blue": [
+          3.52,
+          4.27,
+          0.81,
+          1.0
+        ],
+        "units": [
+          "/min",
+          "/min",
+          "/15min",
+          ""
+        ]
+      },
+      "form": {
+        "red_streak": 1,
+        "blue_streak": 1,
+        "red_finish": 33.3,
+        "blue_finish": 66.7,
+        "red_sos": 1470.0,
+        "blue_sos": 1438.0
+      }
+    }
+  ]
+}
