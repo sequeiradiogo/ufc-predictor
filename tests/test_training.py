@@ -4,6 +4,7 @@ tests/test_training.py
 Artifact-free tests for training-time helpers:
   - make_symmetric() corner-flip augmentation
   - bounded isotonic calibrators
+  - final temperature scaling of the ensemble
 """
 
 import sys
@@ -11,10 +12,12 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
+from ml.calibration import apply_temperature, fit_temperature
 from ml.ML_data_preparation_v1 import make_symmetric
 from ml.train_v1_models import CAL_PROB_MAX, CAL_PROB_MIN, _isotonic
 
@@ -63,3 +66,31 @@ class TestBoundedCalibration:
         out = ir.predict(np.array([-5.0, 0.0, 0.5, 1.0, 5.0]))
         assert out.min() >= CAL_PROB_MIN
         assert out.max() <= CAL_PROB_MAX
+
+
+class TestTemperature:
+    def test_identity_at_one(self):
+        p = np.array([0.1, 0.5, 0.87])
+        assert np.array_equal(apply_temperature(p, 1.0), p)
+
+    def test_shrinks_toward_half_without_changing_the_pick(self):
+        p = np.array([0.05, 0.3, 0.5, 0.7, 0.95])
+        q = apply_temperature(p, 1.2)
+        assert np.all(np.abs(q - 0.5) <= np.abs(p - 0.5))
+        assert np.array_equal(q >= 0.5, p >= 0.5)
+        assert q[2] == 0.5
+
+    def test_corner_symmetric(self):
+        # Swapping corners must give the complementary probability (no intercept)
+        assert apply_temperature(0.8, 1.3) + apply_temperature(0.2, 1.3) == pytest.approx(1.0)
+
+    def test_scalar_in_scalar_out(self):
+        assert isinstance(apply_temperature(0.9, 1.2), float)
+
+    def test_fit_recovers_overconfidence(self):
+        # Outcomes drawn from the truth, predictions sharpened with T = 1.5
+        rng = np.random.default_rng(0)
+        truth = rng.uniform(0.2, 0.8, 20000)
+        y = (rng.uniform(size=truth.size) < truth).astype(int)
+        overconfident = apply_temperature(truth, 1 / 1.5)
+        assert fit_temperature(overconfident, y) == pytest.approx(1.5, abs=0.1)

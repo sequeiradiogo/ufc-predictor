@@ -60,6 +60,7 @@ from config import (
     TRAJECTORY_WINDOW,
     NAME_ALIASES,
 )
+from ml.calibration import apply_temperature
 from ml.ELO_calculator import build_elo_features, get_current_glicko_by_division, get_current_ratings
 from utils.odds import print_value_bet_summary
 from utils.logger import get_logger
@@ -1397,6 +1398,7 @@ def compute_prediction(
     if model_type == "ensemble":
         ensemble_weights     = artifact.get("weights", {})
         ensemble_calibrators = artifact.get("calibrators", {})
+        ensemble_temperature = artifact.get("temperature", 1.0)
         model = base_model = platt = None
     elif model_type == "stacking":
         model = base_model = platt = None
@@ -1650,7 +1652,9 @@ def compute_prediction(
             sys.exit(1)
         total_w        = sum(active_weights)
         active_weights = [w / total_w for w in active_weights]
-        proba = list(np.average(model_probas, axis=0, weights=active_weights))
+        p_red = apply_temperature(float(np.average(model_probas, axis=0, weights=active_weights)[1]),
+                                  ensemble_temperature)
+        proba = [1 - p_red, p_red]
     elif model_type == "stacking":
         # Run each base model, collect calibrated probs, feed to meta-LR
         stk_specs  = artifact.get("specs", [])

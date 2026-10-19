@@ -73,6 +73,7 @@ from config import (
     TRAIN_TEST_SPLIT,
     XGB_PARAMS,
 )
+from ml.calibration import apply_temperature, fit_temperature
 from ml.ML_data_preparation_v1 import compute_sample_weights, make_symmetric
 from ml.purged_cv import PurgedWalkForwardCV
 from ml.pytorch_mlp import PyTorchMLP
@@ -833,9 +834,26 @@ def train_ensemble(df: pd.DataFrame, n_trials: int = 100, prod: bool = False) ->
             best_weights = {k: equal for k in model_keys}
             log.info("Using equal weights: %s", best_weights)
 
+        # Final temperature on the weighted average, fit on the tune split
+        # (out of sample for every base model and calibrator) -- see ml/calibration.py
+        if X_tune is not None:
+            ens_tune    = np.average(tune_probas, axis=0,
+                                     weights=[best_weights[k] for k in model_keys])
+            temperature = fit_temperature(ens_tune[:, 1], y_tune)
+        else:
+            temperature = 1.0
+
         ens_hold = np.average(hold_probas, axis=0,
                               weights=[best_weights[k] for k in model_keys])
         hold_acc = ((ens_hold[:, 1] >= 0.5).astype(int) == y_hold).mean()
+        p_raw  = np.clip(ens_hold[:, 1], 1e-6, 1 - 1e-6)
+        p_temp = np.clip(apply_temperature(ens_hold[:, 1], temperature), 1e-6, 1 - 1e-6)
+        print(f"\nTemperature {temperature:.3f} -- hold-out log-loss "
+              f"{log_loss(y_hold, p_raw):.4f} -> {log_loss(y_hold, p_temp):.4f}")
+
+    if prod:
+        temperature = float(eval_ensemble.get("temperature", 1.0))
+        print(f"Temperature (from eval ensemble): {temperature:.3f}")
 
     hold_label = f"{hold_dates.min().date()} to {hold_dates.max().date()}" if y_hold is not None else "n/a"
     print(f"\nEnsemble hold-out accuracy ({hold_label}): {hold_acc:.2%}")
@@ -848,6 +866,7 @@ def train_ensemble(df: pd.DataFrame, n_trials: int = 100, prod: bool = False) ->
         "mode":          "calibrated_soft_vote",
         "weights":       best_weights,
         "calibrators":   calibrators,
+        "temperature":   temperature,
         "model_keys":    model_keys,
         "test_accuracy": hold_acc,
     }, ensemble_save_path)

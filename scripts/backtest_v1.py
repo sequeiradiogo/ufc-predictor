@@ -42,6 +42,7 @@ from config import (
     MODELS_V1_DIR,
     TARGET_COL,
 )
+from ml.calibration import apply_temperature
 from utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -124,6 +125,7 @@ def _score_ensemble(df: pd.DataFrame) -> pd.DataFrame:
     total_w = sum(active_weights)
     active_weights = [w / total_w for w in active_weights]
     prob_red = np.average(model_probas, axis=0, weights=active_weights)
+    prob_red = apply_temperature(prob_red, ens.get("temperature", 1.0))
     return _make_results(df, prob_red)
 
 
