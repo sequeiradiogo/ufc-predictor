@@ -396,6 +396,10 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
 
 # ── Symmetry augmentation (with PR 36 bug fix) ───────────────────────────────
 
+# Red-minus-Blue features whose names lack the _diff suffix; negated on flip.
+_ANTISYMMETRIC_COLS = {"td_offense_matchup"}
+
+
 def make_symmetric(df: pd.DataFrame) -> pd.DataFrame:
     """
     Flip Red <-> Blue to double training data and remove corner bias.
@@ -403,10 +407,14 @@ def make_symmetric(df: pd.DataFrame) -> pd.DataFrame:
 
     Fixes PR 36 bug: striker_vs_wrestler and wrestler_vs_striker
     must be swapped (not just negated) when corners are flipped.
+
+    td_offense_matchup is a Red-minus-Blue difference without the _diff
+    suffix; until 2026-10 it was left un-negated, which made it exactly
+    uncorrelated with the target after augmentation (pure noise to the models).
     """
     df_flip = df.copy()
     df_flip[TARGET_COL] = 1 - df[TARGET_COL]
-    diff_cols = [c for c in df.columns if "_diff" in c]
+    diff_cols = [c for c in df.columns if "_diff" in c or c in _ANTISYMMETRIC_COLS]
     df_flip[diff_cols] = df_flip[diff_cols] * -1
     if "striker_vs_wrestler" in df.columns and "wrestler_vs_striker" in df.columns:
         df_flip["striker_vs_wrestler"] = df["wrestler_vs_striker"]

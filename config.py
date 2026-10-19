@@ -161,17 +161,19 @@ EXCLUDED_FEATURES: list[str] = [
     "age_diff",
     # Glicko-2 features: near-zero target correlation (0.004 / -0.002); removing
     # them improves 2026 accuracy by +1.5pp (67.0% total vs 66.7% with Glicko).
-    # ELO already captures the rating signal more cleanly.
+    # ELO already captures the rating signal more cleanly. Re-tested 2026-10-18
+    # after the Glicko same-date sort fix: still no log-loss gain.
     "glicko_diff",
     "glicko_rd_diff",
     # SHAP ablation (2026-06-11): negative permutation importance across 3-4 models.
     # str_def_diff: target corr=-0.033 (wrong direction) + r=0.49 with sapm_diff (collinear).
     # sos_diff: target corr=-0.049 (wrong direction) + redundant with career record features.
-    # elo_diff: ALL 4 models negative PI; redundant with win/loss/streak features.
-    # Ablation with equal-weight ensemble: dropping these 3 gives +0.44pp on 2025+ set.
+    # Ablation with equal-weight ensemble: dropping these gave +0.44pp on 2025+ set.
+    # Re-tested 2026-10-18 on leak-free data (700 fights 2025-02..2026-09, 5 seeds):
+    # str_def_diff / sos_diff still hurt log-loss and stay out; elo_diff
+    # (originally dropped with them) now helps (+0.6pp, -0.003 log-loss) and is back in.
     "str_def_diff",
     "sos_diff",
-    "elo_diff",
 ]
 
 # Minimum fight date included in the ML training set.

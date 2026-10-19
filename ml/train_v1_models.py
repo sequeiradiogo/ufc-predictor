@@ -86,6 +86,20 @@ MODELS_V1_PROD_DIR.mkdir(exist_ok=True)
 # Calibration holdout fraction of training data
 CAL_FRAC = 0.20
 
+# Bounds on isotonic-calibrated probabilities. Unbounded, the top/bottom bin of
+# a ~560-row calibration window is often all wins/losses, so calibrators output
+# exactly 1.0/0.0 for any score beyond it -- 3-4 confidently wrong fights per
+# hold-out window and absurd EV in value-bet calculations. The bounds are stored
+# inside each calibrator, so predict.py / api.py / backtest_v1.py inherit them.
+# 0.05/0.95 beat both 0.03/0.97 and unbounded on hold-out log-loss in every
+# seed tested (2026-10-19).
+CAL_PROB_MIN = 0.05
+CAL_PROB_MAX = 0.95
+
+
+def _isotonic() -> IsotonicRegression:
+    return IsotonicRegression(out_of_bounds="clip", y_min=CAL_PROB_MIN, y_max=CAL_PROB_MAX)
+
 _ALL_MODELS = ["xgb", "lr", "rf", "lgbm", "mlp", "ensemble", "stacking"]
 
 
@@ -448,7 +462,7 @@ def train_mlp(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: bo
     base.fit(X_tr_s, y_tr.values)
 
     raw_cal    = base.predict_proba(X_cal_s)[:, 1]
-    calibrator = IsotonicRegression(out_of_bounds="clip")
+    calibrator = _isotonic()
     calibrator.fit(raw_cal, y_cal.values)
 
     if prod:
@@ -728,13 +742,13 @@ def train_ensemble(df: pd.DataFrame, n_trials: int = 100, prod: bool = False) ->
         for m_key, m_path, f_path, s_path, is_lr in eval_specs:
             if not m_path.exists() or not f_path.exists():
                 log.warning("Eval model not found for %s -- skipping calibration", m_key)
-                calibrators[m_key] = IsotonicRegression(out_of_bounds="clip")
+                calibrators[m_key] = _isotonic()
                 continue
             eval_artifact   = joblib.load(m_path)
             eval_feat_names = joblib.load(f_path)
             eval_scaler     = joblib.load(s_path) if s_path and s_path.exists() else None
             raw = _raw_proba(eval_artifact, eval_feat_names, eval_scaler, is_lr, X_cal)
-            ir  = IsotonicRegression(out_of_bounds="clip")
+            ir  = _isotonic()
             ir.fit(raw, y_cal)
             calibrators[m_key] = ir
             acc = ((raw >= 0.5).astype(int) == y_cal).mean()
@@ -753,7 +767,7 @@ def train_ensemble(df: pd.DataFrame, n_trials: int = 100, prod: bool = False) ->
         print("\nBase model calibration accuracy:")
         for m_key, artifact, feat_names, scaler, is_lr in loaded:
             raw = _raw_proba(artifact, feat_names, scaler, is_lr, X_cal)
-            ir  = IsotonicRegression(out_of_bounds="clip")
+            ir  = _isotonic()
             ir.fit(raw, y_cal)
             calibrators[m_key] = ir
             acc = ((raw >= 0.5).astype(int) == y_cal).mean()
