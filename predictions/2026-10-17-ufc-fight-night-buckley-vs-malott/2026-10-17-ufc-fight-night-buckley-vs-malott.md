@@ -1,8 +1,12 @@
 # UFC Fight Night: Buckley vs. Malott -- October 17, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-10-16
+Model: Ensemble (Soft Vote) | Generated: 2026-10-16 | Scored: 2026-10-19
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
+
+**Result: 3/7 (42.9%)**
+*High-confidence (>=55%) picks: 3/6 (50.0%)*
+*Bookmaker favorite: 3/7 (42.9%) vs model 3/7 (42.9%) on the same fights*
 
 > Interactive fighter comparison: [2026-10-17-ufc-fight-night-buckley-vs-malott.html](./2026-10-17-ufc-fight-night-buckley-vs-malott.html)
 
@@ -10,17 +14,41 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 
 ## Predictions
 
-| Fight | Predicted Winner | Confidence | Likely Method |
-|---|---|---|---|
-| Joaquin Buckley vs Mike Malott | Mike Malott | 68.4% | Decision (65%) / KO/TKO (24%) |
-| Erin Blanchfield vs Jasmine Jasudavicius | Erin Blanchfield | 70.4% | Decision (67%) / Submission (18%) |
-| Marc-Andre Barriault vs Kyle Daukaus | Kyle Daukaus | 70.8% | KO/TKO (47%) / Decision (37%) |
-| Mandel Nallo vs Nate Landwehr | Mandel Nallo | 69.2% | Decision (70%) / KO/TKO (25%) |
-| Tanner Boser vs Jhonata Diniz | Jhonata Diniz | 52.7% | Decision (53%) / KO/TKO (39%) |
-| Chad Anheliger vs Steven Koslow | Steven Koslow | 66.9% | Decision (60%) / KO/TKO (23%) |
-| Melissa Croden vs Chelsea Chandler | Melissa Croden | 71.8% | Decision (64%) / Submission (21%) |
+| Fight | Predicted Winner | Confidence | Likely Method | Odds (Red / Blue) | Actual Result | Correct? |
+|---|---|---|---|---|---|---|
+| Joaquin Buckley vs Mike Malott | Mike Malott | 68.4% | Decision (65%) / KO/TKO (24%) | +112 / -132 | Mike Malott (KO R2) | YES |
+| Erin Blanchfield vs Jasmine Jasudavicius | Erin Blanchfield | 70.4% | Decision (67%) / Submission (18%) | -330 / +265 | Jasmine Jasudavicius (Dec) | NO |
+| Marc-Andre Barriault vs Kyle Daukaus | Kyle Daukaus | 70.8% | KO/TKO (47%) / Decision (37%) | +168 / -200 | Marc-Andre Barriault (KO R1) | NO |
+| Mandel Nallo vs Nate Landwehr | Mandel Nallo | 69.2% | Decision (70%) / KO/TKO (25%) | -290 / +235 | Mandel Nallo (KO R2) | YES |
+| Tanner Boser vs Jhonata Diniz | Jhonata Diniz | 52.7% | Decision (53%) / KO/TKO (39%) | +184 / -220 | Tanner Boser (KO R3) | NO |
+| Chad Anheliger vs Steven Koslow | Steven Koslow | 66.9% | Decision (60%) / KO/TKO (23%) | +150 / -178 | Steven Koslow (Sub R3) | YES |
+| Melissa Croden vs Chelsea Chandler | Melissa Croden | 71.8% | Decision (64%) / Submission (21%) | -360 / +290 | Chelsea Chandler (Sub R1) | NO |
 
 ---
+
+## Post-Event Summary
+
+- Fights predicted: 7
+- Correct: 3/7 (42.9%)
+- High-confidence (>=55%) picks: 3/6 (50.0%)
+- Bookmaker favorite on the same 7 fights: 3/7 (42.9%) -- model 3/7 (42.9%)
+- Model picked against the favorite in 0 fight(s), right in 0
+- Always backing the favorite (EUR 1 on all 7 fights with odds): -EUR 2.34 on EUR 7 staked (-33.4% ROI)
+
+### P/L (EUR 1 flat on picks >=55% confidence)
+
+| Fight | Model Pick | Odds (dec) | Result | P/L | Favorite (dec) | Favorite P/L |
+|---|---|---|---|---|---|---|
+| Joaquin Buckley vs Mike Malott | Mike Malott | 1.76 | Win | +EUR 0.76 | Mike Malott (1.76) | +EUR 0.76 |
+| Erin Blanchfield vs Jasmine Jasudavicius | Erin Blanchfield | 1.30 | Loss | -EUR 1.00 | Erin Blanchfield (1.30) | -EUR 1.00 |
+| Marc-Andre Barriault vs Kyle Daukaus | Kyle Daukaus | 1.50 | Loss | -EUR 1.00 | Kyle Daukaus (1.50) | -EUR 1.00 |
+| Mandel Nallo vs Nate Landwehr | Mandel Nallo | 1.34 | Win | +EUR 0.34 | Mandel Nallo (1.34) | +EUR 0.34 |
+| Chad Anheliger vs Steven Koslow | Steven Koslow | 1.56 | Win | +EUR 0.56 | Steven Koslow (1.56) | +EUR 0.56 |
+| Melissa Croden vs Chelsea Chandler | Melissa Croden | 1.28 | Loss | -EUR 1.00 | Melissa Croden (1.28) | -EUR 1.00 |
+
+**Net P/L: -EUR 1.34 on EUR 6 staked (-22.3% ROI)**
+
+**Favorite on the same fights: -EUR 1.34 on EUR 6 staked (-22.3% ROI)**
 
 ## Raw Model Output
 
