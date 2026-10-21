@@ -174,6 +174,32 @@ EXCLUDED_FEATURES: list[str] = [
     # (originally dropped with them) now helps (+0.6pp, -0.003 log-loss) and is back in.
     "str_def_diff",
     "sos_diff",
+    # Pruned 2026-10-21 (per-feature permutation importance + group drop-and-retrain
+    # of the real eval pipeline over 9 seeds): dropping all 20 below improved the
+    # base models' test log-loss by 0.004 (P=1.00) and the ensemble's hold-out
+    # log-loss by 0.003 (7/9 seeds); no group hurt on its own.
+    # Exact / near-exact duplicates of features that stay in
+    "ufc_experience_diff",        # = wins_diff + losses_diff
+    "reach_div_norm_diff",        # rho 0.995 with reach_diff
+    "reach_ratio_diff",
+    "splm_div_norm_diff",         # rho 0.996 with splm_diff
+    "grapple_ratio_diff",         # R^2 0.99 from td_avg_diff & co
+    "striker_vs_wrestler",
+    "wrestler_vs_striker",
+    "win_by_ko_diff",             # R^2 0.99 from ko/sub/dec rates + record
+    "win_by_sub_diff",
+    "win_by_dec_unanimous_diff",
+    # No measurable signal (permutation importance within noise for every model)
+    "career_reversals_diff",
+    "ewma_reversals_diff",
+    "ewma_reversals_r1_diff",
+    "southpaw_adv_diff",
+    "both_southpaw",
+    "title_fight",
+    "td_acc_slope_diff",
+    "splm_slope_diff",
+    "avg_td_pct_diff",
+    "ground_def_diff",
 ]
 
 # Minimum fight date included in the ML training set.
