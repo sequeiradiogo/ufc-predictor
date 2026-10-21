@@ -5,6 +5,7 @@ Artifact-free tests for training-time helpers:
   - make_symmetric() corner-flip augmentation
   - bounded isotonic calibrators
   - final temperature scaling of the ensemble
+  - eval-tier training / calibration windows
 """
 
 import sys
@@ -19,7 +20,8 @@ sys.path.insert(0, str(ROOT_DIR))
 
 from ml.calibration import apply_temperature, fit_temperature
 from ml.ML_data_preparation_v1 import make_symmetric
-from ml.train_v1_models import CAL_PROB_MAX, CAL_PROB_MIN, _isotonic
+from config import TRAIN_TEST_SPLIT
+from ml.train_v1_models import CAL_PROB_MAX, CAL_PROB_MIN, _isotonic, eval_fit_end, time_split
 
 
 def _toy_fights() -> pd.DataFrame:
@@ -94,3 +96,16 @@ class TestTemperature:
         y = (rng.uniform(size=truth.size) < truth).astype(int)
         overconfident = apply_temperature(truth, 1 / 1.5)
         assert fit_temperature(overconfident, y) == pytest.approx(1.5, abs=0.1)
+
+
+class TestEvalWindows:
+    def test_calibration_window_is_out_of_sample(self):
+        # Base models must stop training before the calibration window starts;
+        # until 2026-10 the trees trained through it and were calibrated in-sample
+        n = 3500
+        fit_end, split = eval_fit_end(n), int(n * TRAIN_TEST_SPLIT)
+        assert 0 < fit_end < split
+        df = pd.DataFrame({"date": pd.date_range("2018-01-01", periods=n, freq="D")})
+        train, test = time_split(df)
+        assert len(train) == fit_end
+        assert test.index[0] == split

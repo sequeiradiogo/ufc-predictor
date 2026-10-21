@@ -132,10 +132,25 @@ def preprocess(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
     return X, y
 
 
+def eval_fit_end(n: int) -> int:
+    """Eval tier: every base model trains on rows [:eval_fit_end(n)].
+
+    Rows [eval_fit_end(n):split] are the calibration window (LR Platt, MLP
+    isotonic, the ensemble's per-model calibrators, the stacking meta-model) and
+    must be out-of-sample for every base model. Until 2026-10 the tree models
+    trained on the whole [:split] window, so the ensemble calibrated them on
+    in-sample predictions: calibrated test log-loss was RF 0.78 / LGBM 0.70
+    instead of 0.63 / 0.64, and Optuna weighted them down accordingly.
+    """
+    return int(int(n * TRAIN_TEST_SPLIT) * (1 - CAL_FRAC))
+
+
 def time_split(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
-    idx   = int(len(df) * TRAIN_TEST_SPLIT)
-    train = df.iloc[:idx]
-    test  = df.iloc[idx:]
+    """(train, test) for the eval tier -- train stops at the calibration window."""
+    fit_end = eval_fit_end(len(df))
+    idx     = int(len(df) * TRAIN_TEST_SPLIT)
+    train   = df.iloc[:fit_end]
+    test    = df.iloc[idx:]
     log.info("Train: %d fights up to %s", len(train), train["date"].max().date())
     log.info("Test:  %d fights from %s", len(test),  test["date"].min().date())
     return train, test
@@ -166,8 +181,10 @@ def train_xgb(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: bo
         X_te, y_te    = preprocess(test_df)
         w             = compute_sample_weights(train_sym["date"])
         feature_names = list(X_tr.columns)
-        model = XGBClassifier(**fit_p, eval_metric="logloss", early_stopping_rounds=50)
-        model.fit(X_tr, y_tr, eval_set=[(X_te, y_te)], sample_weight=w, verbose=False)
+        # No early stopping: it used the test set to pick the tree count, and the
+        # prod tier always trains the full n_estimators
+        model = XGBClassifier(**fit_p, eval_metric="logloss")
+        model.fit(X_tr, y_tr, sample_weight=w, verbose=False)
         acc = accuracy_score(y_te, model.predict(X_te))
         log.info("XGBoost test accuracy: %.2f%%", acc * 100)
         print(f"XGBoost test accuracy: {acc:.2%}")
@@ -225,9 +242,9 @@ def train_lr(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: boo
         tr_end  = int(n * 0.85)
         cal_end = n
     else:
-        # 70% train, 10% calibration, 20% test
-        tr_end  = int(n * 0.70)
-        cal_end = int(n * 0.80)
+        # Train up to the shared calibration window, Platt on it, 20% test
+        tr_end  = eval_fit_end(n)
+        cal_end = int(n * TRAIN_TEST_SPLIT)
 
     train_sym  = make_symmetric(df.iloc[:tr_end].copy())
     df_cal     = df.iloc[tr_end:cal_end]
@@ -446,8 +463,8 @@ def train_mlp(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: bo
         tr_end  = int(n * 0.85)
         cal_end = n
     else:
-        tr_end  = int(n * 0.70)
-        cal_end = int(n * 0.80)
+        tr_end  = eval_fit_end(n)
+        cal_end = int(n * TRAIN_TEST_SPLIT)
 
     train_sym  = make_symmetric(df.iloc[:tr_end].copy())
     df_cal     = df.iloc[tr_end:cal_end]
@@ -533,10 +550,10 @@ def train_stacking(df: pd.DataFrame) -> None:
     """
     Train a LogisticRegression meta-learner on top of the 5 calibrated base models.
 
-    Uses the 70/10/20 chronological split:
-      - 70%  training window  -- base models were already trained here (no leakage)
-      - 10%  meta-train slice -- base model predictions on unseen data feed meta-LR
-      - 20%  test             -- honest hold-out for accuracy reporting
+    Uses the eval tier's chronological split:
+      - [:eval_fit_end]        -- base models were already trained here (no leakage)
+      - [eval_fit_end:split]   -- base model predictions on unseen data feed meta-LR
+      - [split:]  (20%)        -- honest hold-out for accuracy reporting
 
     The stacking artifact is a dict with:
       "meta": LogisticRegression fitted on stacked probs
@@ -546,8 +563,8 @@ def train_stacking(df: pd.DataFrame) -> None:
     log.info("=== Stacking Meta-Learner ===")
 
     n       = len(df)
-    tr_end  = int(n * 0.70)
-    cal_end = int(n * 0.80)
+    tr_end  = eval_fit_end(n)
+    cal_end = int(n * TRAIN_TEST_SPLIT)
 
     df_meta = df.iloc[tr_end:cal_end]   # meta-train slice
     df_test = df.iloc[cal_end:]          # honest hold-out
@@ -653,7 +670,7 @@ def train_ensemble(df: pd.DataFrame, n_trials: int = 100, prod: bool = False) ->
         ensemble_save_path = MODEL_V1_PROD_ENSEMBLE_PATH
     else:
         split_idx = int(len(df) * TRAIN_TEST_SPLIT)
-        cal_idx   = int(split_idx * (1 - CAL_FRAC))
+        cal_idx   = eval_fit_end(len(df))
         X_cal  = X_all.iloc[cal_idx:split_idx]
         y_cal  = y_all[cal_idx:split_idx]
         X_test = X_all.iloc[split_idx:]
