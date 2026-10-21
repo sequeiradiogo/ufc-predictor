@@ -31,6 +31,7 @@ sys.path.insert(0, str(ROOT))
 
 from config import DB_V1_PATH, DB_PATH, EWMA_SPAN, FINISH_METHOD_MAP, NAME_ALIASES, SOS_WINDOW, STARTING_ELO
 from ml.ELO_calculator import build_elo_features, build_glicko_features
+from ml.opp_adjusted_defense import FEATURES as ADJ_DEF_FEATURES, prefight_adj_defense
 
 KAGGLE_CSV = ROOT / "raw_data" / "ufc-master.csv"
 
@@ -499,6 +500,17 @@ def main(dry_run: bool = False) -> None:
         ["fight_id", "fighter_id"] + _oadj_out_cols
     ]
 
+    # --- Opponent-adjusted striking defence (shared with predict.py's live path) ---
+    print("  Opponent-adjusted defence ...")
+    adjdef_df = prefight_adj_defense(ufc_conn)
+    adjdef_df["fight_id"]   = adjdef_df["fight_id"].map(ufc_fight_map)
+    adjdef_df["fighter_id"] = adjdef_df["fighter_id"].map(
+        lambda fid: _md5id(ufc_fid_to_name[fid]) if fid in ufc_fid_to_name else None
+    )
+    adjdef_df = adjdef_df.dropna(subset=["fight_id", "fighter_id"])[
+        ["fight_id", "fighter_id", *ADJ_DEF_FEATURES]
+    ]
+
     # --- EWMA of per-fight output rates (splm, td_avg, sapm, reversals) ---
     print("  EWMA output rates (splm, td_avg, sapm, reversals) ...")
 
@@ -674,6 +686,8 @@ def main(dry_run: bool = False) -> None:
         (oadj_df,          "opp_adj_head_acc",   "R_opp_adj_head_acc",   "B_opp_adj_head_acc"),
         (oadj_df,          "opp_adj_body_acc",   "R_opp_adj_body_acc",   "B_opp_adj_body_acc"),
         (oadj_df,          "opp_adj_dist_acc",   "R_opp_adj_dist_acc",   "B_opp_adj_dist_acc"),
+        (adjdef_df,        "adj_str_def",        "R_adj_str_def",        "B_adj_str_def"),
+        (adjdef_df,        "adj_acc_def",        "R_adj_acc_def",        "B_adj_acc_def"),
         (ewma_rates_df,    "ewma_splm",          "R_ewma_splm",          "B_ewma_splm"),
         (ewma_rates_df,    "ewma_td_avg",        "R_ewma_td_avg",        "B_ewma_td_avg"),
         (ewma_rates_df,    "ewma_sapm",          "R_ewma_sapm",          "B_ewma_sapm"),

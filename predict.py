@@ -61,6 +61,7 @@ from config import (
     NAME_ALIASES,
 )
 from ml.calibration import apply_temperature
+from ml.opp_adjusted_defense import current_adj_defense
 from ml.ELO_calculator import build_elo_features, get_current_glicko_by_division, get_current_ratings
 from utils.odds import print_value_bet_summary
 from utils.logger import get_logger
@@ -1195,6 +1196,9 @@ def build_feature_vector(
             row[feat] = _er.get("ewma_reversals_r1", 0.0) - _eb.get("ewma_reversals_r1", 0.0)
 
         # ── Opponent-adjusted stats ────────────────────────────────────────────
+        elif feat in ("adj_str_def_diff", "adj_acc_def_diff"):
+            stat = feat[: -len("_diff")]
+            row[feat] = _er.get(stat, 0.0) - _eb.get(stat, 0.0)
         elif feat == "opp_adj_splm_diff":
             row[feat] = _er.get("opp_adj_splm", 0.0) - _eb.get("opp_adj_splm", 0.0)
         elif feat == "opp_adj_td_avg_diff":
@@ -1590,6 +1594,16 @@ def compute_prediction(
                 own_body_acc=extra_b.get("body_acc", 0.0),
                 own_dist_acc=extra_b.get("dist_acc", 0.0),
             ))
+
+        # -- Opponent-adjusted striking defence (same code path as training) --
+        if conn_v2 and (r_fid_v2 or b_fid_v2):
+            _adj_def = current_adj_defense(
+                conn_v2, [f for f in (r_fid_v2, b_fid_v2) if f], before_date=as_of,
+            )
+            if r_fid_v2:
+                extra_r.update(_adj_def[r_fid_v2])
+            if b_fid_v2:
+                extra_b.update(_adj_def[b_fid_v2])
 
     finally:
         conn.close()

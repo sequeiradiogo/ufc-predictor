@@ -230,6 +230,9 @@ def ingest(csv_path: Path, db_path: Path) -> None:
         "opp_adj_head_acc":  ("R_opp_adj_head_acc",  "B_opp_adj_head_acc"),
         "opp_adj_body_acc":  ("R_opp_adj_body_acc",  "B_opp_adj_body_acc"),
         "opp_adj_dist_acc":  ("R_opp_adj_dist_acc",  "B_opp_adj_dist_acc"),
+        # Opponent-adjusted striking defence (ml/opp_adjusted_defense.py)
+        "adj_str_def":       ("R_adj_str_def",       "B_adj_str_def"),
+        "adj_acc_def":       ("R_adj_acc_def",       "B_adj_acc_def"),
         # Group E: reversals (from add_computed_features_to_csv.py)
         "career_reversals":  ("R_career_reversals",  "B_career_reversals"),
         "ewma_reversals":    ("R_ewma_reversals",    "B_ewma_reversals"),
