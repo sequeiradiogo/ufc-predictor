@@ -625,6 +625,17 @@ def main() -> None:
     out_path.write_text(md, encoding="utf-8")
     print(f"Predictions written to: {out_path}")
     print(f"Fight data JSON:        {json_path}")
+    if not args.output:
+        _write_feed()
+
+
+def _write_feed() -> None:
+    """Refresh predictions/feed.json (read by match-analyzer); never fails the run."""
+    try:
+        from scripts.build_feed import write_feed
+        print(f"Feed:                   {write_feed()}")
+    except Exception as e:  # noqa: BLE001 -- the predictions themselves are already written
+        log.warning("feed.json not updated: %s", e)
 
 
 if __name__ == "__main__":

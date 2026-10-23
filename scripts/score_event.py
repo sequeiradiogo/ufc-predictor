@@ -652,6 +652,22 @@ def find_unscored_prediction() -> Path | None:
 SUMMARY_PATH = PREDICTIONS_DIR / "SUMMARY.md"
 
 
+def event_fights(md: str) -> list[dict]:
+    """Every scored fight row of an event markdown (YES / NO / PUSH), in card order."""
+    out = []
+    for line in md.splitlines():
+        c = [x.strip() for x in line.strip().strip("|").split("|")]
+        if len(c) < 6 or " vs " not in c[0] or c[-1] not in ("YES", "NO", "PUSH"):
+            continue
+        red, blue = c[0].split(" vs ", 1)
+        odds = re.match(r"([+-]\d+) / ([+-]\d+)", c[4]) if len(c) >= 7 else None
+        out.append({"red_name": red, "blue_name": blue, "pick": c[1],
+                    "confidence": round(float(c[2].rstrip("%")) / 100, 4),
+                    "odds": [int(odds.group(1)), int(odds.group(2))] if odds else None,
+                    "result": c[-2], "correct": {"YES": True, "NO": False}.get(c[-1])})
+    return out
+
+
 def _event_record(md: str, min_confidence: float) -> dict | None:
     """Re-count one scored event from its markdown table (model, high-conf, favorite, P/L)."""
     rec = {"model_ok": 0, "n": 0, "hc_ok": 0, "hc_n": 0, "fav_ok": 0, "fav_model_ok": 0,
@@ -690,14 +706,9 @@ def _event_record(md: str, min_confidence: float) -> dict | None:
     return rec
 
 
-def write_summary(min_confidence: float = MIN_CONFIDENCE) -> Path:
-    """
-    Regenerate predictions/SUMMARY.md: one row per scored event plus totals --
-    model vs bookmaker favorite on the same fights, high-confidence accuracy,
-    and flat-stake P/L. Rebuilt from the scored markdown, so it never drifts.
-    """
-    pct = lambda a, b: f"{a}/{b} ({a / b:.1%})" if b else "--"
-    rows, tot = [], {}
+def _scored_events(min_confidence: float) -> list[tuple[Path, str, dict]]:
+    """(markdown path, event title, _event_record) for every scored event, oldest first."""
+    out = []
     for md_path in sorted(PREDICTIONS_DIR.glob("*/*.md")):
         md = md_path.read_text(encoding="utf-8")
         if SCORED_MARKER not in md:
@@ -705,9 +716,31 @@ def write_summary(min_confidence: float = MIN_CONFIDENCE) -> Path:
         rec = _event_record(md, min_confidence)
         if rec is None:
             continue
-        title = md.splitlines()[0].lstrip("# ").split(" -- ")[0]
+        out.append((md_path, md.splitlines()[0].lstrip("# ").split(" -- ")[0], rec))
+    return out
+
+
+def summary_totals(min_confidence: float = MIN_CONFIDENCE, events=None) -> dict:
+    """The _event_record counts summed over every scored event, plus `events` (their number)."""
+    tot = {"events": 0}
+    for _, _, rec in _scored_events(min_confidence) if events is None else events:
+        tot["events"] += 1
         for k, v in rec.items():
             tot[k] = tot.get(k, 0) + v
+    return tot
+
+
+def write_summary(min_confidence: float = MIN_CONFIDENCE) -> Path:
+    """
+    Regenerate predictions/SUMMARY.md: one row per scored event plus totals --
+    model vs bookmaker favorite on the same fights, high-confidence accuracy,
+    and flat-stake P/L. Rebuilt from the scored markdown, so it never drifts.
+    """
+    pct = lambda a, b: f"{a}/{b} ({a / b:.1%})" if b else "--"
+    rows = []
+    events = _scored_events(min_confidence)
+    tot = summary_totals(min_confidence, events)
+    for md_path, title, rec in events:
         roi = f"{rec['pl'] / rec['staked']:+.1%}" if rec["staked"] else "--"
         fav_roi = f"{rec['fav_pl'] / rec['fav_staked']:+.1%}" if rec["fav_staked"] else "--"
         all_roi = f"{rec['all_fav_pl'] / rec['all_fav_staked']:+.1%}" if rec["all_fav_staked"] else "--"
@@ -775,6 +808,7 @@ def main() -> None:
         parser.error("--rescore requires --json")
     if args.summary_only:
         print(f"Wrote {write_summary(args.min_confidence)}")
+        _write_feed(args.min_confidence)
         return
 
     json_path = Path(args.json) if args.json else find_unscored_prediction()
@@ -816,6 +850,16 @@ def main() -> None:
     print(f"\nScored:    {md_path}")
     print(f"Accuracy:  {acc_str}")
     print(f"Summary:   {write_summary(args.min_confidence)}")
+    _write_feed(args.min_confidence)
+
+
+def _write_feed(min_confidence: float) -> None:
+    """Refresh predictions/feed.json's track record (read by match-analyzer); never fails the run."""
+    try:
+        from scripts.build_feed import write_feed
+        print(f"Feed:      {write_feed(min_confidence)}")
+    except Exception as e:  # noqa: BLE001 -- the scoring itself is already written
+        log.warning("feed.json not updated: %s", e)
 
 
 if __name__ == "__main__":

@@ -75,6 +75,10 @@ python scripts/score_event.py --min-confidence 0.55    # threshold for high-conf
 python scripts/score_event.py --summary-only           # rebuild predictions/SUMMARY.md (track record vs bookmaker favorite)
 python scripts/score_event.py --json path/to/f.json --rescore   # re-score an already-scored event (re-fetches results + odds)
 
+# Rebuild predictions/feed.json (latest event + track record; public contract read by match-analyzer).
+# predict_event.py and score_event.py already call it at the end
+python scripts/build_feed.py
+
 # Predict a fight (uses v1 DB + models by default)
 python predict.py "Islam Makhachev" "Charles Oliveira"
 python predict.py "Islam Makhachev" "Charles Oliveira" --model ensemble
@@ -272,6 +276,7 @@ Scrapes the next upcoming UFC event from UFCStats (requires Playwright), runs v1
 - Fighter name normalisation also uses UFCStats DB, then names are passed to v1 prediction by fuzzy search
 - Output format: single-model table
 - Predictions are stored in `predictions/<slug>/<slug>.md` (+ matching `.json`/`.html`) and tracked in git. `_event_slug()` generates `<date>-<name>` (e.g. `2026-07-25-ufc-fight-night-ankalaev-vs-guskov`), date first -- GitHub's web/mobile UI has no configurable sort order and always lists folders alphabetically, so date-first is what makes that alphabetical order match chronological order. Older event folders predating this convention were one-time renamed to match; don't rename them back.
+- `predictions/feed.json` (`scripts/build_feed.py`, written at the end of `predict_event.py` and `score_event.py`): the latest event's per-fight probabilities and comparison stats (`radar`/`bars`/`form`), each scored event's fights (`events`, via `score_event.event_fights()`) and the `SUMMARY.md` totals (`score_event.summary_totals()`) over the events dated `TRACK_RECORD_SINCE` or later (2026-10-24, the first card predicted after the 2026-10-19..21 model fixes -- earlier events say little about the current model; `SUMMARY.md` keeps the full history), read by the match-analyzer app (`JaimeFerreira2002/match-analyzer`, UFC tab) from GitHub's raw URL. It is a public contract: adding fields is fine, but removing or renaming one needs a `SCHEMA` bump there too. A feed failure only logs a warning so it can't block the weekly/Monday commits.
 
 ### Scoring & odds (`scripts/score_event.py`, `scrapers/bestfightodds.py`)
 
