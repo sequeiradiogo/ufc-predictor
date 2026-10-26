@@ -1,8 +1,12 @@
 # UFC 333: Volkanovski vs. Evloev -- October 24, 2026
 
-Model: Ensemble (Soft Vote) | Generated: 2026-10-23
+Model: Ensemble (Soft Vote) | Generated: 2026-10-23 | Scored: 2026-10-26
 
 Fighters making their UFC debut were excluded (no historical stats in DB).
+
+**Result: 4/13 (30.8%)**
+*High-confidence (>=55%) picks: 4/12 (33.3%)*
+*Bookmaker favorite: 10/11 (90.9%) vs model 4/11 (36.4%) on the same fights*
 
 > Interactive fighter comparison: [2026-10-24-ufc-333-volkanovski-vs-evloev.html](./2026-10-24-ufc-333-volkanovski-vs-evloev.html)
 
@@ -10,23 +14,53 @@ Fighters making their UFC debut were excluded (no historical stats in DB).
 
 ## Predictions
 
-| Fight | Predicted Winner | Confidence | Likely Method |
-|---|---|---|---|
-| Alexander Volkanovski vs Movsar Evloev | Movsar Evloev | 74.2% | Decision (70%) / KO/TKO (25%) |
-| Petr Yan vs Merab Dvalishvili | Petr Yan | 62.3% | Decision (58%) / KO/TKO (37%) |
-| Lone'er Kavanagh vs Ramazan Temirov | Ramazan Temirov | 61.3% | KO/TKO (51%) / Decision (39%) |
-| Alexander Volkov vs Rizvan Kuniev | Alexander Volkov | 72.1% | KO/TKO (62%) / Decision (33%) |
-| Aaron Pico vs Losene Keita | Losene Keita | 54.7% | Decision (41%) / KO/TKO (37%) |
-| Azamat Murzakanov vs Dominick Reyes | Azamat Murzakanov | 65.8% | KO/TKO (72%) / Decision (19%) |
-| Nikita Krylov vs Abdul Rakhman Yakhyaev | Abdul Rakhman Yakhyaev | 82.1% | Submission (50%) / KO/TKO (34%) |
-| Abus Magomedov vs Cam Rowston | Cam Rowston | 71.0% | Decision (41%) / KO/TKO (38%) |
-| Grant Dawson vs Nurullo Aliev | Nurullo Aliev | 62.2% | Decision (43%) / KO/TKO (29%) |
-| Abubakar Vagaev vs Jacob Malkoun | Jacob Malkoun | 67.2% | Decision (59%) / KO/TKO (26%) |
-| Bolaji Oki vs Daniel Santos | Bolaji Oki | 63.8% | KO/TKO (50%) / Decision (43%) |
-| Kody Steele vs Noah Gugnon | Noah Gugnon | 74.7% | Decision (60%) / KO/TKO (30%) |
-| Iasmin Lucindo vs Nicolle Caliari | Iasmin Lucindo | 81.7% | Decision (74%) / KO/TKO (19%) |
+| Fight | Predicted Winner | Confidence | Likely Method | Odds (Red / Blue) | Actual Result | Correct? |
+|---|---|---|---|---|---|---|
+| Alexander Volkanovski vs Movsar Evloev | Movsar Evloev | 74.2% | Decision (70%) / KO/TKO (25%) | -112 / -104 | Alexander Volkanovski (KO R2) | NO |
+| Petr Yan vs Merab Dvalishvili | Petr Yan | 62.3% | Decision (58%) / KO/TKO (37%) | -144 / +122 | Petr Yan (Dec) | YES |
+| Lone'er Kavanagh vs Ramazan Temirov | Ramazan Temirov | 61.3% | KO/TKO (51%) / Decision (39%) | -110 / -106 | Lone'er Kavanagh (KO R1) | NO |
+| Alexander Volkov vs Rizvan Kuniev | Alexander Volkov | 72.1% | KO/TKO (62%) / Decision (33%) | -144 / +122 | Alexander Volkov (Dec) | YES |
+| Aaron Pico vs Losene Keita | Losene Keita | 54.7% | Decision (41%) / KO/TKO (37%) | -148 / +126 | Aaron Pico (KO R1) | NO |
+| Azamat Murzakanov vs Dominick Reyes | Azamat Murzakanov | 65.8% | KO/TKO (72%) / Decision (19%) | -225 / +188 | Dominick Reyes (KO R1) | NO |
+| Nikita Krylov vs Abdul Rakhman Yakhyaev | Abdul Rakhman Yakhyaev | 82.1% | Submission (50%) / KO/TKO (34%) | +430 / -590 | Abdul Rakhman Yakhyaev (KO R1) | YES |
+| Abus Magomedov vs Cam Rowston | Cam Rowston | 71.0% | Decision (41%) / KO/TKO (38%) | -120 / +102 | Abus Magomedov (Sub R1) | NO |
+| Grant Dawson vs Nurullo Aliev | Nurullo Aliev | 62.2% | Decision (43%) / KO/TKO (29%) | -108 / -108 | Grant Dawson (Dec) | NO |
+| Abubakar Vagaev vs Jacob Malkoun | Jacob Malkoun | 67.2% | Decision (59%) / KO/TKO (26%) | -158 / +134 | Abubakar Vagaev (Dec) | NO |
+| Bolaji Oki vs Daniel Santos | Bolaji Oki | 63.8% | KO/TKO (50%) / Decision (43%) | -108 / -108 | Daniel Santos (Dec) | NO |
+| Kody Steele vs Noah Gugnon | Noah Gugnon | 74.7% | Decision (60%) / KO/TKO (30%) | -164 / +138 | Kody Steele (KO R1) | NO |
+| Iasmin Lucindo vs Nicolle Caliari | Iasmin Lucindo | 81.7% | Decision (74%) / KO/TKO (19%) | -420 / +330 | Iasmin Lucindo (Dec) | YES |
 
 ---
+
+## Post-Event Summary
+
+- Fights predicted: 13
+- Correct: 4/13 (30.8%)
+- High-confidence (>=55%) picks: 4/12 (33.3%)
+- Bookmaker favorite on the same 11 fights: 10/11 (90.9%) -- model 4/11 (36.4%)
+- Model picked against the favorite in 6 fight(s), right in 0
+- Always backing the favorite (EUR 1 on all 11 fights with odds): +EUR 5.34 on EUR 11 staked (+48.5% ROI)
+
+### P/L (EUR 1 flat on picks >=55% confidence)
+
+| Fight | Model Pick | Odds (dec) | Result | P/L | Favorite (dec) | Favorite P/L |
+|---|---|---|---|---|---|---|
+| Alexander Volkanovski vs Movsar Evloev | Movsar Evloev | 1.96 | Loss | -EUR 1.00 | Alexander Volkanovski (1.89) | +EUR 0.89 |
+| Petr Yan vs Merab Dvalishvili | Petr Yan | 1.69 | Win | +EUR 0.69 | Petr Yan (1.69) | +EUR 0.69 |
+| Lone'er Kavanagh vs Ramazan Temirov | Ramazan Temirov | 1.94 | Loss | -EUR 1.00 | Lone'er Kavanagh (1.91) | +EUR 0.91 |
+| Alexander Volkov vs Rizvan Kuniev | Alexander Volkov | 1.69 | Win | +EUR 0.69 | Alexander Volkov (1.69) | +EUR 0.69 |
+| Azamat Murzakanov vs Dominick Reyes | Azamat Murzakanov | 1.44 | Loss | -EUR 1.00 | Azamat Murzakanov (1.44) | -EUR 1.00 |
+| Nikita Krylov vs Abdul Rakhman Yakhyaev | Abdul Rakhman Yakhyaev | 1.17 | Win | +EUR 0.17 | Abdul Rakhman Yakhyaev (1.17) | +EUR 0.17 |
+| Abus Magomedov vs Cam Rowston | Cam Rowston | 2.02 | Loss | -EUR 1.00 | Abus Magomedov (1.83) | +EUR 0.83 |
+| Grant Dawson vs Nurullo Aliev | Nurullo Aliev | 1.93 | Loss | -EUR 1.00 | -- | -- |
+| Abubakar Vagaev vs Jacob Malkoun | Jacob Malkoun | 2.34 | Loss | -EUR 1.00 | Abubakar Vagaev (1.63) | +EUR 0.63 |
+| Bolaji Oki vs Daniel Santos | Bolaji Oki | 1.93 | Loss | -EUR 1.00 | -- | -- |
+| Kody Steele vs Noah Gugnon | Noah Gugnon | 2.38 | Loss | -EUR 1.00 | Kody Steele (1.61) | +EUR 0.61 |
+| Iasmin Lucindo vs Nicolle Caliari | Iasmin Lucindo | 1.24 | Win | +EUR 0.24 | Iasmin Lucindo (1.24) | +EUR 0.24 |
+
+**Net P/L: -EUR 6.21 on EUR 12 staked (-51.7% ROI)**
+
+**Favorite on the same fights: +EUR 4.66 on EUR 10 staked (+46.6% ROI)**
 
 ## Raw Model Output
 

@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generated_at": "2026-10-23T16:20Z",
+  "generated_at": "2026-10-26T18:00Z",
   "finish_names": [
     "Decision",
     "KO/TKO",
@@ -1093,7 +1093,188 @@
       }
     ]
   },
-  "track_record": null,
-  "events": [],
+  "track_record": {
+    "since": "2026-10-24",
+    "events": 1,
+    "fights": 13,
+    "model_acc": 0.3077,
+    "fights_with_odds": 11,
+    "model_acc_with_odds": 0.3636,
+    "favorite_acc": 0.9091,
+    "min_confidence": 0.55,
+    "model_pl": -6.21,
+    "model_staked": 12.0,
+    "model_roi": -0.5175,
+    "favorite_roi": 0.466
+  },
+  "events": [
+    {
+      "date": "2026-10-24",
+      "name": "UFC 333: Volkanovski vs. Evloev",
+      "model_ok": 4,
+      "n": 13,
+      "fav_model_ok": 4,
+      "fav_ok": 10,
+      "fav_n": 11,
+      "fights": [
+        {
+          "red_name": "Alexander Volkanovski",
+          "blue_name": "Movsar Evloev",
+          "pick": "Movsar Evloev",
+          "confidence": 0.742,
+          "odds": [
+            -112,
+            -104
+          ],
+          "result": "Alexander Volkanovski (KO R2)",
+          "correct": false
+        },
+        {
+          "red_name": "Petr Yan",
+          "blue_name": "Merab Dvalishvili",
+          "pick": "Petr Yan",
+          "confidence": 0.623,
+          "odds": [
+            -144,
+            122
+          ],
+          "result": "Petr Yan (Dec)",
+          "correct": true
+        },
+        {
+          "red_name": "Lone'er Kavanagh",
+          "blue_name": "Ramazan Temirov",
+          "pick": "Ramazan Temirov",
+          "confidence": 0.613,
+          "odds": [
+            -110,
+            -106
+          ],
+          "result": "Lone'er Kavanagh (KO R1)",
+          "correct": false
+        },
+        {
+          "red_name": "Alexander Volkov",
+          "blue_name": "Rizvan Kuniev",
+          "pick": "Alexander Volkov",
+          "confidence": 0.721,
+          "odds": [
+            -144,
+            122
+          ],
+          "result": "Alexander Volkov (Dec)",
+          "correct": true
+        },
+        {
+          "red_name": "Aaron Pico",
+          "blue_name": "Losene Keita",
+          "pick": "Losene Keita",
+          "confidence": 0.547,
+          "odds": [
+            -148,
+            126
+          ],
+          "result": "Aaron Pico (KO R1)",
+          "correct": false
+        },
+        {
+          "red_name": "Azamat Murzakanov",
+          "blue_name": "Dominick Reyes",
+          "pick": "Azamat Murzakanov",
+          "confidence": 0.658,
+          "odds": [
+            -225,
+            188
+          ],
+          "result": "Dominick Reyes (KO R1)",
+          "correct": false
+        },
+        {
+          "red_name": "Nikita Krylov",
+          "blue_name": "Abdul Rakhman Yakhyaev",
+          "pick": "Abdul Rakhman Yakhyaev",
+          "confidence": 0.821,
+          "odds": [
+            430,
+            -590
+          ],
+          "result": "Abdul Rakhman Yakhyaev (KO R1)",
+          "correct": true
+        },
+        {
+          "red_name": "Abus Magomedov",
+          "blue_name": "Cam Rowston",
+          "pick": "Cam Rowston",
+          "confidence": 0.71,
+          "odds": [
+            -120,
+            102
+          ],
+          "result": "Abus Magomedov (Sub R1)",
+          "correct": false
+        },
+        {
+          "red_name": "Grant Dawson",
+          "blue_name": "Nurullo Aliev",
+          "pick": "Nurullo Aliev",
+          "confidence": 0.622,
+          "odds": [
+            -108,
+            -108
+          ],
+          "result": "Grant Dawson (Dec)",
+          "correct": false
+        },
+        {
+          "red_name": "Abubakar Vagaev",
+          "blue_name": "Jacob Malkoun",
+          "pick": "Jacob Malkoun",
+          "confidence": 0.672,
+          "odds": [
+            -158,
+            134
+          ],
+          "result": "Abubakar Vagaev (Dec)",
+          "correct": false
+        },
+        {
+          "red_name": "Bolaji Oki",
+          "blue_name": "Daniel Santos",
+          "pick": "Bolaji Oki",
+          "confidence": 0.638,
+          "odds": [
+            -108,
+            -108
+          ],
+          "result": "Daniel Santos (Dec)",
+          "correct": false
+        },
+        {
+          "red_name": "Kody Steele",
+          "blue_name": "Noah Gugnon",
+          "pick": "Noah Gugnon",
+          "confidence": 0.747,
+          "odds": [
+            -164,
+            138
+          ],
+          "result": "Kody Steele (KO R1)",
+          "correct": false
+        },
+        {
+          "red_name": "Iasmin Lucindo",
+          "blue_name": "Nicolle Caliari",
+          "pick": "Iasmin Lucindo",
+          "confidence": 0.817,
+          "odds": [
+            -420,
+            330
+          ],
+          "result": "Iasmin Lucindo (Dec)",
+          "correct": true
+        }
+      ]
+    }
+  ],
   "summary_url": "https://github.com/sequeiradiogo/ufc-predictor/blob/main/predictions/SUMMARY.md"
 }
