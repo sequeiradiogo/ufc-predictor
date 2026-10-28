@@ -14,7 +14,7 @@ A machine-learning system that predicts UFC fight outcomes with **65.7% accuracy
 | 2026 | 321 | 66.4% |
 | **Total (out-of-sample)** | **752** | **65.7%** |
 
-**Live track record** (Jun-Oct 2026, 17 events): model 57.1%, bookmaker favorite 70.3% on the same fights. The bookmaker favorite is the baseline that matters, and the model doesn't beat it yet. The naive "always pick Red corner" baseline is ~55%.
+**Live track record** (Jun-Oct 2026, 18 events, 166 fights with odds): model 56.0%, bookmaker favorite 71.7% on the same fights. The bookmaker favorite is the baseline that matters, and the model doesn't beat it yet. The naive "always pick Red corner" baseline is ~55%.
 
 ---
 
