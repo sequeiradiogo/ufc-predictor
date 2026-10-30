@@ -41,8 +41,9 @@ from config import (
     MODEL_V1_XGB_PATH,
     MODELS_V1_DIR,
     TARGET_COL,
+    TRAIN_TEST_SPLIT,
 )
-from ml.calibration import apply_temperature
+from ml.calibration import apply_temperature, symmetric_proba
 from utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -82,10 +83,18 @@ def _score(df: pd.DataFrame, model_type: str) -> pd.DataFrame:
     feat_names = joblib.load(f_path)
     scaler    = joblib.load(s_path) if s_path and s_path.exists() else None
 
-    X = df.reindex(columns=feat_names, fill_value=0).fillna(0)
-    Xi = scaler.transform(X) if scaler else X.values
+    X    = df.reindex(columns=feat_names, fill_value=0).fillna(0)
     base = artifact["base"] if is_lr else artifact
-    prob_red = base.predict_proba(Xi)[:, 1]
+    raw  = symmetric_proba(lambda Z: base.predict_proba(scaler.transform(Z) if scaler else Z.values)[:, 1], X)
+    if not is_lr:
+        return _make_results(df, raw)
+    # LR / MLP: the stored calibrator (Platt / isotonic) is part of the model,
+    # as in predict.py -- scoring the raw base probability graded another rule
+    platt = artifact["platt"]
+    if hasattr(platt, "predict_proba"):
+        prob_red = platt.predict_proba(raw.reshape(-1, 1))[:, 1]
+    else:
+        prob_red = platt.predict(raw)
     return _make_results(df, prob_red)
 
 
@@ -106,21 +115,21 @@ def _score_ensemble(df: pd.DataFrame) -> pd.DataFrame:
     active_weights = []
 
     for m_key, m_path, f_path, s_path, is_lr in specs:
-        if not m_path.exists() or not f_path.exists():
+        if not m_path.exists() or not f_path.exists() or m_key not in weights:
             continue
         artifact  = joblib.load(m_path)
         feat_names = joblib.load(f_path)
         scaler    = joblib.load(s_path) if s_path and s_path.exists() else None
 
         X  = df.reindex(columns=feat_names, fill_value=0).fillna(0)
-        Xi = scaler.transform(X) if scaler else X.values
         base = artifact["base"] if is_lr else artifact
-        raw_p = base.predict_proba(Xi)[:, 1]
+        raw_p = symmetric_proba(
+            lambda Z, b=base, s=scaler: b.predict_proba(s.transform(Z) if s else Z.values)[:, 1], X)
 
         cal_p = calibrators[m_key].predict(raw_p) if m_key in calibrators else raw_p
 
         model_probas.append(cal_p)
-        active_weights.append(weights.get(m_key, 1.0))
+        active_weights.append(weights[m_key])
 
     total_w = sum(active_weights)
     active_weights = [w / total_w for w in active_weights]
@@ -137,20 +146,22 @@ def _score_stacking(df: pd.DataFrame) -> pd.DataFrame:
 
     base_probs = []
     for m_key, m_path, f_path, s_path, is_lr in stk_specs:
-        m_path = Path(m_path)
-        f_path = Path(f_path)
+        # Next to stacking.joblib (older artifacts stored absolute paths)
+        m_path = MODEL_V1_STACKING_PATH.parent / Path(m_path).name
+        f_path = MODEL_V1_STACKING_PATH.parent / Path(f_path).name
+        s_path = MODEL_V1_STACKING_PATH.parent / Path(s_path).name if s_path else None
         if not m_path.exists() or not f_path.exists():
             log.warning("Stacking backtest: base model %s not found, using 0.5", m_key)
             base_probs.append(np.full(len(df), 0.5))
             continue
         artifact   = joblib.load(m_path)
         feat_names = joblib.load(f_path)
-        scaler     = joblib.load(s_path) if s_path and Path(s_path).exists() else None
+        scaler     = joblib.load(s_path) if s_path and s_path.exists() else None
 
         X  = df.reindex(columns=feat_names, fill_value=0).fillna(0)
-        Xi = scaler.transform(X) if scaler else X.values
         base = artifact["base"] if is_lr else artifact
-        raw_p = base.predict_proba(Xi)[:, 1]
+        raw_p = symmetric_proba(
+            lambda Z, b=base, s=scaler: b.predict_proba(s.transform(Z) if s else Z.values)[:, 1], X)
         base_probs.append(raw_p)
 
     stacked   = np.column_stack(base_probs)
@@ -188,6 +199,26 @@ def _print_report(results: pd.DataFrame, label: str, from_year: int | None) -> N
     acc_total = subset["correct"].mean()
     n_total   = len(subset)
     print(f"\n  Total  {n_total:>6} fights  {acc_total:.1%}")
+
+    # Same windows as train_v1_models.py: base models and calibrators are fit
+    # before `split`, the ensemble's weights + temperature on the first half of
+    # what follows, and only the second half is untouched by every fit. A
+    # --from-year 2025 report straddles all three.
+    n      = len(results)
+    split  = int(n * TRAIN_TEST_SPLIT)
+    hold   = split + (n - split) // 2
+    pos    = subset.index.values   # results has a RangeIndex in date order
+    print("\n  By eval-tier window:")
+    for name, lo, hi in [("fit / calibration", 0, split),
+                         ("ensemble tuning", split, hold),
+                         ("hold-out", hold, n)]:
+        win = subset[(pos >= lo) & (pos < hi)]
+        if win.empty:
+            continue
+        span = f"{win['date'].min().date()} to {win['date'].max().date()}"
+        print(f"  {name:<18} {span}  {len(win):>5} fights  {win['correct'].mean():.1%}")
+    print("  (only the hold-out is out-of-sample for the ensemble; for a single model,\n"
+          "   everything from the ensemble tuning window on is)")
     print()
 
 

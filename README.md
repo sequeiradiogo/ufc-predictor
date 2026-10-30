@@ -1,18 +1,19 @@
 # UFC Fight Predictor
 
-A machine-learning system that predicts UFC fight outcomes with **65.7% accuracy** on honest out-of-sample data (2025-2026, 752 fights). Predictions are generated weekly via GitHub Actions and published to [`predictions/`](./predictions/).
+A machine-learning system that predicts UFC fight outcomes with **66.0% accuracy** on 2025-2026 fights (752 fights; 66.0% on the 350 most recent, which no part of training has seen). Predictions are generated weekly via GitHub Actions and published to [`predictions/`](./predictions/).
 
 ---
 
 ## Results
 
-**Backtest** (`python scripts/backtest_v1.py --from-year 2025`, ensemble, 2026-10-21 retrain):
+**Backtest** (`python scripts/backtest_v1.py --from-year 2025`, ensemble, 2026-10-28 retrain):
 
 | Period | Fights | Accuracy |
 |--------|--------|----------|
-| 2025 | 431 | 65.2% |
-| 2026 | 321 | 66.4% |
-| **Total (out-of-sample)** | **752** | **65.7%** |
+| 2025 | 431 | 66.8% |
+| 2026 | 321 | 64.8% |
+| **Total** | **752** | **66.0%** |
+| Hold-out (Nov 2025 - Sep 2026, untouched by any fit) | 350 | 66.0% |
 
 **Live track record** (Jun-Oct 2026, 18 events, 166 fights with odds): model 56.0%, bookmaker favorite 71.7% on the same fights. The bookmaker favorite is the baseline that matters, and the model doesn't beat it yet. The naive "always pick Red corner" baseline is ~55%.
 
@@ -30,12 +31,12 @@ UFCStats.com  -->  UFCStats DB (raw per-fight stats)
                        |
               v1 Feature CSV (69 diff features, Red - Blue)
                        |
-    XGBoost / LR / RF / LightGBM / MLP  -->  Ensemble (65.7%)
+    XGBoost / LR / RF / LightGBM / MLP  -->  Ensemble (66.0%)
                        |
                   Predictions
 ```
 
-The ensemble is a calibrated soft-vote over five base models, followed by a single temperature scaling step. Weights are re-fit on every retrain and move around a lot. In the 2026-10-21 retrain Random Forest (~47%) and Logistic Regression (~41%) carry most of the weight, then MLP (~11%), with XGBoost and LightGBM under 1%. All features are pre-fight snapshots. `scripts/check_live_parity.py` checks that live inference builds the same features as training.
+The ensemble is a calibrated soft-vote over five base models, followed by a single temperature scaling step. Weights are re-fit on every retrain and move around a lot. In the 2026-10-28 retrain Random Forest (~34%) and MLP (~33%) carry most of the weight, then LightGBM (~18%), XGBoost (~10%) and Logistic Regression (~6%). All features are pre-fight snapshots. Predictions are corner-symmetric: swapping Red and Blue gives exactly the complementary probability. `scripts/check_live_parity.py` checks that live inference builds the same features as training.
 
 ---
 
@@ -212,14 +213,14 @@ ufc-predictor/
 
 | Model | 2025+ Accuracy | Notes |
 |-------|---------------|-------|
-| XGBoost | 66.0% | Default params; tuning consistently hurts |
-| Logistic Regression | 66.1% | Platt-calibrated |
-| Random Forest | 66.8% | |
-| LightGBM | 66.1% | |
-| MLP | 65.0% | PyTorch |
-| **Ensemble** | **65.7%** | Calibrated soft-vote + temperature; RF ~47%, LR ~41%, MLP ~11% |
+| XGBoost | 66.2% | Default params; tuning consistently hurts |
+| Logistic Regression | 66.4% | Platt-calibrated |
+| Random Forest | 66.2% | |
+| LightGBM | 65.6% | |
+| MLP | 63.8% | PyTorch |
+| **Ensemble** | **66.0%** | Calibrated soft-vote + temperature; RF ~34%, MLP ~33%, LGBM ~18% |
 
-Eval-tier models (`models_v1/`), 752 fights, 2026-10-21 retrain. On a single backtest run the individual models land within about a point of each other, so no one of them is clearly better. The ensemble is used for predictions because it gives better-calibrated probabilities (lower hold-out log-loss), not higher accuracy. Live predictions load the production tier (`models_v1_prod/`), which is trained on 100% of the data and borrows the eval ensemble's weights and temperature.
+Eval-tier models (`models_v1/`), 752 fights, 2026-10-28 retrain. On a single backtest run the individual models (except the MLP) land within about a point of each other, so no one of them is clearly better. The ensemble is used for predictions because it gives better-calibrated probabilities (lower hold-out log-loss), not higher accuracy. Live predictions load the production tier (`models_v1_prod/`), which is trained on 100% of the data and borrows the eval ensemble's weights and temperature.
 
 Training data: post-2018 fights only (adversarial validation confirmed distribution shift pre-2018). Evaluated with `--from-year 2025` because the chronological 80/20 split falls around Feb 2025, which puts 2024 and earlier in the training window.
 

@@ -152,3 +152,38 @@ class TestUfcstatsName:
         assert _ufcstats_name(conn, "kai kamaka iii") == "Kai Kamaka III"
         assert _ufcstats_name(conn, "Kai Kamaka") == "Kai Kamaka III"   # via config.NAME_ALIASES
         assert _ufcstats_name(conn, "Nobody Atall") is None
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# compute_prediction(as_of=...) sees only fights before as_of -- artifact-free
+# ══════════════════════════════════════════════════════════════════════════════
+
+class TestRestrictToBefore:
+    """ELO, SOS, KO vulnerability, EWMA, round-1 and opponent-adjusted stats
+    replay whole tables; re-predicting a past event used to include its result."""
+
+    def test_hides_fights_from_as_of_on(self, two_fight_db):
+        from predict import _restrict_to_before
+        _restrict_to_before(two_fight_db, "2025-06-01")
+        assert two_fight_db.execute("SELECT fight_id FROM fights").fetchall() == [("f1",)]
+        assert {r[0] for r in two_fight_db.execute("SELECT DISTINCT fight_id FROM fight_stats")} == {"f1"}
+        # the stored tables are untouched
+        assert two_fight_db.execute("SELECT COUNT(*) FROM main.fights").fetchone()[0] == 2
+
+    def test_live_stats_match_before_date(self, two_fight_db):
+        from predict import _restrict_to_before
+        expected = compute_live_career_stats(two_fight_db, "Fighter A", before_date="2025-06-01")
+        _restrict_to_before(two_fight_db, "2025-06-01")
+        got = compute_live_career_stats(two_fight_db, "Fighter A")
+        # age is measured at before_date (today here), everything else from history
+        assert {k: v for k, v in got.items() if k != "age"} == {k: v for k, v in expected.items() if k != "age"}
+
+    def test_noop_when_nothing_is_after_as_of(self, two_fight_db):
+        from predict import _restrict_to_before
+        _restrict_to_before(two_fight_db, "2026-01-01")
+        assert two_fight_db.execute("SELECT COUNT(*) FROM sqlite_temp_master").fetchone()[0] == 0
+
+    def test_rejects_a_non_iso_date(self, two_fight_db):
+        from predict import _restrict_to_before
+        with pytest.raises(ValueError):
+            _restrict_to_before(two_fight_db, "2025-06-01'; DROP TABLE fights; --")

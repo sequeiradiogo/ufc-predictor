@@ -25,6 +25,7 @@ Notes
 """
 
 import argparse
+import re
 import sqlite3
 import sys
 from datetime import date
@@ -60,7 +61,7 @@ from config import (
     TRAJECTORY_WINDOW,
     NAME_ALIASES,
 )
-from ml.calibration import apply_temperature
+from ml.calibration import apply_temperature, symmetric_proba
 from ml.opp_adjusted_defense import current_adj_defense
 from ml.ELO_calculator import build_elo_features, get_current_glicko_by_division, get_current_ratings
 from utils.odds import print_value_bet_summary
@@ -80,19 +81,40 @@ _DEFENSIVE_STAT_ZEROS = {
 }
 
 
-def _get_v2_defensive_stats(conn_v2: sqlite3.Connection, fighter_name: str) -> dict:
+def _restrict_to_before(conn: sqlite3.Connection, as_of: str) -> None:
+    """Make *conn* see only fights before *as_of*, like the training row of a fight on that date.
+
+    Shadows fights / fight_stats / fight_stats_rounds with TEMP views (the temp
+    schema wins for unqualified names; nothing is written to the DB file), so
+    every history replay on this connection -- ELO, SOS, KO vulnerability,
+    EWMA, round-1 and opponent-adjusted stats -- stops at as_of, not just the
+    helpers that take a before_date. Without it, re-predicting a past event on
+    a DB that already holds it leaked the result into those features. A no-op
+    when the DB has nothing from as_of on (the normal upcoming-event case).
+    """
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", as_of or ""):
+        raise ValueError(f"as_of must be YYYY-MM-DD, got {as_of!r}")
+    if not conn.execute("SELECT 1 FROM fights WHERE date >= ? LIMIT 1", (as_of,)).fetchone():
+        return
+    tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+    keep = f"SELECT fight_id FROM main.fights WHERE date < '{as_of}'"
+    conn.execute(f"CREATE TEMP VIEW fights AS SELECT * FROM main.fights WHERE date < '{as_of}'")
+    for t in ("fight_stats", "fight_stats_rounds"):
+        if t in tables:
+            conn.execute(f"CREATE TEMP VIEW {t} AS SELECT * FROM main.{t} WHERE fight_id IN ({keep})")
+
+
+def _get_v2_defensive_stats(
+    conn_v2: sqlite3.Connection, fighter_name: str, fighter_id: str | None = None
+) -> dict:
     """
     Return the most recent pre-fight sapm/str_def/td_def/zone-accuracy/zone-defense
-    for a fighter from the UFCStats DB, matched by exact name.
+    for a fighter from the UFCStats DB, matched by *fighter_id* or exact name.
     Returns zeros on no match.
     """
-    row = conn_v2.execute(
-        "SELECT fighter_id FROM fighters WHERE name = ? LIMIT 1",
-        (fighter_name,),
-    ).fetchone()
-    if not row:
+    fid = fighter_id or _resolve_ufcstats_id(conn_v2, fighter_name)
+    if not fid:
         return dict(_DEFENSIVE_STAT_ZEROS)
-    fid = row[0]
     stats = conn_v2.execute(
         """
         SELECT CAST(fs.sapm     AS REAL), CAST(fs.str_def  AS REAL), CAST(fs.td_def   AS REAL),
@@ -144,12 +166,66 @@ def _ufcstats_name(conn_v2: sqlite3.Connection, *candidates: str | None) -> str 
     return None
 
 
-def _resolve_ufcstats_id(conn_v2: sqlite3.Connection, name: str) -> str | None:
-    """Return the UFCStats hex fighter_id for an exact name match, or None."""
-    row = conn_v2.execute(
-        "SELECT fighter_id FROM fighters WHERE name = ? LIMIT 1", (name,)
-    ).fetchone()
-    return row[0] if row else None
+def _v1_fighter_for_ufcstats_id(
+    conn: sqlite3.Connection, conn_v2: sqlite3.Connection, ufcstats_id: str, name: str | None = None
+) -> tuple[str, str, str]:
+    """(ufc_v2.db fighter_id, display name, UFCStats name) for a known UFCStats fighter.
+
+    ufc_v2.db only supplies the display name and the snapshot fallback, so a
+    fighter it doesn't have yet (UFCStats history, no ufc_v2.db row) falls back
+    to his UFCStats ID and name instead of failing name resolution.
+    """
+    row = conn_v2.execute("SELECT name FROM fighters WHERE fighter_id = ?", (ufcstats_id,)).fetchone()
+    if row is None:
+        print(f"\n[ERROR]  No UFCStats fighter with id '{ufcstats_id}'.")
+        sys.exit(1)
+    us_name = row[0]
+    # ufc_v2.db may hold the Kaggle spelling, which NAME_ALIASES maps to us_name
+    kaggle = [k for k, v in NAME_ALIASES.items() if v.lower() == us_name.lower()]
+    for cand in (us_name, name, *kaggle):
+        if not cand:
+            continue
+        hit = conn.execute(
+            "SELECT fighter_id, name FROM fighters WHERE name = ? COLLATE NOCASE LIMIT 1", (cand,)
+        ).fetchone()
+        if hit:
+            return hit[0], hit[1], us_name
+    log.info("%s has no ufc_v2.db row -- using UFCStats data only", us_name)
+    return ufcstats_id, us_name, us_name
+
+
+def _resolve_ufcstats_id(
+    conn_v2: sqlite3.Connection, name: str, before_date: str | None = None
+) -> str | None:
+    """Return the UFCStats hex fighter_id for an exact name match, or None.
+
+    Different UFCStats fighters can share a name (two "Bruno Silva"s). Then the
+    one who fought on *before_date* wins (rebuild_career_stats.py passes the
+    fight's own date), else the one with the latest fight before it. Callers
+    that already know the ID (predict_event.py) should pass it instead.
+    """
+    ids = [r[0] for r in conn_v2.execute("SELECT fighter_id FROM fighters WHERE name = ?", (name,))]
+    if len(ids) <= 1:
+        return ids[0] if ids else None
+    ranked = conn_v2.execute(
+        f"""
+        SELECT fs.fighter_id,
+               MAX(CASE WHEN f.date = ? THEN 1 ELSE 0 END)              AS fought_on,
+               MAX(CASE WHEN ? IS NULL OR f.date < ? THEN f.date END)  AS last_before
+        FROM fight_stats fs
+        JOIN fights f ON f.fight_id = fs.fight_id
+        WHERE fs.fighter_id IN ({",".join("?" * len(ids))})
+        GROUP BY fs.fighter_id
+        ORDER BY fought_on DESC, last_before DESC
+        """,
+        (before_date, before_date, before_date, *ids),
+    ).fetchall()
+    if not ranked:
+        return ids[0]
+    if not ranked[0][1]:
+        log.warning("%d UFCStats fighters named '%s' -- using %s (latest fight %s); "
+                    "pass the fighter ID to choose", len(ids), name, ranked[0][0], ranked[0][2])
+    return ranked[0][0]
 
 
 def compute_live_career_stats(
@@ -157,6 +233,7 @@ def compute_live_career_stats(
     fighter_name: str,
     trajectory_window: int = TRAJECTORY_WINDOW,
     before_date: str | None = None,
+    fighter_id: str | None = None,
 ) -> dict | None:
     """
     Recompute career aggregate stats and trajectory slopes from raw per-fight
@@ -176,9 +253,11 @@ def compute_live_career_stats(
     that date. Training features are built this way so they match live
     inference by construction.
 
+    Pass *fighter_id* (UFCStats hex ID) when known -- names aren't unique.
+
     Returns None if the fighter cannot be found in the UFCStats DB.
     """
-    fid = _resolve_ufcstats_id(conn_v2, fighter_name)
+    fid = fighter_id or _resolve_ufcstats_id(conn_v2, fighter_name, before_date)
     if fid is None:
         return None
 
@@ -480,10 +559,14 @@ def search_fighter(conn: sqlite3.Connection, name: str) -> list[tuple]:
     return cur.fetchall()
 
 
-def resolve_fighter(conn: sqlite3.Connection, query: str) -> tuple[str, str]:
+def resolve_fighter(
+    conn: sqlite3.Connection, query: str, interactive: bool = True
+) -> tuple[str, str]:
     """
     Find a fighter by partial name.  If multiple matches are found, prompt the
-    user to choose.  Returns (fighter_id, full_name).
+    user to choose -- or, with *interactive* False (API, scheduled scripts),
+    list them and exit: input() blocks a web worker or dies with EOFError in CI.
+    Returns (fighter_id, full_name).
     """
     matches = search_fighter(conn, query)
     if not matches:
@@ -503,11 +586,16 @@ def resolve_fighter(conn: sqlite3.Connection, query: str) -> tuple[str, str]:
     display = matches[:10]
     for i, (fid, fname) in enumerate(display, 1):
         print(f"  {i:2}. {fname}")
+    if not interactive:
+        print("[ERROR]  Ambiguous fighter name -- use the full name.")
+        sys.exit(1)
     while True:
         try:
             choice = int(input("Enter number: ")) - 1
             if 0 <= choice < len(display):
                 return display[choice]
+        except EOFError:
+            sys.exit(1)
         except (ValueError, KeyboardInterrupt):
             pass
         print("  Invalid — enter a number from the list above.")
@@ -1275,7 +1363,8 @@ def build_feature_vector(
             r_age = float(pd.to_numeric(red_stats.get("age",  30.0), errors="coerce") or 30.0)
             b_age = float(pd.to_numeric(blue_stats.get("age", 30.0), errors="coerce") or 30.0)
             if r_age > 0 and b_age > 0:
-                row[feat] = (r_age / max(b_age, 1.0)) - 1.0
+                # log ratio: antisymmetric under a corner swap, as in training
+                row[feat] = float(np.log(max(r_age, 1.0) / max(b_age, 1.0)))
             else:
                 row[feat] = 0.0
 
@@ -1346,6 +1435,9 @@ def compute_prediction(
     r_fighter_id: str | None = None,
     b_fighter_id: str | None = None,
     as_of:        str | None = None,
+    r_ufcstats_id: str | None = None,
+    b_ufcstats_id: str | None = None,
+    interactive:  bool = False,
 ) -> dict:
     """
     Compute a fight prediction and return a result dict.
@@ -1359,8 +1451,15 @@ def compute_prediction(
 
     db_path defaults to DB_V1_PATH; models_dir defaults to MODELS_V1_PROD_DIR
     (falling back to MODELS_V1_DIR if the prod tier doesn't exist).
-    Pass r_fighter_id / b_fighter_id to bypass name resolution (useful when
-    the caller already has the UFCStats fighter IDs).
+    Every feature only sees fights before *as_of* (_restrict_to_before), so a
+    past event can be re-predicted without leaking its result.
+
+    Pass r_fighter_id / b_fighter_id (ufc_v2.db IDs) to bypass name resolution.
+    Pass r_ufcstats_id / b_ufcstats_id when the caller has the UFCStats IDs
+    (predict_event.py): names aren't unique there, and a fighter with UFCStats
+    history but no ufc_v2.db row yet is still predicted.
+
+    *interactive* lets resolve_fighter() prompt on an ambiguous name (CLI only).
     """
     db_path    = db_path    or DB_V1_PATH
     # Prefer production models (trained on 100% of data) when available
@@ -1378,6 +1477,11 @@ def compute_prediction(
         "stacking": (models_dir / "stacking.joblib",            None,                                None,                              False),
     }
     model_path, features_path, scaler_path, _is_lr = _paths[model_type]
+    if model_type == "stacking" and not model_path.exists() and (MODELS_V1_DIR / "stacking.joblib").exists():
+        # Stacking is only trained on the eval tier (its meta-model needs
+        # out-of-sample base predictions), so the prod tier never has one
+        log.info("No prod stacking model -- using the eval tier's")
+        model_path = MODELS_V1_DIR / "stacking.joblib"
 
     script_map = {
         "xgb":      "ml/train_v1_models.py --model xgb",
@@ -1435,18 +1539,24 @@ def compute_prediction(
     conn_v2 = sqlite3.connect(str(DB_PATH)) if DB_PATH.exists() else None
 
     try:
+        if as_of:
+            for c in (conn, conn_v2):
+                if c is not None:
+                    _restrict_to_before(c, as_of)
+
         # ── Resolve fighters ──────────────────────────────────────────────────
-        if r_fighter_id:
-            r_id, r_name = r_fighter_id, red_name
-        else:
-            r_id, r_name = resolve_fighter(conn, red_name)
+        def _resolve(name: str, v1_id: str | None, us_id: str | None) -> tuple:
+            """(ufc_v2.db id, display name, UFCStats name or None, UFCStats id or None)."""
+            if us_id and conn_v2:
+                return (*_v1_fighter_for_ufcstats_id(conn, conn_v2, us_id, name), us_id)
+            if v1_id:
+                return v1_id, name, None, None
+            return (*resolve_fighter(conn, name, interactive=interactive), None, None)
 
-        if b_fighter_id:
-            b_id, b_name = b_fighter_id, blue_name
-        else:
-            b_id, b_name = resolve_fighter(conn, blue_name)
+        r_id, r_name, r_us_name, r_fid_v2 = _resolve(red_name, r_fighter_id, r_ufcstats_id)
+        b_id, b_name, b_us_name, b_fid_v2 = _resolve(blue_name, b_fighter_id, b_ufcstats_id)
 
-        if r_id == b_id:
+        if (r_fid_v2 == b_fid_v2) if (r_fid_v2 and b_fid_v2) else (r_id == b_id):
             print("\n[WARN]  Both names resolved to the same fighter — please check the names.")
             sys.exit(1)
 
@@ -1460,12 +1570,13 @@ def compute_prediction(
         _def_glicko_t = (GLICKO_START_R, GLICKO_START_RD, 0.06)
 
         # UFCStats hex IDs (used for all history-replay queries on conn_v2)
-        # UFCStats spelling: try the caller's name first (predict_event passes
-        # UFCStats names), then the ufc_v2.db one.
-        r_us_name = (_ufcstats_name(conn_v2, red_name, r_name) or r_name) if conn_v2 else r_name
-        b_us_name = (_ufcstats_name(conn_v2, blue_name, b_name) or b_name) if conn_v2 else b_name
-        r_fid_v2 = _resolve_ufcstats_id(conn_v2, r_us_name) if conn_v2 else None
-        b_fid_v2 = _resolve_ufcstats_id(conn_v2, b_us_name) if conn_v2 else None
+        # UFCStats spelling: try the caller's name first, then the ufc_v2.db one.
+        if r_fid_v2 is None:
+            r_us_name = (_ufcstats_name(conn_v2, red_name, r_name) or r_name) if conn_v2 else r_name
+            r_fid_v2 = _resolve_ufcstats_id(conn_v2, r_us_name, as_of) if conn_v2 else None
+        if b_fid_v2 is None:
+            b_us_name = (_ufcstats_name(conn_v2, blue_name, b_name) or b_name) if conn_v2 else b_name
+            b_fid_v2 = _resolve_ufcstats_id(conn_v2, b_us_name, as_of) if conn_v2 else None
 
         # Per-fighter stat connection / ID: prefer UFCStats (always fresh),
         # fall back to v2 snapshot when UFCStats ID not found.
@@ -1477,8 +1588,10 @@ def compute_prediction(
         # ── Career stats ──────────────────────────────────────────────────────
         # compute_live_career_stats recomputes from raw UFCStats data (always
         # includes the fighter's latest fight; v2 snapshot lags one event).
-        _live_r = compute_live_career_stats(conn_v2, r_us_name, before_date=as_of) if conn_v2 else None
-        _live_b = compute_live_career_stats(conn_v2, b_us_name, before_date=as_of) if conn_v2 else None
+        _live_r = (compute_live_career_stats(conn_v2, r_us_name, before_date=as_of, fighter_id=r_fid_v2)
+                   if conn_v2 and r_fid_v2 else None)
+        _live_b = (compute_live_career_stats(conn_v2, b_us_name, before_date=as_of, fighter_id=b_fid_v2)
+                   if conn_v2 and b_fid_v2 else None)
 
         if _live_r:
             red_stats = pd.Series(_live_r)
@@ -1564,7 +1677,7 @@ def compute_prediction(
             for k in _ZONE_KEYS:
                 extra_r[k] = _live_r[k]
         elif conn_v2:
-            extra_r.update(_get_v2_defensive_stats(conn_v2, r_us_name))
+            extra_r.update(_get_v2_defensive_stats(conn_v2, r_us_name, r_fid_v2))
 
         if _live_b:
             extra_b["sapm"]    = _live_b["sapm"]
@@ -1573,7 +1686,7 @@ def compute_prediction(
             for k in _ZONE_KEYS:
                 extra_b[k] = _live_b[k]
         elif conn_v2:
-            extra_b.update(_get_v2_defensive_stats(conn_v2, b_us_name))
+            extra_b.update(_get_v2_defensive_stats(conn_v2, b_us_name, b_fid_v2))
 
         # ── Opponent-adjusted stats (needs own splm/td_avg/zone accs above) ────
         if conn_v2 and r_fid_v2:
@@ -1626,7 +1739,9 @@ def compute_prediction(
         model_probas   = []
         active_weights = []
         for m_key, m_path, m_feats_path, m_scaler_path, m_is_lr in _specs:
-            if not m_path.exists():
+            # A model the ensemble has no weight for was left out of it at
+            # training time; a 1.0 default handed it ~half of the vote.
+            if not m_path.exists() or m_key not in ensemble_weights:
                 continue
             m_artifact      = joblib.load(m_path)
             m_feature_names = joblib.load(m_feats_path)
@@ -1639,10 +1754,12 @@ def compute_prediction(
                 m_feature_names,
                 extra_r=extra_r, extra_b=extra_b,
             ).fillna(0)
-            Xm_input = m_scaler.transform(Xm) if m_scaler is not None else Xm.values
+            m_base = m_artifact["base"] if m_is_lr else m_artifact
+            raw_p  = float(symmetric_proba(
+                lambda Z: m_base.predict_proba(m_scaler.transform(Z) if m_scaler is not None else Z.values)[:, 1],
+                Xm,
+            )[0])
             if m_is_lr:
-                m_base = m_artifact["base"]
-                raw_p  = m_base.predict_proba(Xm_input)[0, 1]
                 if m_key in ensemble_calibrators:
                     cal_p = float(ensemble_calibrators[m_key].predict([raw_p])[0])
                 else:
@@ -1653,14 +1770,11 @@ def compute_prediction(
                         cal_p = float(m_platt.predict([raw_p])[0])
                 m_proba = [1 - cal_p, cal_p]
             else:
-                raw_p = m_artifact.predict_proba(Xm_input)[0, 1]
-                if m_key in ensemble_calibrators:
-                    cal_p   = float(ensemble_calibrators[m_key].predict([raw_p])[0])
-                    m_proba = [1 - cal_p, cal_p]
-                else:
-                    m_proba = m_artifact.predict_proba(Xm_input)[0].tolist()
+                cal_p   = (float(ensemble_calibrators[m_key].predict([raw_p])[0])
+                           if m_key in ensemble_calibrators else raw_p)
+                m_proba = [1 - cal_p, cal_p]
             model_probas.append(m_proba)
-            active_weights.append(ensemble_weights.get(m_key, 1.0))
+            active_weights.append(ensemble_weights[m_key])
         if not model_probas:
             print("\n[ERROR]  No base models found for ensemble. Train base models first.")
             sys.exit(1)
@@ -1676,22 +1790,27 @@ def compute_prediction(
         meta_sc    = artifact["meta_scaler"]
         base_probs = []
         for m_key, m_path, f_path, s_path, m_is_lr in stk_specs:
-            m_path = Path(m_path)
-            f_path = Path(f_path)
+            # Base models sit next to stacking.joblib; older artifacts stored
+            # absolute paths, so only the file name is used
+            m_path = model_path.parent / Path(m_path).name
+            f_path = model_path.parent / Path(f_path).name
+            s_path = model_path.parent / Path(s_path).name if s_path else None
             if not m_path.exists() or not f_path.exists():
                 log.warning("Stacking: base model %s not found, using 0.5", m_key)
                 base_probs.append(0.5)
                 continue
             m_art  = joblib.load(m_path)
             m_feat = joblib.load(f_path)
-            m_sc   = joblib.load(s_path) if s_path and Path(s_path).exists() else None
+            m_sc   = joblib.load(s_path) if s_path and s_path.exists() else None
             Xm = build_feature_vector(
                 red_stats, blue_stats, elo_r, elo_b, form_r, form_b,
                 division, title_fight, m_feat, extra_r=extra_r, extra_b=extra_b,
             ).fillna(0)
-            Xi = m_sc.transform(Xm) if m_sc is not None else Xm.values
             m_base = m_art["base"] if m_is_lr else m_art
-            raw_p  = float(m_base.predict_proba(Xi)[0, 1])
+            raw_p  = float(symmetric_proba(
+                lambda Z: m_base.predict_proba(m_sc.transform(Z) if m_sc is not None else Z.values)[:, 1],
+                Xm,
+            )[0])
             base_probs.append(raw_p)
         stacked  = np.array(base_probs).reshape(1, -1)
         stacked_s = meta_sc.transform(stacked)
@@ -1707,12 +1826,14 @@ def compute_prediction(
             extra_r=extra_r, extra_b=extra_b,
         ).fillna(0)
 
-        X_input = scaler.transform(X) if scaler is not None else X.values
+        _m = model if model is not None else base_model
+        raw_prob = float(symmetric_proba(
+            lambda Z: _m.predict_proba(scaler.transform(Z) if scaler is not None else Z.values)[:, 1], X,
+        )[0])
 
         if model is not None:
-            proba = model.predict_proba(X_input)[0]
+            proba = [1 - raw_prob, raw_prob]
         else:
-            raw_prob = base_model.predict_proba(X_input)[0, 1]
             if hasattr(platt, "predict_proba"):
                 calibrated = platt.predict_proba([[raw_prob]])[0, 1]
             else:
@@ -1817,7 +1938,7 @@ def predict_fight(
     }
     model_label = model_labels.get(model_type, model_type)
 
-    result = compute_prediction(red_name, blue_name, model_type, division, title_fight)
+    result = compute_prediction(red_name, blue_name, model_type, division, title_fight, interactive=True)
 
     r_name        = result["red_name"]
     b_name        = result["blue_name"]

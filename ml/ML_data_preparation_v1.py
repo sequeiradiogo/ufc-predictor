@@ -359,9 +359,11 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
 
     # ── Group D: Age ratio + UFC experience (issue #63) ───────────────────────
     # age_ratio_diff: mma-ai.net feature #7 -- relative age advantage.
+    # log(r/b), not r/b - 1: swapping corners must negate it (make_symmetric,
+    # ml.calibration.symmetric_proba); r/b - 1 gave +0.162 one way, -0.139 the other.
     _both_age_known = (r_age_vals > 0) & (b_age_vals > 0)
     ml["age_ratio_diff"] = (
-        (r_age_vals / b_age_vals.clip(lower=1.0) - 1.0)
+        np.log(r_age_vals.clip(lower=1.0) / b_age_vals.clip(lower=1.0))
         .where(_both_age_known, 0.0)
         .fillna(0.0)
         .values
@@ -402,6 +404,19 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
 _ANTISYMMETRIC_COLS = {"td_offense_matchup"}
 
 
+def mirror_features(df: pd.DataFrame) -> pd.DataFrame:
+    """The same fights with Red and Blue swapped (features only -- the target,
+    if present, is left alone). The corner flip make_symmetric() trains on, and
+    what ml.calibration.symmetric_proba() predicts on at inference."""
+    df_flip = df.copy()
+    diff_cols = [c for c in df.columns if "_diff" in c or c in _ANTISYMMETRIC_COLS]
+    df_flip[diff_cols] = df_flip[diff_cols] * -1
+    if "striker_vs_wrestler" in df.columns and "wrestler_vs_striker" in df.columns:
+        df_flip["striker_vs_wrestler"] = df["wrestler_vs_striker"]
+        df_flip["wrestler_vs_striker"] = df["striker_vs_wrestler"]
+    return df_flip
+
+
 def make_symmetric(df: pd.DataFrame) -> pd.DataFrame:
     """
     Flip Red <-> Blue to double training data and remove corner bias.
@@ -414,13 +429,8 @@ def make_symmetric(df: pd.DataFrame) -> pd.DataFrame:
     suffix; until 2026-10 it was left un-negated, which made it exactly
     uncorrelated with the target after augmentation (pure noise to the models).
     """
-    df_flip = df.copy()
+    df_flip = mirror_features(df)
     df_flip[TARGET_COL] = 1 - df[TARGET_COL]
-    diff_cols = [c for c in df.columns if "_diff" in c or c in _ANTISYMMETRIC_COLS]
-    df_flip[diff_cols] = df_flip[diff_cols] * -1
-    if "striker_vs_wrestler" in df.columns and "wrestler_vs_striker" in df.columns:
-        df_flip["striker_vs_wrestler"] = df["wrestler_vs_striker"]
-        df_flip["wrestler_vs_striker"] = df["striker_vs_wrestler"]
     return pd.concat([df, df_flip], ignore_index=True).sort_values("date").reset_index(drop=True)
 
 

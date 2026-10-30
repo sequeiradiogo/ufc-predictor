@@ -96,22 +96,23 @@ def main(dry_run: bool = False) -> None:
     for i, d in enumerate(dates):
         for side in ("R", "B"):
             name = ufcstats_name(df.at[i, f"{side}_fighter"])
+            # By the fight's date: names aren't unique in UFCStats
+            fid = _resolve_ufcstats_id(conn, name, before_date=d)
+            if fid is None:
+                unresolved.add(name)
+                continue
             try:
-                stats = compute_live_career_stats(conn, name, before_date=d)
+                stats = compute_live_career_stats(conn, name, before_date=d, fighter_id=fid)
             except ValueError:
                 inconsistent.append((d, name))
                 continue
             if stats is None:
-                if _resolve_ufcstats_id(conn, name) is None:
-                    unresolved.add(name)
-                    continue
                 debuts += 1
                 stats = {k: 0.0 for k in CAREER_COLS.values()}
-                h, r, st = conn.execute("SELECT height, reach, stance FROM fighters WHERE name = ?", (name,)).fetchone()
+                h, r, st = conn.execute("SELECT height, reach, stance FROM fighters WHERE fighter_id = ?", (fid,)).fetchone()
                 stats.update(height=float(h or 0), reach=float(r or 0), stance=(st or "Orthodox").strip())
             for col, key in CAREER_COLS.items():
                 new[f"{side}_{col}"].iat[i] = round(float(stats[key]), 4)
-            fid = _resolve_ufcstats_id(conn, name)
             form = {**compute_recent_form(conn, fid, before_date=d),
                     **compute_finish_rates_single(conn, fid, before_date=d)}
             for col, key in FORM_COLS.items():

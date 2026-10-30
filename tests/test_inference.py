@@ -618,3 +618,53 @@ class TestEndToEndPrediction:
         prob = result["red_prob"]
         assert 0.0 < prob < 1.0, f"red_prob out of range: {prob}"
         assert abs(result["red_prob"] + result["blue_prob"] - 1.0) < 1e-6
+
+    def test_corner_swap_gives_the_complement(self):
+        """Listing a fighter as Blue instead of Red must not change his
+        probability -- was 95.7% vs 79.6% for this lopsided matchup until 2026-10."""
+        from predict import compute_prediction
+        a = compute_prediction("Islam Makhachev", "Jack Della Maddalena", as_of="2026-10-24")
+        b = compute_prediction("Jack Della Maddalena", "Islam Makhachev", as_of="2026-10-24")
+        assert a["red_prob"] == pytest.approx(b["blue_prob"], abs=1e-9)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Fighter resolution -- artifact-free
+# ══════════════════════════════════════════════════════════════════════════════
+
+@pytest.fixture
+def namesake_db():
+    """Two different UFCStats fighters called 'Same Name': x fought 2020 + 2024, y fought 2022."""
+    conn = sqlite3.connect(":memory:")
+    conn.executescript("""
+        CREATE TABLE fighters (fighter_id TEXT, name TEXT);
+        CREATE TABLE fights (fight_id TEXT, date TEXT);
+        CREATE TABLE fight_stats (fight_id TEXT, fighter_id TEXT);
+        INSERT INTO fighters VALUES ('x', 'Same Name'), ('y', 'Same Name'), ('z', 'Other Name');
+        INSERT INTO fights VALUES ('f1', '2020-03-01'), ('f2', '2022-05-01'), ('f3', '2024-08-01');
+        INSERT INTO fight_stats VALUES ('f1', 'x'), ('f2', 'y'), ('f3', 'x'), ('f3', 'z');
+    """)
+    yield conn
+    conn.close()
+
+
+class TestFighterResolution:
+    def test_namesake_who_fought_on_the_date_wins(self, namesake_db):
+        # rebuild_career_stats.py resolves each training row by its fight date
+        from predict import _resolve_ufcstats_id
+        assert _resolve_ufcstats_id(namesake_db, "Same Name", before_date="2022-05-01") == "y"
+        assert _resolve_ufcstats_id(namesake_db, "Same Name", before_date="2024-08-01") == "x"
+
+    def test_namesake_falls_back_to_latest_fight(self, namesake_db):
+        from predict import _resolve_ufcstats_id
+        assert _resolve_ufcstats_id(namesake_db, "Same Name", before_date="2023-01-01") == "y"
+        assert _resolve_ufcstats_id(namesake_db, "Same Name") == "x"
+        assert _resolve_ufcstats_id(namesake_db, "Other Name") == "z"
+        assert _resolve_ufcstats_id(namesake_db, "Nobody") is None
+
+    def test_ambiguous_name_never_prompts_outside_the_cli(self, namesake_db, monkeypatch):
+        # input() blocked the API worker / raised EOFError in CI
+        from predict import resolve_fighter
+        monkeypatch.setattr("builtins.input", lambda *_: pytest.fail("prompted for input"))
+        with pytest.raises(SystemExit):
+            resolve_fighter(namesake_db, "Name", interactive=False)

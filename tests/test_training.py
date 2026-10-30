@@ -18,10 +18,10 @@ import pytest
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
-from ml.calibration import apply_temperature, fit_temperature
-from ml.ML_data_preparation_v1 import make_symmetric
+from ml.calibration import apply_temperature, fit_temperature, symmetric_proba
+from ml.ML_data_preparation_v1 import make_symmetric, mirror_features
 from config import TRAIN_TEST_SPLIT
-from ml.train_v1_models import CAL_PROB_MAX, CAL_PROB_MIN, _isotonic, eval_fit_end, time_split
+from ml.train_v1_models import CAL_PROB_MAX, CAL_PROB_MIN, _isotonic, _mirror, eval_fit_end, time_split
 
 
 def _toy_fights() -> pd.DataFrame:
@@ -57,6 +57,43 @@ class TestMakeSymmetric:
         df["td_offense_matchup"] = np.where(df["target"] == 1, 1.0, -1.0)
         sym = make_symmetric(df)
         assert np.corrcoef(sym["td_offense_matchup"], sym["target"])[0, 1] > 0.99
+
+
+class TestCornerSymmetry:
+    """A prediction must not depend on which fighter is listed as Red.
+
+    Until 2026-10 the calibrators were fit on real fights only (Red wins ~55%)
+    and re-learned a red-corner prior: 19% of 2025+ picks flipped when the
+    corners were swapped (Makhachev 95.7% as Red, 79.6% as Blue)."""
+
+    def test_mirror_features_matches_make_symmetric(self):
+        df = _toy_fights()
+        flip = make_symmetric(df)
+        flip = flip[flip["target"] != flip["date"].map(df.set_index("date")["target"])]
+        mirrored = mirror_features(df).drop(columns="target")
+        pd.testing.assert_frame_equal(
+            flip.drop(columns="target").sort_values("date").reset_index(drop=True),
+            mirrored.sort_values("date").reset_index(drop=True),
+        )
+
+    def test_mirrored_isotonic_is_point_symmetric(self):
+        # Calibration data with a strong red prior
+        rng = np.random.default_rng(1)
+        raw = rng.uniform(0.15, 0.85, 600)
+        y = (rng.uniform(size=raw.size) < np.clip(raw + 0.08, 0, 1)).astype(int)
+        grid = np.linspace(0, 1, 41)
+        biased = _isotonic().fit(raw, y)
+        assert (biased.predict(grid) + biased.predict(1 - grid) - 1).mean() > 0.05
+        ir = _isotonic().fit(*_mirror(raw, y))
+        np.testing.assert_allclose(ir.predict(grid) + ir.predict(1 - grid), 1.0, atol=1e-9)
+
+    def test_symmetric_proba_is_exactly_antisymmetric(self):
+        # A model that ignores corner symmetry entirely (red bias + nonlinearity)
+        df = _toy_fights().drop(columns=["date", "target"])
+        f = lambda X: 1 / (1 + np.exp(-(0.01 * X["elo_diff"] + X["striker_vs_wrestler"] + 0.4)))
+        p = symmetric_proba(f, df)
+        q = symmetric_proba(f, mirror_features(df))
+        np.testing.assert_allclose(p + q, 1.0)
 
 
 class TestBoundedCalibration:

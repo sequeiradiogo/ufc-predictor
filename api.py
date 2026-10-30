@@ -227,7 +227,7 @@ def _get_fighter_stats(conn: sqlite3.Connection, fighter_id: str) -> dict:
 
 # ── Prediction logic (shared) ─────────────────────────────────────────────────
 
-def _run_prediction(req: PredictRequest) -> PredictResponse:
+def _run_prediction(req: PredictRequest, as_of: Optional[str] = None) -> PredictResponse:
     _models_dir = (
         MODELS_V1_PROD_DIR
         if MODELS_V1_PROD_DIR.exists() and any(MODELS_V1_PROD_DIR.iterdir())
@@ -243,9 +243,12 @@ def _run_prediction(req: PredictRequest) -> PredictResponse:
             title_fight=req.title_fight or 0,
             db_path=DB_V1_PATH,
             models_dir=_models_dir,
+            as_of=as_of,
         )
     except SystemExit:
-        raise HTTPException(status_code=404, detail=f"Fighter not found or prediction failed.")
+        raise HTTPException(status_code=404, detail="Fighter not found, ambiguous name or prediction failed.")
+    except ValueError as exc:
+        raise HTTPException(status_code=500, detail=f"Prediction failed: {exc}")
 
     red_win_prob  = result["red_prob"]
     blue_win_prob = result["blue_prob"]
@@ -679,7 +682,8 @@ class CardRequest(BaseModel):
     fights:     list[CardMatchup] = Field(..., min_length=1, max_length=15)
     model:      str               = Field("ensemble", pattern="^(xgb|lr|rf|lgbm|mlp|ensemble|stacking)$")
     event_name: Optional[str]     = None
-    event_date: Optional[str]     = None
+    # Features are built as of this date (age, layoff, rankings, history), like training
+    event_date: Optional[str]     = Field(None, pattern=r"^\d{4}-\d{2}-\d{2}$")
 
 
 class CardFightResult(BaseModel):
@@ -706,7 +710,9 @@ def predict_card(req: CardRequest):
     - A single model is used across all fights (default: ensemble).
     - Fights where a fighter cannot be resolved are returned with an error field
       rather than failing the entire request.
-    - Optionally pass event_name and event_date for context in the response.
+    - Optionally pass event_name and event_date (YYYY-MM-DD). Features are then
+      built as of event_date -- age, layoff, rankings and fight history -- like
+      predict_event.py; without it, as of today.
     """
     results: list[CardFightResult] = []
     for matchup in req.fights:
@@ -720,7 +726,7 @@ def predict_card(req: CardRequest):
             odds_blue=matchup.odds_blue,
         )
         try:
-            prediction = _run_prediction(pred_req)
+            prediction = _run_prediction(pred_req, as_of=req.event_date)
             results.append(CardFightResult(
                 red_fighter=matchup.red_fighter,
                 blue_fighter=matchup.blue_fighter,

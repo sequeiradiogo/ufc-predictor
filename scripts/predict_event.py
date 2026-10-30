@@ -526,6 +526,13 @@ def main() -> None:
     print(f"\nEvent: {event['name']}  ({event['date']})")
     print(f"Fights on card: {len(event['fights'])}\n")
 
+    # Before predicting the card, not after: nothing would be written anyway
+    if args.skip_existing and not args.output:
+        slug = _event_slug(event["name"], event["date"])
+        if (PREDICTIONS_DIR / slug).exists():
+            print(f"Predictions already exist for {slug} -- skipping (--skip-existing).")
+            sys.exit(0)
+
     if not event["fights"]:
         print("[ERROR]  No fights found on the card. The page structure may have changed.")
         sys.exit(1)
@@ -573,10 +580,16 @@ def main() -> None:
                 models_dir=_models_dir,
                 # Age / layoff / rankings as of fight night, like training
                 as_of=str(event["date"])[:10],
+                # Exact UFCStats IDs: names aren't unique there (two "Bruno
+                # Silva"s), and ufc_v2.db may not have a recent fighter yet
+                r_ufcstats_id=fight["r_id"],
+                b_ufcstats_id=fight["b_id"],
             )
             results.append(result)
-        except SystemExit:
-            log.warning("compute_prediction exited for %s vs %s -- skipping", r_db_name, b_db_name)
+        except (SystemExit, ValueError) as exc:
+            # ValueError: compute_live_career_stats' career-time integrity
+            # check -- skip this fight instead of losing the whole card
+            log.warning("compute_prediction failed for %s vs %s -- skipping (%s)", r_db_name, b_db_name, exc)
             skipped.append(f"{r_db_name} vs {b_db_name} (prediction error)")
 
     conn.close()
@@ -593,13 +606,11 @@ def main() -> None:
     # Determine paths
     if args.output:
         out_path = Path(args.output)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
     else:
         PREDICTIONS_DIR.mkdir(exist_ok=True)
         slug      = _event_slug(event["name"], event["date"])
         event_dir = PREDICTIONS_DIR / slug
-        if args.skip_existing and event_dir.exists():
-            print(f"Predictions already exist for {slug} -- skipping (--skip-existing).")
-            sys.exit(0)
         event_dir.mkdir(exist_ok=True)
         out_path  = event_dir / f"{slug}.md"
 

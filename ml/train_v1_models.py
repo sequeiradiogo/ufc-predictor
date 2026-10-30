@@ -73,7 +73,7 @@ from config import (
     TRAIN_TEST_SPLIT,
     XGB_PARAMS,
 )
-from ml.calibration import apply_temperature, fit_temperature
+from ml.calibration import apply_temperature, fit_temperature, symmetric_proba
 from ml.ML_data_preparation_v1 import compute_sample_weights, make_symmetric
 from ml.purged_cv import PurgedWalkForwardCV
 from ml.pytorch_mlp import PyTorchMLP
@@ -100,6 +100,21 @@ CAL_PROB_MAX = 0.95
 
 def _isotonic() -> IsotonicRegression:
     return IsotonicRegression(out_of_bounds="clip", y_min=CAL_PROB_MIN, y_max=CAL_PROB_MAX)
+
+
+def _mirror(p: np.ndarray, y: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Calibration data plus its corner-swapped copy (p -> 1-p, y -> 1-y).
+
+    The base models are trained corner-symmetric, but the calibration window
+    holds real fights only, where Red wins ~55%: calibrators fit on it learned
+    a red-corner prior (2025+ backtest: Red +5.6pp on average, 19% of picks
+    flipped when the corners were swapped). Isotonic / Platt fits on
+    point-symmetric data are point-symmetric, so c(1-p) = 1 - c(p). Works for
+    a single probability column or a (n, k) matrix of base-model probabilities.
+    """
+    p = np.asarray(p, dtype=float)
+    y = np.asarray(y)
+    return np.concatenate([p, 1 - p]), np.concatenate([y, 1 - y])
 
 _ALL_MODELS = ["xgb", "lr", "rf", "lgbm", "mlp", "ensemble", "stacking"]
 
@@ -185,7 +200,7 @@ def train_xgb(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: bo
         # prod tier always trains the full n_estimators
         model = XGBClassifier(**fit_p, eval_metric="logloss")
         model.fit(X_tr, y_tr, sample_weight=w, verbose=False)
-        acc = accuracy_score(y_te, model.predict(X_te))
+        acc = accuracy_score(y_te, symmetric_proba(lambda Z: model.predict_proba(Z)[:, 1], X_te) >= 0.5)
         log.info("XGBoost test accuracy: %.2f%%", acc * 100)
         print(f"XGBoost test accuracy: {acc:.2%}")
         joblib.dump(model,         MODEL_V1_XGB_PATH)
@@ -255,14 +270,14 @@ def train_lr(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: boo
 
     scaler  = StandardScaler()
     X_tr_s  = scaler.fit_transform(X_tr)
-    X_cal_s = scaler.transform(X_cal)
 
     base = LogisticRegression(**params)
     base.fit(X_tr_s, y_tr, sample_weight=w)
 
-    probs_cal_raw = base.predict_proba(X_cal_s)[:, 1]
+    probs_cal_raw = symmetric_proba(lambda Z: base.predict_proba(scaler.transform(Z))[:, 1], X_cal)
     platt = LogisticRegression(max_iter=1000)
-    platt.fit(probs_cal_raw.reshape(-1, 1), y_cal)
+    p_fit, y_fit = _mirror(probs_cal_raw, y_cal.values)
+    platt.fit(p_fit.reshape(-1, 1), y_fit)
 
     if prod:
         print("LR prod: trained on 85% + calibrated on 15%")
@@ -273,8 +288,8 @@ def train_lr(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: boo
     else:
         df_test   = df.iloc[cal_end:]
         X_te, y_te = preprocess(df_test)
-        X_te_s     = scaler.transform(X_te)
-        probs_te   = platt.predict_proba(base.predict_proba(X_te_s)[:, 1].reshape(-1, 1))[:, 1]
+        raw_te     = symmetric_proba(lambda Z: base.predict_proba(scaler.transform(Z))[:, 1], X_te)
+        probs_te   = platt.predict_proba(raw_te.reshape(-1, 1))[:, 1]
         acc = accuracy_score(y_te, (probs_te >= 0.5).astype(int))
         log.info("LR test accuracy: %.2f%%", acc * 100)
         print(f"LR test accuracy: {acc:.2%}")
@@ -342,7 +357,7 @@ def train_rf(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: boo
         w             = compute_sample_weights(train_sym["date"])
         model = RandomForestClassifier(**params)
         model.fit(X_tr, y_tr, sample_weight=w)
-        acc = accuracy_score(y_te, model.predict(X_te))
+        acc = accuracy_score(y_te, symmetric_proba(lambda Z: model.predict_proba(Z)[:, 1], X_te) >= 0.5)
         log.info("RF test accuracy: %.2f%%", acc * 100)
         print(f"RF test accuracy: {acc:.2%}")
         joblib.dump(model,         MODEL_V1_RF_PATH)
@@ -409,7 +424,7 @@ def train_lgbm(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: b
         w             = compute_sample_weights(train_sym["date"])
         model = LGBMClassifier(**params, verbosity=-1)
         model.fit(X_tr.values, y_tr, sample_weight=w)
-        acc = accuracy_score(y_te, model.predict(X_te.values))
+        acc = accuracy_score(y_te, symmetric_proba(lambda Z: model.predict_proba(Z.values)[:, 1], X_te) >= 0.5)
         log.info("LightGBM test accuracy: %.2f%%", acc * 100)
         print(f"LightGBM test accuracy: {acc:.2%}")
         joblib.dump(model,         MODEL_V1_LGBM_PATH)
@@ -474,14 +489,13 @@ def train_mlp(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: bo
 
     scaler  = StandardScaler()
     X_tr_s  = scaler.fit_transform(X_tr)
-    X_cal_s = scaler.transform(X_cal)
 
     base = PyTorchMLP(**params)
     base.fit(X_tr_s, y_tr.values)
 
-    raw_cal    = base.predict_proba(X_cal_s)[:, 1]
+    raw_cal    = symmetric_proba(lambda Z: base.predict_proba(scaler.transform(Z))[:, 1], X_cal)
     calibrator = _isotonic()
-    calibrator.fit(raw_cal, y_cal.values)
+    calibrator.fit(*_mirror(raw_cal, y_cal.values))
 
     if prod:
         print("MLP prod: trained on 85% + calibrated on 15%")
@@ -492,8 +506,7 @@ def train_mlp(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: bo
     else:
         df_test   = df.iloc[cal_end:]
         X_te, y_te = preprocess(df_test)
-        X_te_s     = scaler.transform(X_te)
-        probs_te   = calibrator.predict(base.predict_proba(X_te_s)[:, 1])
+        probs_te   = calibrator.predict(symmetric_proba(lambda Z: base.predict_proba(scaler.transform(Z))[:, 1], X_te))
         acc = accuracy_score(y_te, (probs_te >= 0.5).astype(int))
         log.info("MLP test accuracy: %.2f%%", acc * 100)
         print(f"MLP test accuracy: {acc:.2%}")
@@ -581,11 +594,9 @@ def train_stacking(df: pd.DataFrame) -> None:
 
     def _raw_proba(artifact, feat_names, scaler, is_lr, X_df) -> np.ndarray:
         Xm = X_df.reindex(columns=feat_names, fill_value=0).fillna(0)
-        Xi = scaler.transform(Xm) if scaler else Xm.values
         base = artifact["base"] if is_lr else artifact
-        if hasattr(base, "predict_proba"):
-            return base.predict_proba(Xi)[:, 1]
-        return base.predict(Xi).astype(float)
+        return symmetric_proba(
+            lambda Z: base.predict_proba(scaler.transform(Z) if scaler else Z.values)[:, 1], Xm)
 
     loaded = []
     for m_key, m_path, f_path, s_path, is_lr in specs:
@@ -617,6 +628,7 @@ def train_stacking(df: pd.DataFrame) -> None:
     X_meta_stack = np.column_stack(meta_probs)
     X_test_stack = np.column_stack(test_probs)
 
+    X_meta_stack, y_meta = _mirror(X_meta_stack, y_meta)
     meta_sc = StandardScaler()
     X_meta_s = meta_sc.fit_transform(X_meta_stack)
     X_test_s = meta_sc.transform(X_test_stack)
@@ -631,13 +643,16 @@ def train_stacking(df: pd.DataFrame) -> None:
     for (m_key, *_), coef in zip(loaded, meta_lr.coef_[0]):
         print(f"  {m_key:<8s}  {coef:+.4f}")
 
+    # File names only, resolved next to stacking.joblib at load time: absolute
+    # paths pinned the artifact to this machine (a pickled WindowsPath doesn't
+    # even load on Linux).
+    loaded_keys = {x[0] for x in loaded}
     joblib.dump({
         "meta":        meta_lr,
         "meta_scaler": meta_sc,
-        "specs":       [(m_key, m_path, f_path, s_path, is_lr)
-                        for m_key, m_path, f_path, s_path, is_lr in
-                        [(s[0], s[1], s[2], s[3], s[4]) for s in specs
-                         if any(x[0] == s[0] for x in loaded)]],
+        "specs":       [(m_key, m_path.name, f_path.name, s_path.name if s_path else None, is_lr)
+                        for m_key, m_path, f_path, s_path, is_lr in specs
+                        if m_key in loaded_keys],
         "model_keys":  [x[0] for x in loaded],
     }, MODEL_V1_STACKING_PATH)
     log.info("Saved stacking.joblib")
@@ -735,9 +750,9 @@ def train_ensemble(df: pd.DataFrame, n_trials: int = 100, prod: bool = False) ->
 
     def _raw_proba(artifact, feat_names, scaler, is_lr, X_df) -> np.ndarray:
         Xm = X_df.reindex(columns=feat_names, fill_value=0).fillna(0)
-        Xi = scaler.transform(Xm) if scaler else Xm.values
         base = artifact["base"] if is_lr else artifact
-        return base.predict_proba(Xi)[:, 1]
+        return symmetric_proba(
+            lambda Z: base.predict_proba(scaler.transform(Z) if scaler else Z.values)[:, 1], Xm)
 
     if prod:
         # For prod: calibrators are fitted on eval base model predictions (unbiased --
@@ -751,26 +766,37 @@ def train_ensemble(df: pd.DataFrame, n_trials: int = 100, prod: bool = False) ->
             ("mlp",  MODEL_V1_MLP_PATH,  MODEL_V1_MLP_FEATURES,  MODEL_V1_MLP_SCALER, True),
         ]
         eval_ensemble = joblib.load(MODEL_V1_ENSEMBLE_PATH)
-        best_weights  = eval_ensemble["weights"]
-        model_keys    = [m_key for m_key, *_ in loaded]
+        prod_keys     = {m_key for m_key, *_ in loaded}
 
         log.info("Fitting calibrators on eval base model predictions (last 20%% = unbiased holdout)...")
         calibrators = {}
         print("\nCalibration (eval models, unbiased last-20%% predictions):")
         for m_key, m_path, f_path, s_path, is_lr in eval_specs:
+            if m_key not in prod_keys:
+                continue
             if not m_path.exists() or not f_path.exists():
-                log.warning("Eval model not found for %s -- skipping calibration", m_key)
-                calibrators[m_key] = _isotonic()
+                # No out-of-sample predictions to calibrate on: leave the model
+                # out of the prod ensemble. It used to get an unfitted
+                # IsotonicRegression, which raised NotFittedError on every
+                # prediction.
+                log.warning("Eval model not found for %s -- left out of the prod ensemble", m_key)
                 continue
             eval_artifact   = joblib.load(m_path)
             eval_feat_names = joblib.load(f_path)
             eval_scaler     = joblib.load(s_path) if s_path and s_path.exists() else None
             raw = _raw_proba(eval_artifact, eval_feat_names, eval_scaler, is_lr, X_cal)
             ir  = _isotonic()
-            ir.fit(raw, y_cal)
+            ir.fit(*_mirror(raw, y_cal))
             calibrators[m_key] = ir
             acc = ((raw >= 0.5).astype(int) == y_cal).mean()
             print(f"  {m_key:<8s}  {acc:.2%}")
+
+        model_keys   = [k for k in eval_ensemble["weights"] if k in calibrators]
+        w_total      = sum(eval_ensemble["weights"][k] for k in model_keys)
+        if not model_keys or w_total <= 0:
+            log.error("No calibrated model left for the prod ensemble.")
+            sys.exit(1)
+        best_weights = {k: eval_ensemble["weights"][k] / w_total for k in model_keys}
 
         print(f"\nProd ensemble weights (from eval ensemble):")
         for k, w in best_weights.items():
@@ -786,7 +812,7 @@ def train_ensemble(df: pd.DataFrame, n_trials: int = 100, prod: bool = False) ->
         for m_key, artifact, feat_names, scaler, is_lr in loaded:
             raw = _raw_proba(artifact, feat_names, scaler, is_lr, X_cal)
             ir  = _isotonic()
-            ir.fit(raw, y_cal)
+            ir.fit(*_mirror(raw, y_cal))
             calibrators[m_key] = ir
             acc = ((raw >= 0.5).astype(int) == y_cal).mean()
             print(f"  {m_key:<8s}  {acc:.2%}")

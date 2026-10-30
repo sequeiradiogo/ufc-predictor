@@ -34,6 +34,25 @@ def apply_temperature(p, temperature: float = 1.0):
     return float(out) if np.ndim(out) == 0 else out
 
 
+def symmetric_proba(proba_red, X):
+    """Corner-symmetric raw probability of Red: (f(x) + 1 - f(mirror(x))) / 2.
+
+    *proba_red* maps an unscaled feature DataFrame to the model's raw P(Red);
+    *X* is that DataFrame. Symmetry-augmented training only makes a model
+    roughly symmetric -- Random Forest's bootstrap samples rarely hold both
+    copies of a fight, so its raw outputs drifted ~0.05 off on lopsided
+    matchups, and the steep top of its isotonic calibrator turned that into
+    0.95 vs 0.75 for the same fight with corners swapped. Every raw base-model
+    probability is taken through here (training, calibration, predict.py,
+    backtest_v1.py), so with the mirrored calibrators (train_v1_models._mirror)
+    and the intercept-free temperature the pick never depends on the corner.
+    """
+    from ml.ML_data_preparation_v1 import mirror_features
+
+    return (np.asarray(proba_red(X), dtype=float)
+            + 1 - np.asarray(proba_red(mirror_features(X)), dtype=float)) / 2
+
+
 def fit_temperature(p: np.ndarray, y: np.ndarray) -> float:
     """Temperature minimising the log-loss of apply_temperature(p, T) against y."""
     y = np.asarray(y, dtype=float)
