@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generated_at": "2026-10-30T21:58Z",
+  "generated_at": "2026-11-02T21:09Z",
   "finish_names": [
     "Decision",
     "KO/TKO",
@@ -846,19 +846,150 @@
   },
   "track_record": {
     "since": "2026-10-24",
-    "events": 1,
-    "fights": 13,
-    "model_acc": 0.3077,
-    "fights_with_odds": 11,
-    "model_acc_with_odds": 0.3636,
-    "favorite_acc": 0.9091,
+    "events": 2,
+    "fights": 23,
+    "model_acc": 0.4348,
+    "fights_with_odds": 21,
+    "model_acc_with_odds": 0.4762,
+    "favorite_acc": 0.8095,
     "min_confidence": 0.55,
-    "model_pl": -6.21,
-    "model_staked": 12.0,
-    "model_roi": -0.5175,
-    "favorite_roi": 0.466
+    "model_pl": -4.5,
+    "model_staked": 22.0,
+    "model_roi": -0.2045,
+    "favorite_roi": 0.2325
   },
   "events": [
+    {
+      "date": "2026-10-31",
+      "name": "UFC Fight Night: Moicano vs. Nolan",
+      "model_ok": 6,
+      "n": 10,
+      "fav_model_ok": 6,
+      "fav_ok": 7,
+      "fav_n": 10,
+      "fights": [
+        {
+          "red_name": "Renato Moicano",
+          "blue_name": "Tom Nolan",
+          "pick": "Tom Nolan",
+          "confidence": 0.686,
+          "odds": [
+            -136,
+            116
+          ],
+          "result": "Tom Nolan (KO R3)",
+          "correct": true
+        },
+        {
+          "red_name": "Randy Brown",
+          "blue_name": "Jacobe Smith",
+          "pick": "Jacobe Smith",
+          "confidence": 0.755,
+          "odds": [
+            230,
+            -280
+          ],
+          "result": "Jacobe Smith (Dec)",
+          "correct": true
+        },
+        {
+          "red_name": "Ode Osbourne",
+          "blue_name": "Cody Durden",
+          "pick": "Cody Durden",
+          "confidence": 0.687,
+          "odds": [
+            100,
+            -118
+          ],
+          "result": "Cody Durden (Dec)",
+          "correct": true
+        },
+        {
+          "red_name": "Yana Santos",
+          "blue_name": "Luana Santos",
+          "pick": "Luana Santos",
+          "confidence": 0.914,
+          "odds": [
+            275,
+            -340
+          ],
+          "result": "Luana Santos (Dec)",
+          "correct": true
+        },
+        {
+          "red_name": "Jean-Paul Lebosnoyani",
+          "blue_name": "Farman Hasanov",
+          "pick": "Farman Hasanov",
+          "confidence": 0.63,
+          "odds": [
+            -295,
+            240
+          ],
+          "result": "Jean-Paul Lebosnoyani (KO R3)",
+          "correct": false
+        },
+        {
+          "red_name": "Francis Marshall",
+          "blue_name": "Dakota Hope",
+          "pick": "Francis Marshall",
+          "confidence": 0.75,
+          "odds": [
+            -210,
+            176
+          ],
+          "result": "Dakota Hope (Dec (Split))",
+          "correct": false
+        },
+        {
+          "red_name": "Rodrigo Sezinando",
+          "blue_name": "Theodor Berggren",
+          "pick": "Theodor Berggren",
+          "confidence": 0.696,
+          "odds": [
+            -178,
+            150
+          ],
+          "result": "Rodrigo Sezinando (KO R2)",
+          "correct": false
+        },
+        {
+          "red_name": "Julian Erosa",
+          "blue_name": "JeongYeong Lee",
+          "pick": "JeongYeong Lee",
+          "confidence": 0.744,
+          "odds": [
+            110,
+            -130
+          ],
+          "result": "Julian Erosa (KO R1)",
+          "correct": false
+        },
+        {
+          "red_name": "Zach Reese",
+          "blue_name": "Mickey Gall",
+          "pick": "Zach Reese",
+          "confidence": 0.763,
+          "odds": [
+            -405,
+            320
+          ],
+          "result": "Zach Reese (Dec)",
+          "correct": true
+        },
+        {
+          "red_name": "Talita Alencar",
+          "blue_name": "Piera Rodriguez",
+          "pick": "Piera Rodriguez",
+          "confidence": 0.679,
+          "odds": [
+            240,
+            -295
+          ],
+          "result": "Piera Rodriguez (Dec)",
+          "correct": true
+        }
+      ]
+    },
     {
       "date": "2026-10-24",
       "name": "UFC 333: Volkanovski vs. Evloev",
