@@ -282,6 +282,50 @@ class TestScrapeEventOdds:
         assert (m["odds_red"], m["odds_blue"]) == (None, None)
 
 
+class TestScrapeOdds:
+    """refresh_data's scrape_odds(): whole-pair matching, our corners, per date."""
+
+    _EVENTS = [
+        {"name": "UFC 332", "url": "u/oct3",  "date_text": "Oct 3rd"},
+        {"name": "UFC",     "url": "u/oct31", "date_text": "Oct 31st"},
+    ]
+    _CARDS = {
+        "u/oct3": [
+            # BFO lists Blue first here
+            {"r_name": "Payton Talbott", "b_name": "Deiveson Figueiredo", "odds_red": -670, "odds_blue": 490},
+            {"r_name": "Jacobe Smith",   "b_name": "Bruce Whitehead",     "odds_red": -150, "odds_blue": 130},
+        ],
+        "u/oct31": [
+            {"r_name": "Randy Brown",    "b_name": "Jacobe Smith",        "odds_red": 230,  "odds_blue": -280},
+        ],
+    }
+
+    @pytest.fixture
+    def odds(self, monkeypatch):
+        import scrapers.bestfightodds as bfo
+        monkeypatch.setattr(bfo, "_fetch_bfo_events", lambda: [])
+        monkeypatch.setattr(bfo, "_fetch_bfo_archive_events", lambda: self._EVENTS)
+        monkeypatch.setattr(bfo, "_scrape_event_odds", lambda url: self._CARDS[url])
+        monkeypatch.setattr(bfo, "_fetch_fighter_events", lambda name: [])
+        fights = [
+            {"fight_id": "a", "date": "2026-10-03", "r_name": "Deiveson Figueiredo", "b_name": "Payton Talbott"},
+            {"fight_id": "b", "date": "2026-10-03", "r_name": "Jacobe Smith",        "b_name": "Bruce Whitehead"},
+            {"fight_id": "c", "date": "2026-10-31", "r_name": "Randy Brown",         "b_name": "Jacobe Smith"},
+            {"fight_id": "d", "date": "2026-10-31", "r_name": "Nick Klein",          "b_name": "Joe Kropschot"},
+        ]
+        return bfo.scrape_odds(fights)
+
+    def test_flips_when_bfo_lists_blue_first(self, odds):
+        assert odds["a"] == (490, -670)
+
+    def test_same_fighter_twice_gets_each_fights_line(self, odds):
+        assert odds["b"] == (-150, 130)
+        assert odds["c"] == (230, -280)
+
+    def test_unpriced_fight_has_no_odds(self, odds):
+        assert odds["d"] == (None, None)
+
+
 class TestParseFighterEvents:
     def test_event_headers(self):
         from bs4 import BeautifulSoup

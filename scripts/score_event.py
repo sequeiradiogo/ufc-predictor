@@ -12,7 +12,6 @@ Usage:
 """
 
 import argparse
-import difflib
 import json
 import re
 import sys
@@ -23,10 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from scrapers.ufcstats import _browser_session, _col_ps_text, _normalize_method
-from scrapers.bestfightodds import (
-    _fetch_bfo_events, _fetch_bfo_archive_events, _fetch_fighter_events,
-    _scrape_event_odds, _name_key, _parse_bfo_date,
-)
+from scrapers.bestfightodds import _sim, odds_for_pairs
 from utils.logger import get_logger
 
 log = get_logger("score_event")
@@ -106,134 +102,15 @@ def scrape_bfo_odds(
     Returns {fight_key: (odds_red, odds_blue)}.  fight_key = 'Red vs Blue'.
 
     score_event.py always runs after the event has happened, so the event has
-    usually already dropped off BFO's homepage (upcoming events only) -- the
-    archive of completed events is checked as well. BFO event names are often
-    location-based (e.g. "UFC Oklahoma") rather than fighter-based like
-    UFCStats/our own naming, so events are matched by date and confirmed by
-    their card actually containing our fighters. The archive only covers the
-    ~20 most recent events (all orgs), so any fight still uncovered after
-    that is looked up through the fighter's own BFO page (needed when
-    re-scoring older events).
+    usually already dropped off BFO's homepage (upcoming events only); the
+    matching itself (date + card contents, archive, fighter-page fallback) is
+    scrapers.bestfightodds.odds_for_pairs(), shared with refresh_data.py.
     """
-    try:
-        bfo_events = _fetch_bfo_events()
-    except Exception as exc:
-        log.warning("BFO event list fetch failed: %s", exc)
-        bfo_events = []
-
-    try:
-        archive_events = _fetch_bfo_archive_events()
-    except Exception as exc:
-        log.warning("BFO archive fetch failed: %s", exc)
-        archive_events = []
-
-    def _on_date(events: list[dict]) -> list[dict]:
-        out = []
-        for e in events:
-            parsed = _parse_bfo_date(e["date_text"], ref_year=event_date.year)
-            if parsed and abs((parsed - event_date).days) <= 1:
-                out.append(e)
-        return out
-
-    fighter_keys = {_name_key(n) for pair in fighter_pairs for n in pair}
-    matched_events, matchups = [], []
-    seen_urls: set[str] = set()
-
-    def _try_event(ev: dict) -> None:
-        # Scrape a candidate and keep it only if its card contains our
-        # fighters -- BFO covers many orgs on the same date. BFO also splits
-        # a single UFC card across several listings under different names
-        # (e.g. "UFC 332" for the main card + a bare "UFC" page for the
-        # prelims), so every matching candidate is kept, not just the first.
-        if ev["url"] in seen_urls:
-            return
-        seen_urls.add(ev["url"])
-        try:
-            ev_matchups = _scrape_event_odds(ev["url"])
-        except Exception as exc:
-            log.warning("BFO odds scrape failed for '%s': %s", ev["name"], exc)
-            return
-        ev_keys = {_name_key(m["r_name"]) for m in ev_matchups} | \
-                  {_name_key(m["b_name"]) for m in ev_matchups}
-        if ev_keys & fighter_keys:
-            matched_events.append(ev)
-            matchups.extend(ev_matchups)
-
-    for cand in _on_date(bfo_events + archive_events):
-        _try_event(cand)
-
-    # Fights still uncovered (event older than the archive window, or a card
-    # listing the archive missed): find the event via the fighter's BFO page.
-    for red, blue in fighter_pairs:
-        if _fuzzy_odds_lookup(red, blue, matchups) is not None:
-            continue
-        for name in (red, blue):
-            try:
-                fighter_events = _fetch_fighter_events(name)
-            except Exception as exc:
-                log.warning("BFO fighter lookup failed for '%s': %s", name, exc)
-                continue
-            for ev in _on_date(fighter_events):
-                _try_event(ev)
-            if _fuzzy_odds_lookup(red, blue, matchups) is not None:
-                break
-
-    if not matched_events:
-        log.warning("No BFO event matched '%s' (%s)", event_name, event_date)
-        return {}
-
-    log.info("BFO event(s) matched: %s", ", ".join(e["name"] for e in matched_events))
-
-    # Build lookup keyed by (red_key, blue_key)
-    bfo_lookup: dict[tuple[str, str], tuple[int | None, int | None]] = {}
-    for m in matchups:
-        rk = _name_key(m["r_name"])
-        bk = _name_key(m["b_name"])
-        bfo_lookup[(rk, bk)] = (m["odds_red"], m["odds_blue"])
-        bfo_lookup[(bk, rk)] = (m["odds_blue"], m["odds_red"])
-
-    out: dict[str, tuple[int | None, int | None]] = {}
-    for red, blue in fighter_pairs:
-        rk   = _name_key(red)
-        bk   = _name_key(blue)
-        key  = f"{red} vs {blue}"
-        odds = bfo_lookup.get((rk, bk))
-        if odds is None:
-            # Exact key match failed -- fuzzy-match names (hyphenation like
-            # "Saint-Denis" vs "Saint Denis", suffixes like "Kai Kamaka III",
-            # nicknames like "Zach" vs "Zachary" all break the exact lookup).
-            odds = _fuzzy_odds_lookup(red, blue, matchups)
-        out[key] = odds if odds is not None else (None, None)
-    return out
+    odds = odds_for_pairs(event_date, fighter_pairs, label=event_name)
+    return {f"{red} vs {blue}": v for (red, blue), v in odds.items()}
 
 
 # -- Name matching ------------------------------------------------------------
-
-def _sim(a: str, b: str) -> float:
-    return difflib.SequenceMatcher(None, _name_key(a), _name_key(b)).ratio()
-
-
-_ODDS_SIM_FLOOR = 0.75  # per-fighter similarity floor for odds fuzzy fallback
-
-
-def _fuzzy_odds_lookup(
-    red: str, blue: str, matchups: list[dict],
-) -> tuple[int | None, int | None] | None:
-    """Fuzzy-match (red, blue) against BFO matchups when exact keys don't align."""
-    best_score, best = 0.0, None
-    for m in matchups:
-        s1, s2 = _sim(red, m["r_name"]), _sim(blue, m["b_name"])
-        s3, s4 = _sim(blue, m["r_name"]), _sim(red, m["b_name"])
-        if s1 >= _ODDS_SIM_FLOOR and s2 >= _ODDS_SIM_FLOOR:
-            score, odds = s1 + s2, (m["odds_red"], m["odds_blue"])
-        elif s3 >= _ODDS_SIM_FLOOR and s4 >= _ODDS_SIM_FLOOR:
-            score, odds = s3 + s4, (m["odds_blue"], m["odds_red"])
-        else:
-            continue
-        if score > best_score:
-            best_score, best = score, odds
-    return best
-
 
 _SIM_FLOOR = 0.6  # minimum per-fighter similarity; prevents false positives when one fighter matches exactly
 
