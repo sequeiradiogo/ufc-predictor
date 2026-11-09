@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generated_at": "2026-11-06T18:47Z",
+  "generated_at": "2026-11-09T21:47Z",
   "finish_names": [
     "Decision",
     "KO/TKO",
@@ -929,19 +929,162 @@
   },
   "track_record": {
     "since": "2026-10-24",
-    "events": 2,
-    "fights": 23,
-    "model_acc": 0.4348,
-    "fights_with_odds": 21,
-    "model_acc_with_odds": 0.4762,
-    "favorite_acc": 0.8095,
+    "events": 3,
+    "fights": 34,
+    "model_acc": 0.5294,
+    "fights_with_odds": 32,
+    "model_acc_with_odds": 0.5625,
+    "favorite_acc": 0.75,
     "min_confidence": 0.55,
-    "model_pl": -4.5,
-    "model_staked": 22.0,
-    "model_roi": -0.2045,
-    "favorite_roi": 0.2325
+    "model_pl": -4.1,
+    "model_staked": 33.0,
+    "model_roi": -0.1242,
+    "favorite_roi": 0.0984
   },
   "events": [
+    {
+      "date": "2026-11-07",
+      "name": "UFC Fight Night: Cortes Acosta vs. Walker",
+      "model_ok": 8,
+      "n": 11,
+      "fav_model_ok": 8,
+      "fav_ok": 7,
+      "fav_n": 11,
+      "fights": [
+        {
+          "red_name": "Waldo Cortes Acosta",
+          "blue_name": "Johnny Walker",
+          "pick": "Waldo Cortes Acosta",
+          "confidence": 0.589,
+          "odds": [
+            -225,
+            172
+          ],
+          "result": "Johnny Walker (KO R3)",
+          "correct": false
+        },
+        {
+          "red_name": "Tatiana Suarez",
+          "blue_name": "Virna Jandiroba",
+          "pick": "Tatiana Suarez",
+          "confidence": 0.733,
+          "odds": [
+            -200,
+            168
+          ],
+          "result": "Tatiana Suarez (Dec)",
+          "correct": true
+        },
+        {
+          "red_name": "Davey Grant",
+          "blue_name": "Elijah Smith",
+          "pick": "Elijah Smith",
+          "confidence": 0.852,
+          "odds": [
+            285,
+            -350
+          ],
+          "result": "Elijah Smith (KO R1)",
+          "correct": true
+        },
+        {
+          "red_name": "Billy Elekana",
+          "blue_name": "Lucas Fernando",
+          "pick": "Lucas Fernando",
+          "confidence": 0.711,
+          "odds": [
+            275,
+            -340
+          ],
+          "result": "Lucas Fernando (Dec)",
+          "correct": true
+        },
+        {
+          "red_name": "Priscila Cachoeira",
+          "blue_name": "Nina Milosevic",
+          "pick": "Nina Milosevic",
+          "confidence": 0.855,
+          "odds": [
+            380,
+            -500
+          ],
+          "result": "Nina Milosevic (KO R2)",
+          "correct": true
+        },
+        {
+          "red_name": "Keiichiro Nakamura",
+          "blue_name": "Ollie Schmid",
+          "pick": "Keiichiro Nakamura",
+          "confidence": 0.733,
+          "odds": [
+            -360,
+            290
+          ],
+          "result": "Ollie Schmid (Dec)",
+          "correct": false
+        },
+        {
+          "red_name": "Karine Silva",
+          "blue_name": "Gabriella Fernandes",
+          "pick": "Karine Silva",
+          "confidence": 0.771,
+          "odds": [
+            -220,
+            184
+          ],
+          "result": "Karine Silva (Dec)",
+          "correct": true
+        },
+        {
+          "red_name": "Jose Delano",
+          "blue_name": "Murtazali Magomedov",
+          "pick": "Murtazali Magomedov",
+          "confidence": 0.733,
+          "odds": [
+            -118,
+            100
+          ],
+          "result": "Murtazali Magomedov (Dec)",
+          "correct": true
+        },
+        {
+          "red_name": "Mantas Kondratavicius",
+          "blue_name": "Andre Petroski",
+          "pick": "Mantas Kondratavicius",
+          "confidence": 0.834,
+          "odds": [
+            -320,
+            260
+          ],
+          "result": "Andre Petroski (KO R2)",
+          "correct": false
+        },
+        {
+          "red_name": "Seokhyeon Ko",
+          "blue_name": "Wellington Turman",
+          "pick": "Seokhyeon Ko",
+          "confidence": 0.791,
+          "odds": [
+            -650,
+            480
+          ],
+          "result": "Seokhyeon Ko (Dec)",
+          "correct": true
+        },
+        {
+          "red_name": "Jonny Parsons",
+          "blue_name": "Jose Souza",
+          "pick": "Jose Souza",
+          "confidence": 0.918,
+          "odds": [
+            164,
+            -196
+          ],
+          "result": "Jose Souza (KO R1)",
+          "correct": true
+        }
+      ]
+    },
     {
       "date": "2026-10-31",
       "name": "UFC Fight Night: Moicano vs. Nolan",
