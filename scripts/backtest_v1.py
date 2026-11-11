@@ -8,9 +8,11 @@ Usage:
     python scripts/backtest_v1.py
     python scripts/backtest_v1.py --from-year 2025
     python scripts/backtest_v1.py --model ensemble
+    python scripts/backtest_v1.py --from-year 2025 --by-experience
 """
 
 import argparse
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -173,6 +175,7 @@ def _score_stacking(df: pd.DataFrame) -> pd.DataFrame:
 def _make_results(df: pd.DataFrame, prob_red: np.ndarray) -> pd.DataFrame:
     predicted = (prob_red >= 0.5).astype(int)
     return pd.DataFrame({
+        "fight_id":  df["fight_id"].values,
         "date":      df["date"].values,
         "year":      df["date"].dt.year.values,
         "target":    df[TARGET_COL].values,
@@ -222,11 +225,85 @@ def _print_report(results: pd.DataFrame, label: str, from_year: int | None) -> N
     print()
 
 
+# Buckets on the less experienced fighter's prior UFC fights (wins + losses
+# before the fight, as stored in ufc_v2.db). Debuts aren't in the CSV.
+EXPERIENCE_BUCKETS = [(1, 1, "1"), (2, 3, "2-3"), (4, 5, "4-5"), (6, 10**6, "6+")]
+
+
+def _implied(odds: pd.Series) -> pd.Series:
+    """American moneyline -> implied probability (vig included)."""
+    o = pd.to_numeric(odds, errors="coerce")
+    return np.where(o < 0, -o / (-o + 100), 100 / (o + 100))
+
+
+def _experience_frame() -> pd.DataFrame:
+    """fight_id -> min prior UFC fights of the two corners + de-vigged market prob."""
+    with sqlite3.connect(f"file:{DB_V1_PATH}?mode=ro", uri=True) as conn:
+        fx = pd.read_sql(
+            """SELECT f.fight_id, f.odds_red, f.odds_blue,
+                      r.wins + r.losses AS r_exp, b.wins + b.losses AS b_exp
+               FROM fights f
+               JOIN fight_stats r ON r.fight_id = f.fight_id AND r.fighter_id = f.r_fighter_id
+               JOIN fight_stats b ON b.fight_id = f.fight_id AND b.fighter_id = f.b_fighter_id""",
+            conn)
+    fx["min_exp"] = fx[["r_exp", "b_exp"]].min(axis=1)
+    pr, pb = _implied(fx["odds_red"]), _implied(fx["odds_blue"])
+    fx["market_red"] = pr / (pr + pb)   # NaN when either side has no price
+    return fx[["fight_id", "min_exp", "market_red"]]
+
+
+def _log_loss(y: np.ndarray, p: np.ndarray) -> float:
+    p = np.clip(p, 1e-6, 1 - 1e-6)
+    return float(-np.mean(y * np.log(p) + (1 - y) * np.log(1 - p)))
+
+
+def _print_experience_report(results: pd.DataFrame, from_year: int | None) -> None:
+    """Model vs bookmaker favorite, split by the less experienced fighter's UFC fights.
+
+    Compared on the fights that have odds for both corners (a pick'em -- equal
+    prices -- counts as a Red pick, like the model's exact 50%).
+    """
+    n     = len(results)
+    split = int(n * TRAIN_TEST_SPLIT)
+    hold  = split + (n - split) // 2
+    res   = results.assign(pos=np.arange(n)).merge(_experience_frame(), on="fight_id", how="left")
+    subset = res[res["year"] >= from_year] if from_year else res
+
+    for title, frame in [(f"from_year={from_year or 'all'}", subset),
+                         ("hold-out window only", subset[subset["pos"] >= hold])]:
+        print(f"\n  By UFC experience (min prior UFC fights of the two corners) | {title}")
+        print(f"  {'bucket':<6} {'fights':>6} {'model':>7} {'logloss':>8} | "
+              f"{'w/odds':>6} {'model':>7} {'fav':>7} {'gap':>7} {'ll model':>9} {'ll mkt':>7}")
+        rows = [(lbl, frame[frame["min_exp"].between(lo, hi)]) for lo, hi, lbl in EXPERIENCE_BUCKETS]
+        rows.append(("all", frame[frame["min_exp"].notna()]))
+        for lbl, g in rows:
+            if g.empty:
+                continue
+            y = g["target"].values
+            line = (f"  {lbl:<6} {len(g):>6} {g['correct'].mean():>7.1%} "
+                    f"{_log_loss(y, g['prob_red'].values):>8.4f} | ")
+            o = g[g["market_red"].notna()]
+            if len(o):
+                yo  = o["target"].values
+                fav = ((o["market_red"].values >= 0.5).astype(int) == yo).mean()
+                acc = o["correct"].mean()
+                line += (f"{len(o):>6} {acc:>7.1%} {fav:>7.1%} {acc - fav:>+7.1%} "
+                         f"{_log_loss(yo, o['prob_red'].values):>9.4f} "
+                         f"{_log_loss(yo, o['market_red'].values):>7.4f}")
+            print(line)
+    print("  (gap = model accuracy - bookmaker favorite accuracy on the same fights;\n"
+          "   ll mkt = log-loss of the de-vigged closing line)")
+    print()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Backtest v1 (mdabbert) models.")
     parser.add_argument("--from-year", type=int, default=None)
     parser.add_argument("--model", choices=["xgb", "lr", "rf", "lgbm", "mlp", "ensemble", "stacking"],
                         default="ensemble")
+    parser.add_argument("--by-experience", action="store_true",
+                        help="also split accuracy by the less experienced fighter's prior UFC "
+                             "fights, against the bookmaker favorite on the same fights")
     args = parser.parse_args()
 
     if not MODELS_V1_DIR.exists():
@@ -236,6 +313,8 @@ def main() -> None:
     df      = _load_csv()
     results = _score(df, args.model)
     _print_report(results, f"v1 {args.model}", args.from_year)
+    if args.by_experience:
+        _print_experience_report(results, args.from_year)
 
 
 if __name__ == "__main__":

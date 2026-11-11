@@ -24,6 +24,8 @@ import pandas as pd
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
+from ml.pre_ufc import MODEL_FEATURES as PRE_UFC_FEATURES  # noqa: E402
+
 try:
     from config import DB_PATH
     from logger import get_logger
@@ -240,6 +242,8 @@ def ingest(csv_path: Path, db_path: Path) -> None:
         "ewma_ctrl_r1":      ("R_ewma_ctrl_r1",      "B_ewma_ctrl_r1"),
         "ewma_splm_r1":      ("R_ewma_splm_r1",      "B_ewma_splm_r1"),
         "ewma_reversals_r1": ("R_ewma_reversals_r1", "B_ewma_reversals_r1"),
+        # Pre-UFC record / opponent quality / mma_elo (ml/pre_ufc.py MODEL_FEATURES)
+        **{f: (f"R_{f}", f"B_{f}") for f in PRE_UFC_FEATURES},
     }
 
     r_stats = df[["fight_id", "r_fighter_id"]].rename(columns={"r_fighter_id": "fighter_id"}).copy()
