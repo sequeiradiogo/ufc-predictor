@@ -132,3 +132,28 @@ jobs:
             models_v1.tar.gz \
             models_v1_prod.tar.gz \
             --clobber
+
+      # The step above overwrites data-artifacts-latest, so this keeps an immutable
+      # dated copy of everything a refresh produces (issue #70): restoring an earlier
+      # state = `gh release download data-YYYY-MM-DD`. rankings_history.csv matters
+      # most -- the scraper only sees today's rankings, so its history exists nowhere
+      # else. A re-run on the same day replaces that day's snapshot; --latest=false
+      # keeps data-artifacts-latest as the release marked Latest.
+      - name: Create dated data snapshot release
+        if: ${{ inputs.dry_run != true }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="data-$(date -u +%Y-%m-%d)"
+          SHA="$(git rev-parse HEAD)"
+          FILES="db/ufc_ufcstats.db db/ufc_v2.db raw_data/rankings_history.csv \
+            models_v1.tar.gz models_v1_prod.tar.gz raw_data/ufc-master.csv \
+            raw_data/espn_dwcs_fights.csv raw_data/espn_fighter_map.csv \
+            raw_data/espn_career_fights.csv raw_data/espn_opponent_bouts.csv"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" $FILES --clobber
+          else
+            gh release create "$TAG" $FILES --target "$SHA" --latest=false \
+              --title "Data snapshot $TAG" \
+              --notes "Produced by monthly-refresh.yml run ${{ github.run_id }} at commit $SHA. Restore with: gh release download $TAG"
+          fi

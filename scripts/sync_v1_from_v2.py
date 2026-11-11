@@ -27,7 +27,6 @@ Options:
 import argparse
 import bisect
 import hashlib
-import shutil
 import sqlite3
 import sys
 from datetime import date
@@ -523,10 +522,8 @@ def build_v1_db(v2_db_path: Path, v1_db_path: Path, dry_run: bool = False) -> No
 
     # ── Backup existing DB ────────────────────────────────────────────────────
     if v1_db_path.exists():
-        from datetime import datetime
-        ts     = datetime.now().strftime("%Y%m%d_%H%M%S")
-        backup = v1_db_path.with_name(v1_db_path.stem + f"_backup_{ts}.db")
-        shutil.copy2(v1_db_path, backup)
+        from db.backup import backup_db
+        backup = backup_db(v1_db_path)
         log.info("Backed up existing DB -> %s", backup.name)
 
     # ── Write to DB ───────────────────────────────────────────────────────────

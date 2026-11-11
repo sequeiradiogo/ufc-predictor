@@ -17,6 +17,7 @@ RAW_DIR    = ROOT_DIR / "raw_data"
 DB_UFCSTATS_PATH = DB_DIR / "ufc_ufcstats.db"    # UFCStats per-fight DB with rolling stats
 DB_PATH          = DB_UFCSTATS_PATH               # active DB for ML pipeline (branch: feat/ufcstats-schema)
 _DB_MDABBERT     = DB_DIR / "ufc_v2.db"           # mdabbert career-aggregate DB (primary prediction source)
+DB_BACKUPS_KEEP  = 5                              # automatic *_backup_<timestamp>.db copies kept per DB (db/backup.py)
 
 # ── ML Datasets ───────────────────────────────────────────────────────────────
 CSV_MASTER         = RAW_DIR / "ufc-master.csv"          # mdabbert source CSV with historical odds

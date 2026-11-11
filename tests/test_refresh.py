@@ -572,10 +572,17 @@ class TestRollingIncremental:
         assert sig.parameters["fighter_ids"].default is None
 
     @pytest.mark.skipif(not DB_PATH.exists(), reason="DB not found")
-    def test_incremental_does_not_crash(self):
-        """Run rolling.main() for a single known fighter -- should complete without error."""
+    def test_incremental_does_not_crash(self, tmp_path):
+        """Run rolling.main() for a single known fighter -- should complete without error.
+
+        Runs on a copy: rolling.main() upserts into the DB and makes a backup (which
+        rotates old ones), so pointing it at DB_PATH mutated the real local DB.
+        """
+        import shutil
         from db import rolling
-        conn = sqlite3.connect(str(DB_PATH))
+        db_copy = tmp_path / DB_PATH.name
+        shutil.copy2(DB_PATH, db_copy)
+        conn = sqlite3.connect(str(db_copy))
         # rolling.py requires per-fight strike columns; mdabbert DBs store career averages only
         db_cols = {row[1] for row in conn.execute("PRAGMA table_info(fight_stats)").fetchall()}
         if "body_landed" not in db_cols:
@@ -587,7 +594,7 @@ class TestRollingIncremental:
         conn.close()
         if row is None:
             pytest.skip("No fighters with 3+ fights in DB")
-        rolling.main(fighter_ids={row[0]})
+        rolling.main(fighter_ids={row[0]}, db_path=db_copy)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
