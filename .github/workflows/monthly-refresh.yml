@@ -63,6 +63,19 @@ jobs:
           python -c "from db.rolling import main; from config import DB_UFCSTATS_PATH; main(db_path=DB_UFCSTATS_PATH)"
           python scripts/check_db_health.py
 
+      # Pre-UFC careers (ml/pre_ufc.py features): refresh the ESPN <-> UFCStats map from
+      # the UFC events, then fetch only the new fighters' non-UFC bouts and their
+      # opponents' histories (incremental, a few minutes). An ESPN outage leaves the
+      # tracked CSVs as they were -- the features are then a month stale, not broken,
+      # and training and live inference still read the same files.
+      - name: Refresh ESPN pre-UFC data
+        if: ${{ inputs.dry_run != true }}
+        continue-on-error: true
+        run: |
+          python scripts/scrape_espn.py
+          python scripts/scrape_espn_careers.py
+          python scripts/scrape_espn_careers.py --opponents
+
       - name: Enrich v1 CSV
         if: ${{ inputs.dry_run != true }}
         run: |
@@ -97,7 +110,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add raw_data/ufc-master.csv
+          git add raw_data/ufc-master.csv raw_data/espn_dwcs_fights.csv raw_data/espn_fighter_map.csv raw_data/espn_career_fights.csv raw_data/espn_opponent_bouts.csv
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else

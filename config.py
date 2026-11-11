@@ -200,6 +200,20 @@ EXCLUDED_FEATURES: list[str] = [
     "splm_slope_diff",
     "avg_td_pct_diff",
     "ground_def_diff",
+    # Pre-UFC features (ml/pre_ufc.py) left out 2026-11-11: all 14 are computed
+    # and stored, 6 are used. Real eval pipeline, 9 seeds, vs no pre-UFC features:
+    # the 6-feature set gave hold-out log-loss -0.0037 (6/9; -0.0011 on fights
+    # with odds) and accuracy 63.1% -> 63.9%; all 14 gave -0.0034 (7/9) but
+    # +0.0007 on fights with odds and 62.0%. Dropping only the opponent-quality
+    # trio was worst (hold-out +0.0001).
+    "ext_wins_diff",
+    "ext_losses_diff",
+    "ext_ko_losses_diff",
+    "ext_win_streak_diff",
+    "ext_named_promo_fights_diff",
+    "pro_days_since_last_diff",
+    "ext_win_opp_elo_diff",
+    "ext_opp_win_rate_diff",
 ]
 
 # Minimum fight date included in the ML training set.

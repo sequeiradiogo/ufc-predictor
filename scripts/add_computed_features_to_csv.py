@@ -32,6 +32,7 @@ sys.path.insert(0, str(ROOT))
 from config import DB_V1_PATH, DB_PATH, EWMA_SPAN, FINISH_METHOD_MAP, NAME_ALIASES, SOS_WINDOW, STARTING_ELO
 from ml.ELO_calculator import build_elo_features, build_glicko_features
 from ml.opp_adjusted_defense import FEATURES as ADJ_DEF_FEATURES, prefight_adj_defense
+from ml.pre_ufc import MODEL_FEATURES as PRE_UFC_FEATURES, prefight_model_features
 
 KAGGLE_CSV = ROOT / "raw_data" / "ufc-master.csv"
 
@@ -326,7 +327,7 @@ def main(dry_run: bool = False) -> None:
         "SELECT fighter_id, name FROM fighters", ufc_conn
     )
     ufc_fights = pd.read_sql_query(
-        "SELECT f.fight_id, f.date, r.name r_name, b.name b_name "
+        "SELECT f.fight_id, f.date, f.r_fighter_id, f.b_fighter_id, r.name r_name, b.name b_name "
         "FROM fights f "
         "JOIN fighters r ON f.r_fighter_id = r.fighter_id "
         "JOIN fighters b ON f.b_fighter_id = b.fighter_id",
@@ -509,6 +510,22 @@ def main(dry_run: bool = False) -> None:
     )
     adjdef_df = adjdef_df.dropna(subset=["fight_id", "fighter_id"])[
         ["fight_id", "fighter_id", *ADJ_DEF_FEATURES]
+    ]
+
+    # --- Pre-UFC record, opponent quality and MMA-wide rating (ESPN data; ml/pre_ufc.py,
+    #     shared with predict.py's live path) ---
+    print("  Pre-UFC career / opponent quality / mma_elo ...")
+    _pu = pd.concat([
+        ufc_fights[["fight_id", "date", "r_fighter_id"]].rename(columns={"r_fighter_id": "fighter_id"}),
+        ufc_fights[["fight_id", "date", "b_fighter_id"]].rename(columns={"b_fighter_id": "fighter_id"}),
+    ], ignore_index=True)
+    preufc_df = prefight_model_features(_pu[["fighter_id", "date"]], ufc_conn)
+    preufc_df["fight_id"]   = _pu["fight_id"].map(ufc_fight_map).values
+    preufc_df["fighter_id"] = _pu["fighter_id"].map(
+        lambda fid: _md5id(ufc_fid_to_name[fid]) if fid in ufc_fid_to_name else None
+    ).values
+    preufc_df = preufc_df.dropna(subset=["fight_id", "fighter_id"])[
+        ["fight_id", "fighter_id", *PRE_UFC_FEATURES]
     ]
 
     # --- EWMA of per-fight output rates (splm, td_avg, sapm, reversals) ---
@@ -697,6 +714,7 @@ def main(dry_run: bool = False) -> None:
         (ewma_rates_df,    "ewma_reversals",     "R_ewma_reversals",     "B_ewma_reversals"),
         (ewma_rates_df,    "career_reversals",   "R_career_reversals",   "B_career_reversals"),
     ]
+    per_fighter_data += [(preufc_df, f, f"R_{f}", f"B_{f}") for f in PRE_UFC_FEATURES]
     if r1_df is not None:
         per_fighter_data += [
             (r1_df, "ewma_ctrl_r1",      "R_ewma_ctrl_r1",      "B_ewma_ctrl_r1"),

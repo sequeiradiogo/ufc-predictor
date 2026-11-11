@@ -40,6 +40,13 @@ raw_data/*.csv
 !raw_data/ufcstats_fighters.csv
 !raw_data/ufcstats_fights.csv
 !raw_data/ufcstats_fight_stats.csv
+!raw_data/espn_dwcs_fights.csv
+!raw_data/espn_fighter_map.csv
+!raw_data/espn_career_fights.csv
+# needed at inference (mma_elo / opponent quality replay it), so tracked like the others
+!raw_data/espn_opponent_bouts.csv
+# ESPN response cache (scripts/scrape_espn_careers.py) -- resumable, never committed
+raw_data/espn_cache/
 
 # Claude Code local config
 .claude/

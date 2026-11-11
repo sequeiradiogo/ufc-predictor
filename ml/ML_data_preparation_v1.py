@@ -55,6 +55,7 @@ from config import (
     TRAIN_TEST_SPLIT,
 )
 from utils.logger import get_logger
+from ml.pre_ufc import MODEL_FEATURES as PRE_UFC_FEATURES, NO_DATA as PRE_UFC_NO_DATA  # noqa: E402
 
 log = get_logger(__name__)
 
@@ -233,6 +234,8 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
         "career_reversals", "ewma_reversals",
         # Group F: R1 stats (zero-filled when backfill not yet run)
         "ewma_ctrl_r1", "ewma_splm_r1", "ewma_reversals_r1",
+        # Pre-UFC record / opponent quality / mma_elo (ml/pre_ufc.py)
+        *PRE_UFC_FEATURES,
     )
     for col in _PRECOMPUTED:
         wide[f"{col}_red"]  = pd.to_numeric(wide.get(f"r_{col}"), errors="coerce")
@@ -293,10 +296,13 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
         "career_reversals", "ewma_reversals",
         # Group F: R1 stats
         "ewma_ctrl_r1", "ewma_splm_r1", "ewma_reversals_r1",
+        # Pre-UFC record / opponent quality / mma_elo
+        *PRE_UFC_FEATURES,
     )
     _FILLNA = {
         "days_since_last": 365,
         "sos": STARTING_ELO,
+        **PRE_UFC_NO_DATA,   # a fight not mapped to UFCStats: the no-history value, not 0
     }
     for stat in _DIFF_STATS:
         fill = _FILLNA.get(stat, 0)

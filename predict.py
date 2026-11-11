@@ -63,6 +63,7 @@ from config import (
 )
 from ml.calibration import apply_temperature, symmetric_proba
 from ml.opp_adjusted_defense import current_adj_defense
+from ml.pre_ufc import MODEL_FEATURES as PRE_UFC_FEATURES, current_model_features
 from ml.ELO_calculator import build_elo_features, get_current_glicko_by_division, get_current_ratings
 from utils.odds import print_value_bet_summary
 from utils.logger import get_logger
@@ -1283,6 +1284,11 @@ def build_feature_vector(
         elif feat == "ewma_reversals_r1_diff":
             row[feat] = _er.get("ewma_reversals_r1", 0.0) - _eb.get("ewma_reversals_r1", 0.0)
 
+        # -- Pre-UFC record / opponent quality / mma_elo (ml/pre_ufc.py) --
+        elif feat[: -len("_diff")] in PRE_UFC_FEATURES:
+            stat = feat[: -len("_diff")]
+            row[feat] = _er.get(stat, 0.0) - _eb.get(stat, 0.0)
+
         # ── Opponent-adjusted stats ────────────────────────────────────────────
         elif feat in ("adj_str_def_diff", "adj_acc_def_diff"):
             stat = feat[: -len("_diff")]
@@ -1717,6 +1723,16 @@ def compute_prediction(
                 extra_r.update(_adj_def[r_fid_v2])
             if b_fid_v2:
                 extra_b.update(_adj_def[b_fid_v2])
+
+        # -- Pre-UFC record / opponent quality / mma_elo (same code path as training).
+        #    Always filled for both corners: an unknown fighter gets the no-history
+        #    values, which are not 0 (a missing key would silently diff as 0).
+        if conn_v2:
+            _pre = current_model_features(
+                conn_v2, [r_fid_v2, b_fid_v2], before_date=as_of or date.today().isoformat(),
+            )
+            extra_r.update(_pre[r_fid_v2])
+            extra_b.update(_pre[b_fid_v2])
 
     finally:
         conn.close()
