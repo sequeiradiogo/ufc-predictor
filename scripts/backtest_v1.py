@@ -204,24 +204,25 @@ def _print_report(results: pd.DataFrame, label: str, from_year: int | None) -> N
     print(f"\n  Total  {n_total:>6} fights  {acc_total:.1%}")
 
     # Same windows as train_v1_models.py: base models and calibrators are fit
-    # before `split`, the ensemble's weights + temperature on the first half of
-    # what follows, and only the second half is untouched by every fit. A
-    # --from-year 2025 report straddles all three.
+    # before `split`; nothing is fit after it (the ensemble is the plain mean of
+    # the calibrated models since issue #73 -- until 2026-11 its weights and
+    # temperature were fit on the first half). The hold-out (second half) is
+    # kept as its own row to stay comparable with earlier figures.
     n      = len(results)
     split  = int(n * TRAIN_TEST_SPLIT)
     hold   = split + (n - split) // 2
     pos    = subset.index.values   # results has a RangeIndex in date order
     print("\n  By eval-tier window:")
     for name, lo, hi in [("fit / calibration", 0, split),
-                         ("ensemble tuning", split, hold),
+                         ("test, first half", split, hold),
                          ("hold-out", hold, n)]:
         win = subset[(pos >= lo) & (pos < hi)]
         if win.empty:
             continue
         span = f"{win['date'].min().date()} to {win['date'].max().date()}"
         print(f"  {name:<18} {span}  {len(win):>5} fights  {win['correct'].mean():.1%}")
-    print("  (only the hold-out is out-of-sample for the ensemble; for a single model,\n"
-          "   everything from the ensemble tuning window on is)")
+    print("  (everything from the test window on is out of sample, for the ensemble and\n"
+          "   every single model -- valid for models trained after issue #73)")
     print()
 
 

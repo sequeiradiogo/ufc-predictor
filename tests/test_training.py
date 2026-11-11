@@ -18,7 +18,7 @@ import pytest
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
-from ml.calibration import apply_temperature, fit_temperature, symmetric_proba
+from ml.calibration import apply_temperature, symmetric_proba
 from ml.ML_data_preparation_v1 import make_symmetric, mirror_features
 from config import TRAIN_TEST_SPLIT
 from ml.train_v1_models import CAL_PROB_MAX, CAL_PROB_MIN, _isotonic, _mirror, eval_fit_end, time_split
@@ -125,14 +125,6 @@ class TestTemperature:
 
     def test_scalar_in_scalar_out(self):
         assert isinstance(apply_temperature(0.9, 1.2), float)
-
-    def test_fit_recovers_overconfidence(self):
-        # Outcomes drawn from the truth, predictions sharpened with T = 1.5
-        rng = np.random.default_rng(0)
-        truth = rng.uniform(0.2, 0.8, 20000)
-        y = (rng.uniform(size=truth.size) < truth).astype(int)
-        overconfident = apply_temperature(truth, 1 / 1.5)
-        assert fit_temperature(overconfident, y) == pytest.approx(1.5, abs=0.1)
 
 
 class TestEvalWindows:

@@ -73,7 +73,7 @@ from config import (
     TRAIN_TEST_SPLIT,
     XGB_PARAMS,
 )
-from ml.calibration import apply_temperature, fit_temperature, symmetric_proba
+from ml.calibration import symmetric_proba
 from ml.ML_data_preparation_v1 import compute_sample_weights, make_symmetric
 from ml.purged_cv import PurgedWalkForwardCV
 from ml.pytorch_mlp import PyTorchMLP
@@ -658,12 +658,9 @@ def train_stacking(df: pd.DataFrame) -> None:
     log.info("Saved stacking.joblib")
 
 
-_OPTUNA_MIN_ROWS = 50   # fall back to equal weights if tuning window is thinner
-
-
 # ── Calibrated soft-vote ensemble ─────────────────────────────────────────────
 
-def train_ensemble(df: pd.DataFrame, n_trials: int = 100, prod: bool = False) -> None:
+def train_ensemble(df: pd.DataFrame, prod: bool = False) -> None:
     log.info("=== Calibrated Ensemble%s ===", " (prod)" if prod else "")
 
     feature_cols = [c for c in df.columns if c not in META_COLS]
@@ -678,11 +675,11 @@ def train_ensemble(df: pd.DataFrame, n_trials: int = 100, prod: bool = False) ->
         cal_idx  = int(len(df) * TRAIN_TEST_SPLIT)
         X_cal  = X_all.iloc[cal_idx:]
         y_cal  = y_all[cal_idx:]
-        X_tune, y_tune = None, None   # weights come from eval ensemble, no Optuna needed
-        X_hold, y_hold = None, None
-        tune_dates     = df.iloc[cal_idx:]["date"]
-        hold_dates     = tune_dates
+        X_hold, y_hold = None, None   # weights + temperature come from the eval ensemble
+        hold_dates     = df.iloc[cal_idx:]["date"]
         ensemble_save_path = MODEL_V1_PROD_ENSEMBLE_PATH
+        log.info("Prod ensemble: calibrators on the last %d fights (%s to %s)",
+                 len(y_cal), hold_dates.min().date(), hold_dates.max().date())
     else:
         split_idx = int(len(df) * TRAIN_TEST_SPLIT)
         cal_idx   = eval_fit_end(len(df))
@@ -690,31 +687,17 @@ def train_ensemble(df: pd.DataFrame, n_trials: int = 100, prod: bool = False) ->
         y_cal  = y_all[cal_idx:split_idx]
         X_test = X_all.iloc[split_idx:]
         y_test = y_all[split_idx:]
-        tune_end = len(X_test) // 2
-        X_tune = X_test.iloc[:tune_end]
-        y_tune = y_test[:tune_end]
-        X_hold = X_test.iloc[tune_end:]
-        y_hold = y_test[tune_end:]
-        tune_dates = df.iloc[split_idx:split_idx + tune_end]["date"]
-        hold_dates = df.iloc[split_idx + tune_end:]["date"]
-        if len(X_tune) < _OPTUNA_MIN_ROWS:
-            log.warning(
-                "Tune window too thin (%d rows) -- ensemble will use equal weights.",
-                len(X_tune),
-            )
-            X_tune, y_tune = None, None
+        half   = len(X_test) // 2
+        X_first, y_first = X_test.iloc[:half], y_test[:half]
+        X_hold,  y_hold  = X_test.iloc[half:], y_test[half:]
+        first_dates = df.iloc[split_idx:split_idx + half]["date"]
+        hold_dates  = df.iloc[split_idx + half:]["date"]
         ensemble_save_path = MODEL_V1_ENSEMBLE_PATH
-
-    log.info(
-        "Ensemble split: %d cal | %d tune (%s to %s) | %d hold-out (%s to %s)",
-        len(y_cal),
-        len(X_tune) if X_tune is not None else 0,
-        tune_dates.min().date() if X_tune is not None else "n/a",
-        tune_dates.max().date() if X_tune is not None else "n/a",
-        len(y_hold) if y_hold is not None else 0,
-        hold_dates.min().date() if y_hold is not None else "n/a",
-        hold_dates.max().date() if y_hold is not None else "n/a",
-    )
+        log.info(
+            "Ensemble split: %d cal | test %d (%s to %s) + hold-out %d (%s to %s)",
+            len(y_cal), len(y_first), first_dates.min().date(), first_dates.max().date(),
+            len(y_hold), hold_dates.min().date(), hold_dates.max().date(),
+        )
 
     if prod:
         specs = [
@@ -817,82 +800,38 @@ def train_ensemble(df: pd.DataFrame, n_trials: int = 100, prod: bool = False) ->
             acc = ((raw >= 0.5).astype(int) == y_cal).mean()
             print(f"  {m_key:<8s}  {acc:.2%}")
 
-        model_keys  = []
-        tune_probas = []
-        hold_probas = []
+        model_keys    = []
+        first_probas  = []
+        hold_probas   = []
         print(f"\nBase model hold-out accuracy ({hold_dates.min().date()} to {hold_dates.max().date()}, calibrated):")
         for m_key, artifact, feat_names, scaler, is_lr in loaded:
-            if X_tune is not None:
-                raw_tune = _raw_proba(artifact, feat_names, scaler, is_lr, X_tune)
-                cal_tune = calibrators[m_key].predict(raw_tune)
-                tune_probas.append(np.column_stack([1 - cal_tune, cal_tune]))
-
-            raw_hold = _raw_proba(artifact, feat_names, scaler, is_lr, X_hold)
-            cal_hold = calibrators[m_key].predict(raw_hold)
-            p_hold   = np.column_stack([1 - cal_hold, cal_hold])
-
-            acc = ((p_hold[:, 1] >= 0.5).astype(int) == y_hold).mean()
+            cal_first = calibrators[m_key].predict(_raw_proba(artifact, feat_names, scaler, is_lr, X_first))
+            cal_hold  = calibrators[m_key].predict(_raw_proba(artifact, feat_names, scaler, is_lr, X_hold))
+            acc = ((cal_hold >= 0.5).astype(int) == y_hold).mean()
             print(f"  {m_key:<8s}  {acc:.2%}")
             model_keys.append(m_key)
-            hold_probas.append(p_hold)
+            first_probas.append(cal_first)
+            hold_probas.append(cal_hold)
 
-        import optuna
+        # Plain mean of the calibrated models, no temperature (issue #73). Optuna
+        # weights and a temperature fit on the first half of the test split were
+        # in-sample there: over 9 seeds x 7 forecast origins (hold-outs from
+        # 2024-08 to 2026-11) the plain mean had lower hold-out log-loss at 6 of
+        # 7 origins (-0.0042 on average), and it removed the over-confidence at
+        # the top (85%+ said 90% and won 82%; now 88% / 91%). The weights also
+        # swung between retrains (MLP 84% -> 24%). Both halves of the test split
+        # are now out of sample for the ensemble; the hold-out is still reported
+        # separately to stay comparable with earlier figures.
         from sklearn.metrics import log_loss
-        optuna.logging.set_verbosity(optuna.logging.WARNING)
+        best_weights = {k: 1.0 / len(model_keys) for k in model_keys}
+        temperature  = 1.0
 
-        if X_tune is not None:
-            def objective(trial) -> float:
-                raw_w  = [trial.suggest_float(f"w_{k}", 0.0, 1.0) for k in model_keys]
-                total  = sum(raw_w) + 1e-9
-                w_norm = [w / total for w in raw_w]
-                ens    = np.average(tune_probas, axis=0, weights=w_norm)
-                # Log-loss instead of raw 0/1 accuracy: accuracy on a 371-row
-                # tune split is a noisy, near-discontinuous objective and Optuna
-                # (unseeded, 5x100 trials) was landing on degenerate weight
-                # combinations that scored well on this tiny split by chance but
-                # generalized poorly on hold-out (ensemble accuracy drifted from
-                # ~69% to ~65% over the 2026-08 to 2026-09 monthly retrains,
-                # with weight mass swinging wildly onto whichever base model
-                # happened to get lucky). Log-loss is smooth in the weights and
-                # penalizes overconfident wrong predictions, giving a much more
-                # stable optimization surface.
-                probs = np.clip(ens[:, 1], 1e-6, 1 - 1e-6)
-                return -log_loss(y_tune, probs)
-
-            _n_restarts  = 5
-            _trials_each = max(n_trials, 100)
-            best_value   = -np.inf
-            best_raw     = None
-            for restart in range(_n_restarts):
-                sampler = optuna.samplers.TPESampler(seed=42 + restart)
-                study = optuna.create_study(direction="maximize", sampler=sampler)
-                study.optimize(objective, n_trials=_trials_each)
-                if study.best_value > best_value:
-                    best_value = study.best_value
-                    best_raw   = [study.best_params[f"w_{k}"] for k in model_keys]
-            best_total   = sum(best_raw)
-            best_weights = {k: w / best_total for k, w in zip(model_keys, best_raw)}
-        else:
-            equal = 1.0 / len(model_keys)
-            best_weights = {k: equal for k in model_keys}
-            log.info("Using equal weights: %s", best_weights)
-
-        # Final temperature on the weighted average, fit on the tune split
-        # (out of sample for every base model and calibrator) -- see ml/calibration.py
-        if X_tune is not None:
-            ens_tune    = np.average(tune_probas, axis=0,
-                                     weights=[best_weights[k] for k in model_keys])
-            temperature = fit_temperature(ens_tune[:, 1], y_tune)
-        else:
-            temperature = 1.0
-
-        ens_hold = np.average(hold_probas, axis=0,
-                              weights=[best_weights[k] for k in model_keys])
-        hold_acc = ((ens_hold[:, 1] >= 0.5).astype(int) == y_hold).mean()
-        p_raw  = np.clip(ens_hold[:, 1], 1e-6, 1 - 1e-6)
-        p_temp = np.clip(apply_temperature(ens_hold[:, 1], temperature), 1e-6, 1 - 1e-6)
-        print(f"\nTemperature {temperature:.3f} -- hold-out log-loss "
-              f"{log_loss(y_hold, p_raw):.4f} -> {log_loss(y_hold, p_temp):.4f}")
+        for label, probas, y_part in [("first half of test", first_probas, y_first),
+                                      ("hold-out",           hold_probas,  y_hold)]:
+            p = np.clip(np.mean(probas, axis=0), 1e-6, 1 - 1e-6)
+            print(f"Ensemble {label}: accuracy {((p >= 0.5).astype(int) == y_part).mean():.2%}, "
+                  f"log-loss {log_loss(y_part, p):.4f}")
+        hold_acc = ((np.mean(hold_probas, axis=0) >= 0.5).astype(int) == y_hold).mean()
 
     if prod:
         temperature = float(eval_ensemble.get("temperature", 1.0))
@@ -979,7 +918,7 @@ def main() -> None:
         elif target == "mlp":
             train_mlp(df, tune=args.tune, n_trials=args.trials, prod=args.prod)
         elif target == "ensemble":
-            train_ensemble(df, n_trials=args.trials if args.tune else 100, prod=args.prod)
+            train_ensemble(df, prod=args.prod)
         elif target == "stacking":
             train_stacking(df)
 
