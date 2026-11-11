@@ -11,9 +11,7 @@ Run:
 Or import and call main(db_path=...) directly.
 """
 
-import datetime
 import math
-import shutil
 import sqlite3
 import sys
 import time
@@ -26,7 +24,8 @@ import pandas as pd
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
-from config import DB_PATH
+from config import DB_BACKUPS_KEEP, DB_PATH
+from db.backup import backup_db
 from utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -335,10 +334,8 @@ def build_prior_df(df: pd.DataFrame) -> pd.DataFrame:
 def upsert_to_db(prior_df: pd.DataFrame, db_path: Path) -> None:
     """Backup the DB and upsert the computed rolling stats into fight_stats."""
     # ── Backup ────────────────────────────────────────────────────────────────
-    stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup = db_path.with_name(db_path.stem + f"_backup_{stamp}" + db_path.suffix)
-    shutil.copy2(db_path, backup)
-    log.info("DB backup created: %s", backup)
+    backup = backup_db(db_path)
+    log.info("DB backup created: %s (keeping the last %d)", backup, DB_BACKUPS_KEEP)
 
     # ── Prepare export df ────────────────────────────────────────────────────
     df_export = prior_df.copy()
