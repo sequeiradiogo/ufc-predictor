@@ -228,6 +228,12 @@ MIN_FIGHT_DATE = "2018-01-01"
 SAMPLE_WEIGHT_ALPHA = 0.01
 SAMPLE_WEIGHT_BETA  = 1.5
 
+# Shrinkage of per-fighter rates toward the league average (ml/shrinkage.py, issue #69):
+# k pseudo-rounds of league average added to each fighter's rounds. 0 = off.
+# Applied identically when building the training CSV and at live inference, so
+# changing it requires ML_data_preparation_v1.py + a retrain.
+SHRINK_K = 0.0
+
 # Recent form window (number of prior fights to average)
 RECENT_FORM_WINDOW = 3
 
@@ -310,6 +316,21 @@ DIV_SPLM_STD: dict[str, float] = {
     "women's strawweight":  1.47,
 }
 DIV_SPLM_STD_FALLBACK = 2.0      # conservative cross-division default
+
+# League-average defence (%) used by the opp_adj_* features (opp_adj = own stat x
+# league allowed / avg allowed by the fighter's past opponents). Frozen and shared
+# by add_computed_features_to_csv.py and predict.compute_opp_adjusted_stats: both
+# used to average the UFCStats DB on the fly -- training over the whole DB, live
+# over the DB truncated at the event date -- so live values were ~0.1% off and
+# check_live_parity.py failed once shrinkage (issue #69) made the diffs smaller.
+# Mean of non-zero UFCStats fight_stats values, 2026-11-11 refresh.
+LEAGUE_DEF: dict[str, float] = {
+    "str_def":  55.9925,
+    "td_def":   65.9923,
+    "head_def": 64.8425,
+    "body_def": 33.2334,
+    "dist_def": 62.7042,
+}
 
 # ── Fighter name aliases ──────────────────────────────────────────────────────
 # Maps alternate/historical names (lowercased) -> canonical UFCStats name.

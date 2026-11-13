@@ -29,7 +29,7 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from config import DB_V1_PATH, DB_PATH, EWMA_SPAN, FINISH_METHOD_MAP, NAME_ALIASES, SOS_WINDOW, STARTING_ELO
+from config import DB_V1_PATH, DB_PATH, EWMA_SPAN, FINISH_METHOD_MAP, LEAGUE_DEF, NAME_ALIASES, SOS_WINDOW, STARTING_ELO
 from ml.ELO_calculator import build_elo_features, build_glicko_features
 from ml.opp_adjusted_defense import FEATURES as ADJ_DEF_FEATURES, prefight_adj_defense
 from ml.pre_ufc import MODEL_FEATURES as PRE_UFC_FEATURES, prefight_model_features
@@ -451,11 +451,14 @@ def main(dry_run: bool = False) -> None:
     for _dc in _oadj_def_cols:
         _oadj_raw[_dc] = _oadj_raw[_dc].where(_oadj_raw[_dc] > 0)
 
-    _league_str_def  = _oadj_raw["opp_str_def"].mean()
-    _league_td_def   = _oadj_raw["opp_td_def"].mean()
-    _league_head_def = _oadj_raw["opp_head_def"].mean()
-    _league_body_def = _oadj_raw["opp_body_def"].mean()
-    _league_dist_def = _oadj_raw["opp_dist_def"].mean()
+    # Frozen league averages shared with predict.compute_opp_adjusted_stats
+    # (config.LEAGUE_DEF). Averaging this DB here (all fights) and the
+    # as_of-truncated DB live left live values ~0.1% off training.
+    _league_str_def  = LEAGUE_DEF["str_def"]
+    _league_td_def   = LEAGUE_DEF["td_def"]
+    _league_head_def = LEAGUE_DEF["head_def"]
+    _league_body_def = LEAGUE_DEF["body_def"]
+    _league_dist_def = LEAGUE_DEF["dist_def"]
     _league_str_allowed  = 1.0 - _league_str_def  / 100.0
     _league_td_allowed   = 1.0 - _league_td_def   / 100.0
     _league_head_allowed = 1.0 - _league_head_def  / 100.0

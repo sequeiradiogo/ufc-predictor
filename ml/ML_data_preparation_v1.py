@@ -56,6 +56,7 @@ from config import (
 )
 from utils.logger import get_logger
 from ml.pre_ufc import MODEL_FEATURES as PRE_UFC_FEATURES, NO_DATA as PRE_UFC_NO_DATA  # noqa: E402
+from ml.shrinkage import shrink_wide  # noqa: E402
 
 log = get_logger(__name__)
 
@@ -211,6 +212,12 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
         .merge(r_stats, on="fight_id", how="left")
         .merge(b_stats, on="fight_id", how="left")
     )
+
+    # Shrink noisy per-fighter rates toward the league average by pre-fight
+    # rounds (ml/shrinkage.py; no-op while config.SHRINK_K is 0). Done on the
+    # per-corner columns before anything below derives from them, exactly as
+    # predict.build_feature_vector does live.
+    shrink_wide(wide)
 
     # ── Pre-computed features (stored in fight_stats via ingest_mdabbert.py) ──
     # All features were pre-computed by add_computed_features_to_csv.py and

@@ -484,16 +484,8 @@ def opp_adj_db():
 
 
 class TestOppAdjustedStats:
-    @pytest.fixture(autouse=True)
-    def _reset_league_cache(self):
-        # _get_league_avg_defense caches its result at module level keyed by
-        # nothing (not per-connection) -- must reset it before each test or
-        # an earlier test's DB (e.g. the real production DB via
-        # TestEndToEndPrediction) leaks its league averages into this fixture.
-        import predict
-        predict._league_def_cache = None
-        yield
-        predict._league_def_cache = None
+    # League averages of the fixture DB (live inference uses the frozen config.LEAGUE_DEF)
+    LEAGUE = {"str_def": 35.0, "td_def": 45.0, "head_def": 55.0, "body_def": 65.0, "dist_def": 60.0}
 
     def test_opp_adjusted_formula(self, opp_adj_db):
         from predict import compute_opp_adjusted_stats
@@ -501,6 +493,7 @@ class TestOppAdjustedStats:
             opp_adj_db, "aaa",
             own_splm=10.0, own_td_avg=4.0,
             own_head_acc=0.5, own_body_acc=0.6, own_dist_acc=0.7,
+            league=self.LEAGUE,
         )
         # League avg str_def = mean(20,40,20,60) = 35 -> league allowed = 0.65
         # aaa's opponents' (bbb, ccc) avg str_def = mean(40,60) = 50 -> allowed = 0.50
@@ -531,6 +524,7 @@ class TestOppAdjustedStats:
             opp_adj_db, "nonexistent_fighter",
             own_splm=10.0, own_td_avg=4.0,
             own_head_acc=0.5, own_body_acc=0.6, own_dist_acc=0.7,
+            league=self.LEAGUE,
         )
         assert result["opp_adj_splm"] == pytest.approx(10.0)
         assert result["opp_adj_td_avg"] == pytest.approx(4.0)

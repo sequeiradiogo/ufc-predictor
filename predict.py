@@ -45,6 +45,7 @@ from config import (
     DIV_REACH_STD,
     DIV_REACH_STD_FALLBACK,
     DIV_SPLM_STD,
+    LEAGUE_DEF,
     DIV_SPLM_STD_FALLBACK,
     MODELS_V1_DIR,
     MODELS_V1_PROD_DIR,
@@ -64,6 +65,7 @@ from config import (
 from ml.calibration import apply_temperature, symmetric_proba
 from ml.opp_adjusted_defense import current_adj_defense
 from ml.pre_ufc import MODEL_FEATURES as PRE_UFC_FEATURES, current_model_features
+from ml.shrinkage import shrink_corner
 from ml.ELO_calculator import build_elo_features, get_current_glicko_by_division, get_current_ratings
 from utils.odds import print_value_bet_summary
 from utils.logger import get_logger
@@ -1023,34 +1025,6 @@ def compute_r1_ewma_stats(
 
 # ── Opponent-adjusted stats ────────────────────────────────────────────────────
 
-_league_def_cache: dict[str, float] | None = None
-
-
-def _get_league_avg_defense(conn: sqlite3.Connection) -> dict[str, float]:
-    """
-    Return league-wide average str_def/td_def/head_def/body_def/dist_def across
-    all fight_stats rows (zero/no-data rows excluded), cached at module level
-    since it's an expensive full-table scan and doesn't change within a run.
-    Mirrors the league-average computation in add_computed_features_to_csv.py.
-    """
-    global _league_def_cache
-    if _league_def_cache is not None:
-        return _league_def_cache
-    row = conn.execute(
-        """
-        SELECT AVG(NULLIF(CAST(str_def  AS REAL), 0)),
-               AVG(NULLIF(CAST(td_def   AS REAL), 0)),
-               AVG(NULLIF(CAST(head_def AS REAL), 0)),
-               AVG(NULLIF(CAST(body_def AS REAL), 0)),
-               AVG(NULLIF(CAST(dist_def AS REAL), 0))
-        FROM fight_stats
-        """
-    ).fetchone()
-    keys = ["str_def", "td_def", "head_def", "body_def", "dist_def"]
-    _league_def_cache = {k: float(v or 0) for k, v in zip(keys, row)}
-    return _league_def_cache
-
-
 def compute_opp_adjusted_stats(
     conn: sqlite3.Connection,
     fighter_id: str,
@@ -1059,6 +1033,7 @@ def compute_opp_adjusted_stats(
     own_head_acc: float,
     own_body_acc: float,
     own_dist_acc: float,
+    league: dict[str, float] | None = None,
 ) -> dict[str, float]:
     """
     Normalize offensive output by the defensive quality of career opponents
@@ -1067,7 +1042,9 @@ def compute_opp_adjusted_stats(
     facing weaker defenses inflates the adjustment down, tougher defenses
     inflate it up, relative to the league baseline.
     """
-    league = _get_league_avg_defense(conn)
+    # Frozen league averages (config.LEAGUE_DEF), the same constants the
+    # training CSV uses -- averaging the (as_of-truncated) DB here was ~0.1% off.
+    league = league or LEAGUE_DEF
     row = conn.execute(
         """
         SELECT AVG(NULLIF(CAST(opp.str_def  AS REAL), 0)),
@@ -1146,11 +1123,21 @@ def build_feature_vector(
       - days_since_last_diff  (from extra_r/extra_b)
       - sos_diff  (from extra_r/extra_b)
     """
+    # Style ratios from the raw stats: in training they are fight-level columns
+    # stored in the DB (add_computed_features_to_csv.py), never shrunk.
     grapple_r, strike_r = _style_ratios(red_stats)
     grapple_b, strike_b = _style_ratios(blue_stats)
 
-    _er = extra_r or {}
-    _eb = extra_b or {}
+    # Shrink noisy per-fighter rates toward the league average by pre-fight
+    # rounds (ml/shrinkage.py; no-op while config.SHRINK_K is 0) -- the same
+    # transform ML_data_preparation_v1.py applies to the per-corner columns
+    # before building training diffs.
+    r_rounds = red_stats.get("total_rounds_fought", 0)
+    b_rounds = blue_stats.get("total_rounds_fought", 0)
+    red_stats  = shrink_corner(red_stats,  r_rounds)
+    blue_stats = shrink_corner(blue_stats, b_rounds)
+    _er = shrink_corner(extra_r or {}, r_rounds)
+    _eb = shrink_corner(extra_b or {}, b_rounds)
 
     r_time = float(red_stats.get("total_fight_time",  0) or 0)
     b_time = float(blue_stats.get("total_fight_time", 0) or 0)
