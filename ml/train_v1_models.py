@@ -74,6 +74,7 @@ from config import (
     XGB_PARAMS,
 )
 from ml.calibration import symmetric_proba
+from ml.shrinkage import csv_settings_path, read_settings, stamp_models_dir
 from ml.ML_data_preparation_v1 import compute_sample_weights, make_symmetric
 from ml.purged_cv import PurgedWalkForwardCV
 from ml.pytorch_mlp import PyTorchMLP
@@ -904,6 +905,11 @@ def main() -> None:
         log.info("Sample weight alpha set to %.3f", args.alpha)
 
     df = load_data(min_date=args.min_date)
+    # Record how the CSV's rates were shrunk in the tier being trained; a
+    # single-model retrain must match what the tier already holds.
+    stamp_models_dir(MODELS_V1_PROD_DIR if args.prod else MODELS_V1_DIR,
+                     read_settings(csv_settings_path(CSV_V1_WITH_ELO)),
+                     partial=args.model is not None)
     targets = [args.model] if args.model else [m for m in _ALL_MODELS if m != "stacking"]
 
     for target in targets:

@@ -65,7 +65,7 @@ from config import (
 from ml.calibration import apply_temperature, symmetric_proba
 from ml.opp_adjusted_defense import current_adj_defense
 from ml.pre_ufc import MODEL_FEATURES as PRE_UFC_FEATURES, current_model_features
-from ml.shrinkage import shrink_corner
+from ml.shrinkage import OFF as SHRINK_OFF, SETTINGS_NAME as SHRINK_SETTINGS, read_settings, shrink_corner
 from ml.ELO_calculator import build_elo_features, get_current_glicko_by_division, get_current_ratings
 from utils.odds import print_value_bet_summary
 from utils.logger import get_logger
@@ -1104,6 +1104,7 @@ def build_feature_vector(
     feature_names: list[str],
     extra_r:      dict | None = None,
     extra_b:      dict | None = None,
+    shrink:       dict | None = None,
 ) -> pd.DataFrame:
     """
     Compute all features the model expects.
@@ -1129,15 +1130,18 @@ def build_feature_vector(
     grapple_b, strike_b = _style_ratios(blue_stats)
 
     # Shrink noisy per-fighter rates toward the league average by pre-fight
-    # rounds (ml/shrinkage.py; no-op while config.SHRINK_K is 0) -- the same
-    # transform ML_data_preparation_v1.py applies to the per-corner columns
-    # before building training diffs.
+    # rounds (ml/shrinkage.py) -- the same transform ML_data_preparation_v1.py
+    # applies to the per-corner columns before building training diffs. *shrink*
+    # is the loaded model's feature_settings (read_settings), never config.py:
+    # None = off, as for every model trained before the settings were recorded.
+    _s = shrink or SHRINK_OFF
+    _k, _by_div = _s["shrink_k"], _s["shrink_by_division"]
     r_rounds = red_stats.get("total_rounds_fought", 0)
     b_rounds = blue_stats.get("total_rounds_fought", 0)
-    red_stats  = shrink_corner(red_stats,  r_rounds)
-    blue_stats = shrink_corner(blue_stats, b_rounds)
-    _er = shrink_corner(extra_r or {}, r_rounds)
-    _eb = shrink_corner(extra_b or {}, b_rounds)
+    red_stats  = shrink_corner(red_stats,  r_rounds, k=_k, division=division, by_division=_by_div)
+    blue_stats = shrink_corner(blue_stats, b_rounds, k=_k, division=division, by_division=_by_div)
+    _er = shrink_corner(extra_r or {}, r_rounds, k=_k, division=division, by_division=_by_div)
+    _eb = shrink_corner(extra_b or {}, b_rounds, k=_k, division=division, by_division=_by_div)
 
     r_time = float(red_stats.get("total_fight_time",  0) or 0)
     b_time = float(blue_stats.get("total_fight_time", 0) or 0)
@@ -1475,6 +1479,9 @@ def compute_prediction(
         # out-of-sample base predictions), so the prod tier never has one
         log.info("No prod stacking model -- using the eval tier's")
         model_path = MODELS_V1_DIR / "stacking.joblib"
+    # Shrink live features exactly as this model was trained (ml/shrinkage.py);
+    # stacking may come from the eval tier above, so read next to the model.
+    shrink_settings = read_settings(model_path.parent / SHRINK_SETTINGS)
 
     script_map = {
         "xgb":      "ml/train_v1_models.py --model xgb",
@@ -1516,6 +1523,7 @@ def compute_prediction(
         ensemble_weights = None
 
     finish_path  = models_dir / "finish_type.joblib"
+    finish_shrink_settings = read_settings(models_dir / SHRINK_SETTINGS)
     finish_feats_path = models_dir / "finish_type_features.joblib"
     finish_model = joblib.load(finish_path)       if finish_path.exists()       else None
     finish_feats = joblib.load(finish_feats_path) if finish_feats_path.exists() else None
@@ -1755,7 +1763,7 @@ def compute_prediction(
                 form_r, form_b,
                 division, title_fight,
                 m_feature_names,
-                extra_r=extra_r, extra_b=extra_b,
+                extra_r=extra_r, extra_b=extra_b, shrink=shrink_settings,
             ).fillna(0)
             m_base = m_artifact["base"] if m_is_lr else m_artifact
             raw_p  = float(symmetric_proba(
@@ -1807,7 +1815,7 @@ def compute_prediction(
             m_sc   = joblib.load(s_path) if s_path and s_path.exists() else None
             Xm = build_feature_vector(
                 red_stats, blue_stats, elo_r, elo_b, form_r, form_b,
-                division, title_fight, m_feat, extra_r=extra_r, extra_b=extra_b,
+                division, title_fight, m_feat, extra_r=extra_r, extra_b=extra_b, shrink=shrink_settings,
             ).fillna(0)
             m_base = m_art["base"] if m_is_lr else m_art
             raw_p  = float(symmetric_proba(
@@ -1826,7 +1834,7 @@ def compute_prediction(
             form_r, form_b,
             division, title_fight,
             feature_names,
-            extra_r=extra_r, extra_b=extra_b,
+            extra_r=extra_r, extra_b=extra_b, shrink=shrink_settings,
         ).fillna(0)
 
         _m = model if model is not None else base_model
@@ -1856,7 +1864,7 @@ def compute_prediction(
             form_r, form_b,
             division, title_fight,
             finish_feats,
-            extra_r=extra_r, extra_b=extra_b,
+            extra_r=extra_r, extra_b=extra_b, shrink=finish_shrink_settings,
         ).fillna(0)
         finish_proba = finish_model.predict_proba(X_fin.values)[0].tolist()
 

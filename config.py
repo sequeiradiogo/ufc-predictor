@@ -233,6 +233,9 @@ SAMPLE_WEIGHT_BETA  = 1.5
 # Applied identically when building the training CSV and at live inference, so
 # changing it requires ML_data_preparation_v1.py + a retrain.
 SHRINK_K = 0.0
+# Shrink toward the fight's division average instead of the UFC-wide one
+# (ml/shrinkage.DIV_PRIORS; small divisions fall back to the UFC-wide prior).
+SHRINK_BY_DIVISION = False
 
 # Recent form window (number of prior fights to average)
 RECENT_FORM_WINDOW = 3

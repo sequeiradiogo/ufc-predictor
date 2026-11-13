@@ -46,6 +46,7 @@ from config import (
     TRAIN_TEST_SPLIT,
 )
 from ml.calibration import apply_temperature, symmetric_proba
+from ml.shrinkage import SETTINGS_NAME, csv_settings_path, read_settings
 from utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -309,6 +310,15 @@ def main() -> None:
 
     if not MODELS_V1_DIR.exists():
         print(f"[ERROR] v1 models not found at '{MODELS_V1_DIR}'.")
+        sys.exit(1)
+
+    # The CSV's features must be built (rate shrinkage, ml/shrinkage.py) the way
+    # the eval models were trained, or the backtest scores a model on inputs it
+    # never saw.
+    csv_s, model_s = read_settings(csv_settings_path(CSV_V1_WITH_ELO)), read_settings(MODELS_V1_DIR / SETTINGS_NAME)
+    if csv_s != model_s:
+        print(f"[ERROR] feature CSV built with {csv_s}, models_v1/ trained with {model_s}. "
+              "Rebuild the CSV (ML_data_preparation_v1.py) or retrain.")
         sys.exit(1)
 
     df      = _load_csv()

@@ -44,6 +44,7 @@ from config import (
     MODEL_V1_FINISH_PATH, MODEL_V1_FINISH_FEATURES,
     MODEL_V1_PROD_FINISH_PATH, MODEL_V1_PROD_FINISH_FEATURES,
 )
+from ml.shrinkage import csv_settings_path, read_settings, stamp_models_dir
 from utils.logger import get_logger
 
 log = get_logger(__name__)
@@ -148,6 +149,10 @@ def cross_validate(df: pd.DataFrame, n_splits: int = 5) -> list[float]:
 
 def main(prod: bool = False) -> None:
     df = load_finish_dataset()
+    # Same tier directory as the win models: must have been built with the same
+    # rate-shrinkage settings (ml/shrinkage.py).
+    stamp_models_dir(MODEL_V1_PROD_FINISH_PATH.parent if prod else MODEL_V1_FINISH_PATH.parent,
+                     read_settings(csv_settings_path(CSV_V1_WITH_ELO)), partial=True)
 
     if prod:
         # Production tier: train on 100% of data, no held-out evaluation.

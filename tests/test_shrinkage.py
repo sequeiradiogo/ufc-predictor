@@ -89,3 +89,76 @@ class TestTrainingMatchesInference:
         before = wide.copy()
         shrink_wide(wide, k=0)
         pd.testing.assert_frame_equal(wide, before)
+
+
+class TestDivisionPriors:
+    """config.SHRINK_BY_DIVISION: shrink toward the fight's division average."""
+
+    def test_division_prior_differs_from_ufc_wide(self):
+        from ml.shrinkage import DIV_PRIORS
+        assert DIV_PRIORS["heavyweight"]["ko_rate"] > PRIORS["ko_rate"] > DIV_PRIORS["women's strawweight"]["ko_rate"]
+
+    def test_zero_rounds_gives_the_division_prior(self):
+        from ml.shrinkage import DIV_PRIORS
+        out = shrink_corner({"ko_rate": 1.0}, 0, k=6, division="Heavyweight ", by_division=True)
+        assert out["ko_rate"] == pytest.approx(DIV_PRIORS["heavyweight"]["ko_rate"])
+
+    def test_unknown_or_small_division_falls_back_to_ufc_wide(self):
+        for div in (None, "catch weight", "women's featherweight", "no such division"):
+            out = shrink_corner({"ko_rate": 1.0}, 0, k=6, division=div, by_division=True)
+            assert out["ko_rate"] == pytest.approx(PRIORS["ko_rate"])
+
+    def test_by_division_off_ignores_division(self):
+        out = shrink_corner({"ko_rate": 1.0}, 0, k=6, division="heavyweight", by_division=False)
+        assert out["ko_rate"] == pytest.approx(PRIORS["ko_rate"])
+
+    def test_training_matches_inference_per_division(self):
+        fights = [("heavyweight", 3, 12), ("women's strawweight", 2, 40), ("catch weight", 5, 5)]
+        wide = pd.DataFrame([{"division": d, "r_ko_rate": 0.9, "r_splm": 6.0, "r_total_rounds_fought": rr,
+                              "b_ko_rate": 0.2, "b_splm": 3.0, "b_total_rounds_fought": br}
+                             for d, rr, br in fights])
+        shrink_wide(wide, k=6, by_division=True)
+        for i, (d, rr, br) in enumerate(fights):
+            live_r = shrink_corner({"ko_rate": 0.9, "splm": 6.0}, rr, k=6, division=d, by_division=True)
+            live_b = shrink_corner({"ko_rate": 0.2, "splm": 3.0}, br, k=6, division=d, by_division=True)
+            for stat in ("ko_rate", "splm"):
+                assert wide[f"r_{stat}"].iloc[i] == pytest.approx(live_r[stat])
+                assert wide[f"b_{stat}"].iloc[i] == pytest.approx(live_b[stat])
+
+
+class TestModelSettings:
+    """predict.py shrinks as the loaded model was trained, never from config.py."""
+
+    def test_missing_settings_mean_off(self, tmp_path):
+        from ml.shrinkage import OFF, read_settings
+        assert read_settings(tmp_path / "nope.joblib") == OFF
+
+    def test_roundtrip(self, tmp_path):
+        from ml.shrinkage import read_settings, write_settings
+        s = {"shrink_k": 6.0, "shrink_by_division": True}
+        write_settings(tmp_path / "s.joblib", s)
+        assert read_settings(tmp_path / "s.joblib") == s
+
+    def test_partial_retrain_with_other_settings_refused(self, tmp_path):
+        from ml.shrinkage import stamp_models_dir
+        stamp_models_dir(tmp_path, {"shrink_k": 0.0, "shrink_by_division": False}, partial=False)
+        with pytest.raises(SystemExit):
+            stamp_models_dir(tmp_path, {"shrink_k": 6.0, "shrink_by_division": True}, partial=True)
+        # a full retrain may change them
+        stamp_models_dir(tmp_path, {"shrink_k": 6.0, "shrink_by_division": True}, partial=False)
+
+    def test_config_alone_does_not_change_live_features(self, monkeypatch):
+        import config
+        import predict
+        monkeypatch.setattr(config, "SHRINK_K", 6.0)
+        monkeypatch.setattr(config, "SHRINK_BY_DIVISION", True)
+        red  = pd.Series({"splm": 9.0, "total_rounds_fought": 2})
+        blue = pd.Series({"splm": 3.0, "total_rounds_fought": 40})
+        args = (red, blue, 1500.0, 1500.0, {}, {}, "lightweight", 0, ["splm_diff"])
+        # model without recorded settings -> no shrinkage, whatever config says
+        assert predict.build_feature_vector(*args)["splm_diff"].iloc[0] == pytest.approx(6.0)
+        # model trained with shrinkage -> shrunk exactly as in training
+        s = {"shrink_k": 6.0, "shrink_by_division": True}
+        expected = (shrink_corner({"splm": 9.0}, 2, k=6, division="lightweight", by_division=True)["splm"]
+                    - shrink_corner({"splm": 3.0}, 40, k=6, division="lightweight", by_division=True)["splm"])
+        assert predict.build_feature_vector(*args, shrink=s)["splm_diff"].iloc[0] == pytest.approx(expected)

@@ -23,6 +23,7 @@ logs/
 
 # Intermediate generated data (regenerate with ml/ML_data_preparation_v1.py)
 ml/*.csv
+ml/*.settings.joblib
 
 # Databases -- regenerate with db/rebuild_ufcstats_db.py or scripts/scrape_history.py
 db/*.db

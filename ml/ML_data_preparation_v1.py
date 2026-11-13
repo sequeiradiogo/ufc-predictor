@@ -56,7 +56,7 @@ from config import (
 )
 from utils.logger import get_logger
 from ml.pre_ufc import MODEL_FEATURES as PRE_UFC_FEATURES, NO_DATA as PRE_UFC_NO_DATA  # noqa: E402
-from ml.shrinkage import shrink_wide  # noqa: E402
+from ml.shrinkage import config_settings, csv_settings_path, shrink_wide, write_settings  # noqa: E402
 
 log = get_logger(__name__)
 
@@ -474,6 +474,9 @@ def main() -> None:
     CSV_V1_WITH_ELO.parent.mkdir(exist_ok=True)
     df.to_csv(CSV_V1_WITH_ELO, index=False)
     log.info("Saved %d rows to %s", len(df), CSV_V1_WITH_ELO)
+    # How the rates were shrunk -- training copies this into the model tier so
+    # predict.py shrinks live features the way the loaded model was trained.
+    write_settings(csv_settings_path(CSV_V1_WITH_ELO), config_settings())
 
     # Quick sanity check
     n_test = int(len(df) * (1 - TRAIN_TEST_SPLIT))
