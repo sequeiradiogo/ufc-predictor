@@ -228,19 +228,6 @@ def run_trial(hold_months: int, seed: int, shadow: bool = False) -> dict:
     if hold.empty:
         raise SystemExit(f"No fights after {cutoff.date()} to hold out")
 
-    tmp = Path(tempfile.mkdtemp(prefix="prod_trial_"))
-    (tmp / "eval").mkdir()
-    (tmp / "prod").mkdir()
-    redirect_model_paths(tv, tmp / "eval", tmp / "prod")
-    tv.RANDOM_STATE = seed
-    log.info("Trial retrain on %d fights up to %s; holding out %d fights (%s to %s)",
-             len(train), cutoff.date(), len(hold), hold["date"].min().date(), hold["date"].max().date())
-    with contextlib.redirect_stdout(io.StringIO()):
-        for prod in (False, True):   # the prod ensemble needs the eval tier first
-            for fn in (tv.train_xgb, tv.train_lr, tv.train_rf, tv.train_lgbm, tv.train_mlp):
-                fn(train, prod=prod)
-            tv.train_ensemble(train, prod=prod)
-
     X = hold[[c for c in hold.columns if c not in tv.META_COLS]].replace([np.inf, -np.inf], 0)
     y = hold[tv.TARGET_COL].values
     market = (_experience_frame().set_index("fight_id")["market_red"]
@@ -248,12 +235,28 @@ def run_trial(hold_months: int, seed: int, shadow: bool = False) -> dict:
     out = dict(cutoff=str(cutoff.date()), n_train=len(train),
                hold_from=str(hold["date"].min().date()), hold_to=str(hold["date"].max().date()),
                y=y, market=market, fight_id=hold["fight_id"].values,
-               date=hold["date"].dt.strftime("%Y-%m-%d").values,
-               p_prod=score_ensemble(tmp / "prod", X), p_eval=score_ensemble(tmp / "eval", X))
-    if shadow:
-        log.info("Shadow: training V2 (fit on the first 80%%, own calibrators on the last 20%%)")
-        train_v2(tv, train, hold, tmp / "v2")
-        out["p_v2"] = score_ensemble(tmp / "v2", X)
+               date=hold["date"].dt.strftime("%Y-%m-%d").values)
+
+    # The trial models (~20 MB per run) are only needed to score the hold-out
+    with tempfile.TemporaryDirectory(prefix="prod_trial_", ignore_cleanup_errors=True) as tmp_name:
+        tmp = Path(tmp_name)
+        (tmp / "eval").mkdir()
+        (tmp / "prod").mkdir()
+        redirect_model_paths(tv, tmp / "eval", tmp / "prod")
+        tv.RANDOM_STATE = seed
+        log.info("Trial retrain on %d fights up to %s; holding out %d fights (%s to %s)",
+                 len(train), cutoff.date(), len(hold), hold["date"].min().date(), hold["date"].max().date())
+        with contextlib.redirect_stdout(io.StringIO()):
+            for prod in (False, True):   # the prod ensemble needs the eval tier first
+                for fn in (tv.train_xgb, tv.train_lr, tv.train_rf, tv.train_lgbm, tv.train_mlp):
+                    fn(train, prod=prod)
+                tv.train_ensemble(train, prod=prod)
+        out["p_prod"] = score_ensemble(tmp / "prod", X)
+        out["p_eval"] = score_ensemble(tmp / "eval", X)
+        if shadow:
+            log.info("Shadow: training V2 (fit on the first 80%%, own calibrators on the last 20%%)")
+            train_v2(tv, train, hold, tmp / "v2")
+            out["p_v2"] = score_ensemble(tmp / "v2", X)
     return out
 
 
