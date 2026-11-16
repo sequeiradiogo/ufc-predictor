@@ -1193,10 +1193,6 @@ def build_feature_vector(
         elif feat == "title_fight":
             row[feat] = title_fight
 
-        # ── Height / reach ────────────────────────────────────────────────────
-        # height and reach live in fight_stats so they fall through to the
-        # standard _diff handler below via red_stats.get("height") etc.
-
         # ── Stance matchup ────────────────────────────────────────────────────
         # stance is in fight_stats; use red_stats / blue_stats directly
         elif feat == "southpaw_adv_diff":
@@ -1384,12 +1380,22 @@ def build_feature_vector(
         elif feat == "ground_def_diff":
             row[feat] = _er.get("ground_def", 0.0) - _eb.get("ground_def", 0.0)
 
+        # ── Height / reach: 0 when either side is unknown ─────────────────────
+        # UFCStats has no height/reach for some newcomers (stored as 0); a raw
+        # difference would read as a ~180 cm gap. Same rule in
+        # ML_data_preparation_v1.py.
+        elif feat in ("height_diff", "reach_diff"):
+            base = feat[: -len("_diff")]
+            r_val = float(pd.to_numeric(red_stats.get(base,  0), errors="coerce") or 0)
+            b_val = float(pd.to_numeric(blue_stats.get(base, 0), errors="coerce") or 0)
+            row[feat] = r_val - b_val if r_val > 0 and b_val > 0 else 0.0
+
         # ── Division-normalized reach diff ────────────────────────────────────
         elif feat == "reach_div_norm_diff":
             r_reach = float(pd.to_numeric(red_stats.get("reach",  0), errors="coerce") or 0)
             b_reach = float(pd.to_numeric(blue_stats.get("reach", 0), errors="coerce") or 0)
             div_std = DIV_REACH_STD.get(div_lower, DIV_REACH_STD_FALLBACK) if div_lower else DIV_REACH_STD_FALLBACK
-            row[feat] = (r_reach - b_reach) / max(div_std, 1.0)
+            row[feat] = (r_reach - b_reach) / max(div_std, 1.0) if r_reach > 0 and b_reach > 0 else 0.0
 
         # ── Reach ratio (R/B - 1, zeros when either reach unknown) ───────────
         elif feat == "reach_ratio_diff":

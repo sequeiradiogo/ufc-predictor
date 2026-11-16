@@ -132,6 +132,9 @@ _STAT_COLS = (
     "dist_landed",   "dist_atmpted",
     "clinch_landed", "clinch_atmpted",
     "ground_landed", "ground_atmpted",
+    # The scraper parses reversals; leaving it out here left every fight from
+    # Jul 2026 on with NULL reversals (check_db_health.py now catches it).
+    "reversals",
     "total_fight_time",
 )
 

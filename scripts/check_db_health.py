@@ -8,6 +8,8 @@ errors -- predict.py just computes splm/sapm from garbage:
   - fight_stats rows without a date (rolling.py chronology scrambled)
   - NULL rolling columns (rolling.py never ran on new fights)
   - fights without per-round stats (round-1 EWMA features go stale)
+  - fight_stats rows without reversals (refresh_data.py dropped the column
+    until 2026-11; the reversal features silently read 0)
   - total_fight_time never made cumulative (rolling.py stale / not run)
 
 Usage:
@@ -39,6 +41,8 @@ _CHECKS = [
     ("fights without per-round stats (run scripts/backfill_rounds.py)",
      "SELECT COUNT(*) FROM fights f WHERE NOT EXISTS "
      "(SELECT 1 FROM fight_stats_rounds r WHERE r.fight_id = f.fight_id)"),
+    ("fight_stats rows without reversals (run scripts/backfill_reversals.py)",
+     "SELECT COUNT(*) FROM fight_stats WHERE reversals IS NULL"),
 ]
 
 

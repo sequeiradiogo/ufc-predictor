@@ -443,6 +443,7 @@ CREATE TABLE fight_stats (
     dist_landed INTEGER, dist_atmpted INTEGER,
     clinch_landed INTEGER, clinch_atmpted INTEGER,
     ground_landed INTEGER, ground_atmpted INTEGER,
+    reversals INTEGER,
     total_fight_time INTEGER,
     PRIMARY KEY (fight_id, fighter_id)
 )
@@ -486,6 +487,7 @@ _SAMPLE_DATA = {
             "dist_landed": 45, "dist_atmpted": 70,
             "clinch_landed": 5, "clinch_atmpted": 10,
             "ground_landed": 0, "ground_atmpted": 0,
+            "reversals": 1,
             "total_fight_time": 150,
         },
         {
@@ -499,6 +501,7 @@ _SAMPLE_DATA = {
             "dist_landed": 28, "dist_atmpted": 55,
             "clinch_landed": 2, "clinch_atmpted": 5,
             "ground_landed": 0, "ground_atmpted": 0,
+            "reversals": 0,
             "total_fight_time": 150,
         },
     ],
@@ -542,6 +545,12 @@ class TestInsertNewData:
         _insert_new_data(_SAMPLE_DATA, temp_db)
         row = temp_db.execute("SELECT finish_round, match_time_sec FROM fights WHERE fight_id='fff'").fetchone()
         assert row == (2, 150)
+
+    def test_reversals_stored(self, temp_db):
+        # Dropped by the insert until 2026-11: every fight from Jul 2026 had NULL reversals
+        _insert_new_data(_SAMPLE_DATA, temp_db)
+        rows = dict(temp_db.execute("SELECT fighter_id, reversals FROM fight_stats"))
+        assert rows == {"aaa": 1, "bbb": 0}
 
     def test_fight_stats_date_stored(self, temp_db):
         _insert_new_data(_SAMPLE_DATA, temp_db)

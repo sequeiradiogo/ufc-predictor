@@ -56,10 +56,13 @@ jobs:
       # it left every fight from Jul 2026 on with NULL rolling stats.
       # refresh_data.py doesn't write fight_stats_rounds either; the round-1
       # EWMA features read it. Only fights missing round rows are scraped.
+      # backfill_reversals.py is a safety net: refresh_data.py dropped reversals
+      # until 2026-11 (Jul-Nov 2026 were NULL); it only visits NULL fights.
       - name: Rebuild rolling stats and round stats
         if: ${{ inputs.dry_run != true }}
         run: |
           python scripts/backfill_rounds.py
+          python scripts/backfill_reversals.py
           python -c "from db.rolling import main; from config import DB_UFCSTATS_PATH; main(db_path=DB_UFCSTATS_PATH)"
           python scripts/check_db_health.py
 

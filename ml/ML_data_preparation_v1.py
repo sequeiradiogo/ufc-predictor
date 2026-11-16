@@ -261,7 +261,13 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
     for col in _STAT_COLS:
         r_vals = pd.to_numeric(wide.get(f"r_{col}", 0), errors="coerce").fillna(0)
         b_vals = pd.to_numeric(wide.get(f"b_{col}", 0), errors="coerce").fillna(0)
-        ml[f"{col}_diff"] = r_vals - b_vals
+        diff = r_vals - b_vals
+        if col in ("height", "reach"):
+            # UFCStats has no height/reach for some newcomers (stored as 0):
+            # unknown on either side -> no difference, not a ~180 cm gap.
+            # Same rule in predict.build_feature_vector.
+            diff = diff.where((r_vals > 0) & (b_vals > 0), 0.0)
+        ml[f"{col}_diff"] = diff
 
     # Rating diffs
     ml["elo_diff"]      = wide["elo_red"].fillna(STARTING_ELO)  - wide["elo_blue"].fillna(STARTING_ELO)
