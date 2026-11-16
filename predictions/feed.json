@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generated_at": "2026-11-13T19:05Z",
+  "generated_at": "2026-11-16T21:28Z",
   "finish_names": [
     "Decision",
     "KO/TKO",
@@ -1012,19 +1012,174 @@
   },
   "track_record": {
     "since": "2026-10-24",
-    "events": 3,
-    "fights": 34,
-    "model_acc": 0.5294,
-    "fights_with_odds": 32,
-    "model_acc_with_odds": 0.5625,
-    "favorite_acc": 0.75,
+    "events": 4,
+    "fights": 45,
+    "model_acc": 0.5333,
+    "fights_with_odds": 43,
+    "model_acc_with_odds": 0.5581,
+    "favorite_acc": 0.7674,
     "min_confidence": 0.55,
-    "model_pl": -4.1,
-    "model_staked": 33.0,
-    "model_roi": -0.1242,
-    "favorite_roi": 0.0984
+    "model_pl": -6.69,
+    "model_staked": 44.0,
+    "model_roi": -0.152,
+    "favorite_roi": 0.1276
   },
   "events": [
+    {
+      "date": "2026-11-14",
+      "name": "UFC 334: Gane vs. Hokit",
+      "model_ok": 6,
+      "n": 11,
+      "fav_model_ok": 6,
+      "fav_ok": 9,
+      "fav_n": 11,
+      "fights": [
+        {
+          "red_name": "Ciryl Gane",
+          "blue_name": "Josh Hokit",
+          "pick": "Josh Hokit",
+          "confidence": 0.606,
+          "odds": [
+            -215,
+            180
+          ],
+          "result": "Ciryl Gane (Dec)",
+          "correct": false
+        },
+        {
+          "red_name": "Kayla Harrison",
+          "blue_name": "Amanda Nunes",
+          "pick": "Kayla Harrison",
+          "confidence": 0.824,
+          "odds": [
+            -158,
+            134
+          ],
+          "result": "Kayla Harrison (Sub R4)",
+          "correct": true
+        },
+        {
+          "red_name": "Caio Borralho",
+          "blue_name": "Yousri Belgaroui",
+          "pick": "Yousri Belgaroui",
+          "confidence": 0.602,
+          "odds": [
+            -156,
+            132
+          ],
+          "result": "Caio Borralho (Dec)",
+          "correct": false
+        },
+        {
+          "red_name": "Uros Medic",
+          "blue_name": "Kevin Holland",
+          "pick": "Uros Medic",
+          "confidence": 0.777,
+          "odds": [
+            -164,
+            138
+          ],
+          "result": "Draw",
+          "correct": null
+        },
+        {
+          "red_name": "Bilal Hasan",
+          "blue_name": "Luis Gurule",
+          "pick": "Bilal Hasan",
+          "confidence": 0.926,
+          "odds": [
+            -1150,
+            730
+          ],
+          "result": "Luis Gurule (Dec (Split))",
+          "correct": false
+        },
+        {
+          "red_name": "Stephen Thompson",
+          "blue_name": "Charles Radtke",
+          "pick": "Charles Radtke",
+          "confidence": 0.728,
+          "odds": [
+            -126,
+            108
+          ],
+          "result": "Stephen Thompson (KO R3)",
+          "correct": false
+        },
+        {
+          "red_name": "Drew Dober",
+          "blue_name": "Chris Duncan",
+          "pick": "Chris Duncan",
+          "confidence": 0.856,
+          "odds": [
+            168,
+            -200
+          ],
+          "result": "Chris Duncan (Dec)",
+          "correct": true
+        },
+        {
+          "red_name": "Jim Miller",
+          "blue_name": "Terrance McKinney",
+          "pick": "Terrance McKinney",
+          "confidence": 0.728,
+          "odds": [
+            184,
+            -220
+          ],
+          "result": "Terrance McKinney (KO R1)",
+          "correct": true
+        },
+        {
+          "red_name": "Donte Johnson",
+          "blue_name": "Cesar Almeida",
+          "pick": "Donte Johnson",
+          "confidence": 0.829,
+          "odds": [
+            -210,
+            176
+          ],
+          "result": "Cesar Almeida (KO R1)",
+          "correct": false
+        },
+        {
+          "red_name": "Jared Gordon",
+          "blue_name": "Melquizael Costa",
+          "pick": "Melquizael Costa",
+          "confidence": 0.785,
+          "odds": [
+            340,
+            -430
+          ],
+          "result": "Melquizael Costa (Dec)",
+          "correct": true
+        },
+        {
+          "red_name": "Macy Chiasson",
+          "blue_name": "Bia Mesquita",
+          "pick": "Bia Mesquita",
+          "confidence": 0.872,
+          "odds": [
+            215,
+            -260
+          ],
+          "result": "Bia Mesquita (Sub R1)",
+          "correct": true
+        },
+        {
+          "red_name": "Alatengheili",
+          "blue_name": "Juan Diaz",
+          "pick": "Juan Diaz",
+          "confidence": 0.911,
+          "odds": [
+            380,
+            -490
+          ],
+          "result": "Juan Diaz (Dec)",
+          "correct": true
+        }
+      ]
+    },
     {
       "date": "2026-11-07",
       "name": "UFC Fight Night: Cortes Acosta vs. Walker",
