@@ -230,12 +230,17 @@ SAMPLE_WEIGHT_BETA  = 1.5
 
 # Shrinkage of per-fighter rates toward the league average (ml/shrinkage.py, issue #69):
 # k pseudo-rounds of league average added to each fighter's rounds. 0 = off.
-# Applied identically when building the training CSV and at live inference, so
-# changing it requires ML_data_preparation_v1.py + a retrain.
-SHRINK_K = 0.0
+# Only decides how the training CSV is built: live inference uses the settings
+# recorded with the loaded model (feature_settings.joblib), so a change takes
+# effect at the next full retrain (monthly-refresh.yml), never before.
+# On since 2026-11-16: k = 6 by division was better at 9 of 10 forecast origins
+# (2023-06..2026-11 hold-outs, 9 seeds each), mean hold-out log-loss -0.0046,
+# ECE 6.4 -> 5.9pp, accuracy +0.5pp; the exception is the most recent hold-out
+# (+0.0023), mostly 5 fights of 1-UFC-fight fighters (issue #69).
+SHRINK_K = 6.0
 # Shrink toward the fight's division average instead of the UFC-wide one
 # (ml/shrinkage.DIV_PRIORS; small divisions fall back to the UFC-wide prior).
-SHRINK_BY_DIVISION = False
+SHRINK_BY_DIVISION = True
 
 # Recent form window (number of prior fights to average)
 RECENT_FORM_WINDOW = 3
