@@ -1135,13 +1135,14 @@ def build_feature_vector(
     # is the loaded model's feature_settings (read_settings), never config.py:
     # None = off, as for every model trained before the settings were recorded.
     _s = shrink or SHRINK_OFF
-    _k, _by_div = _s["shrink_k"], _s["shrink_by_division"]
+    _sk = dict(k=_s["shrink_k"], division=division, by_division=_s["shrink_by_division"],
+               per_stat=_s.get("shrink_per_stat", False))
     r_rounds = red_stats.get("total_rounds_fought", 0)
     b_rounds = blue_stats.get("total_rounds_fought", 0)
-    red_stats  = shrink_corner(red_stats,  r_rounds, k=_k, division=division, by_division=_by_div)
-    blue_stats = shrink_corner(blue_stats, b_rounds, k=_k, division=division, by_division=_by_div)
-    _er = shrink_corner(extra_r or {}, r_rounds, k=_k, division=division, by_division=_by_div)
-    _eb = shrink_corner(extra_b or {}, b_rounds, k=_k, division=division, by_division=_by_div)
+    red_stats  = shrink_corner(red_stats,  r_rounds, **_sk)
+    blue_stats = shrink_corner(blue_stats, b_rounds, **_sk)
+    _er = shrink_corner(extra_r or {}, r_rounds, **_sk)
+    _eb = shrink_corner(extra_b or {}, b_rounds, **_sk)
 
     r_time = float(red_stats.get("total_fight_time",  0) or 0)
     b_time = float(blue_stats.get("total_fight_time", 0) or 0)

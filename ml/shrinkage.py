@@ -91,6 +91,46 @@ PRIORS: dict[str, float] = {
     "ewma_splm_r1": 3.91776,
 }
 
+# -- One k per stat (config.SHRINK_PER_STAT) ------------------------------------
+# k = noise variance / real between-fighter variance, in rounds: how many rounds a
+# fighter needs before their own rate counts as much as the division's. It differs
+# a lot by stat -- takedowns are noisy but fighters differ hugely, accuracies are
+# precise per round but fighters barely differ. Estimated from the next fight
+# (E[y - mu | xbar] = r/(r+k) (xbar - mu), noise in y doesn't bias it), fights
+# 2018-01-01..2022-06-30 (same window as the priors), division priors, weighted by
+# the next fight's rounds; values above STAT_K_MAX capped (leg_acc 67, td accuracy
+# 162 -- the career value barely predicts the next fight's). Derived stats (EWMA,
+# opponent-adjusted) use their base stat's k; stats with no base (finish rates,
+# clinch share, knockdowns received, round-1 control) fall back to SHRINK_K.
+# 90% bootstrap intervals (resampling fighters) in issue #69.
+STAT_K_MAX = 50.0
+_BASE_K = {
+    "splm": 10.6, "sapm": 9.2, "td_avg": 8.0, "avg_sub_att": 39.2,
+    "avg_sig_str_pct": 13.1, "td_acc": STAT_K_MAX, "head_acc": 20.0, "body_acc": 33.9,
+    "leg_acc": STAT_K_MAX, "dist_acc": 15.6,
+    "td_def": 28.8, "head_def": 11.8, "body_def": 42.5, "dist_def": 12.5,
+}
+STAT_K: dict[str, float] = {
+    **{s: _BASE_K[s] for s in ("splm", "sapm", "td_avg", "avg_sub_att", "avg_sig_str_pct",
+                               "head_acc", "body_acc", "leg_acc", "td_def", "head_def",
+                               "body_def", "dist_def")},
+    "ewma_str_acc": _BASE_K["avg_sig_str_pct"],
+    "ewma_td_acc": _BASE_K["td_acc"],
+    "ewma_head_acc": _BASE_K["head_acc"],
+    "ewma_body_acc": _BASE_K["body_acc"],
+    "ewma_dist_acc": _BASE_K["dist_acc"],
+    "ewma_splm": _BASE_K["splm"],
+    "ewma_td_avg": _BASE_K["td_avg"],
+    "ewma_sapm": _BASE_K["sapm"],
+    "ewma_sub_att": _BASE_K["avg_sub_att"],
+    "opp_adj_splm": _BASE_K["splm"],
+    "opp_adj_td_avg": _BASE_K["td_avg"],
+    "opp_adj_head_acc": _BASE_K["head_acc"],
+    "opp_adj_body_acc": _BASE_K["body_acc"],
+    "opp_adj_dist_acc": _BASE_K["dist_acc"],
+    "ewma_splm_r1": _BASE_K["splm"],
+}
+
 
 def compute_priors(conn: sqlite3.Connection, stats=None, start: str = PRIOR_START,
                    end: str = PRIOR_END, by_division: bool = False):
@@ -134,12 +174,13 @@ def compute_priors(conn: sqlite3.Connection, stats=None, start: str = PRIOR_STAR
 # the tier directory (a .joblib, so the release tarballs carry it), and predict.py
 # reads them from there -- a tier without the file means shrinkage off.
 SETTINGS_NAME = "feature_settings.joblib"
-OFF = {"shrink_k": 0.0, "shrink_by_division": False}
+OFF = {"shrink_k": 0.0, "shrink_by_division": False, "shrink_per_stat": False}
 
 
 def config_settings() -> dict:
-    from config import SHRINK_BY_DIVISION, SHRINK_K
-    return {"shrink_k": float(SHRINK_K), "shrink_by_division": bool(SHRINK_BY_DIVISION)}
+    from config import SHRINK_BY_DIVISION, SHRINK_K, SHRINK_PER_STAT
+    return {"shrink_k": float(SHRINK_K), "shrink_by_division": bool(SHRINK_BY_DIVISION),
+            "shrink_per_stat": bool(SHRINK_PER_STAT)}
 
 
 def csv_settings_path(csv_path: Path) -> Path:
@@ -154,19 +195,24 @@ def read_settings(path: Path) -> dict:
     return {**OFF, **joblib.load(path)}
 
 
+def _complete(settings: dict) -> dict:
+    """Only the OFF keys; a missing one (settings from before it existed) takes its OFF value."""
+    return {k: settings.get(k, v) for k, v in OFF.items()}
+
+
 def write_settings(path: Path, settings: dict) -> None:
-    joblib.dump({k: settings[k] for k in OFF}, path)
+    joblib.dump(_complete(settings), path)
 
 
 def stamp_models_dir(models_dir: Path, settings: dict, partial: bool) -> None:
     """Record *settings* in a tier directory. A partial retrain (one model only) must
     use the same settings as the models already there, or the tier would mix them."""
     path = Path(models_dir) / SETTINGS_NAME
-    if partial and path.exists() and read_settings(path) != {k: settings[k] for k in OFF}:
+    if partial and path.exists() and read_settings(path) != _complete(settings):
         raise SystemExit(
             f"Feature settings {settings} differ from the ones {models_dir.name}/ was trained with "
             f"({read_settings(path)}). Retrain every model (no --model) after changing "
-            "SHRINK_K / SHRINK_BY_DIVISION."
+            "SHRINK_K / SHRINK_BY_DIVISION / SHRINK_PER_STAT."
         )
     write_settings(path, settings)
 
@@ -196,6 +242,18 @@ def _k(k: float | None) -> float:
     return float(k)
 
 
+def _per_stat(per_stat: bool | None) -> bool:
+    if per_stat is None:
+        from config import SHRINK_PER_STAT
+        per_stat = SHRINK_PER_STAT
+    return bool(per_stat)
+
+
+def k_for(stat: str, k: float, per_stat: bool) -> float:
+    """The k used for *stat*: STAT_K's estimate when shrinking per stat, else *k*."""
+    return STAT_K.get(stat, k) if per_stat else k
+
+
 def shrink(value, rounds, prior: float, k: float):
     """(value * rounds + prior * k) / (rounds + k); scalars or arrays. NaN values stay NaN."""
     rounds = np.clip(np.asarray(rounds, dtype=float), 0, None)
@@ -205,27 +263,29 @@ def shrink(value, rounds, prior: float, k: float):
 
 
 def shrink_corner(stats, rounds, k: float | None = None, division=None,
-                  by_division: bool | None = None):
+                  by_division: bool | None = None, per_stat: bool | None = None):
     """Copy of one fighter's stats (dict or Series) with every PRIORS key present shrunk.
 
     Missing keys stay missing, so callers' own defaults still apply. *division* is the
-    division of the fight being predicted (used when shrinking by division).
+    division of the fight being predicted (used when shrinking by division). k <= 0
+    switches shrinkage off even with *per_stat*.
     """
     k = _k(k)
     if k <= 0 or stats is None:
         return stats
+    per = _per_stat(per_stat)
     out = stats.copy() if isinstance(stats, pd.Series) else dict(stats)
     r = float(pd.to_numeric(rounds, errors="coerce") or 0.0)
     for s, prior in priors_for(division, by_division).items():
         if s in out:
             v = pd.to_numeric(out[s], errors="coerce")
             if v is not None and not pd.isna(v):
-                out[s] = shrink(float(v), r, prior, k)
+                out[s] = shrink(float(v), r, prior, k_for(s, k, per))
     return out
 
 
 def shrink_wide(wide: pd.DataFrame, k: float | None = None,
-                by_division: bool | None = None) -> pd.DataFrame:
+                by_division: bool | None = None, per_stat: bool | None = None) -> pd.DataFrame:
     """Shrink r_<stat> / b_<stat> columns of a one-row-per-fight frame in place (returns it).
 
     Reads the fight's division from wide["division"] when shrinking by division.
@@ -233,6 +293,7 @@ def shrink_wide(wide: pd.DataFrame, k: float | None = None,
     k = _k(k)
     if k <= 0:
         return wide
+    per = _per_stat(per_stat)
     by_div = _by_division(by_division)
     divs = wide["division"].map(_norm_div) if by_div and "division" in wide.columns else None
     for corner in ("r", "b"):
@@ -243,5 +304,6 @@ def shrink_wide(wide: pd.DataFrame, k: float | None = None,
                 continue
             if divs is not None:
                 prior = divs.map(lambda d: DIV_PRIORS.get(d, {}).get(s, PRIORS[s])).values.astype(float)
-            wide[col] = shrink(pd.to_numeric(wide[col], errors="coerce").values, rounds, prior, k)
+            wide[col] = shrink(pd.to_numeric(wide[col], errors="coerce").values, rounds, prior,
+                               k_for(s, k, per))
     return wide

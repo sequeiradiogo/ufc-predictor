@@ -241,6 +241,11 @@ SHRINK_K = 6.0
 # Shrink toward the fight's division average instead of the UFC-wide one
 # (ml/shrinkage.DIV_PRIORS; small divisions fall back to the UFC-wide prior).
 SHRINK_BY_DIVISION = True
+# One k per stat (ml/shrinkage.STAT_K, estimated by next-fight regression on
+# 2018-01..2022-06) instead of SHRINK_K for all; SHRINK_K stays the k of stats
+# without an estimate and SHRINK_K = 0 still switches everything off.
+# Off: experiment under evaluation (issue #69).
+SHRINK_PER_STAT = False
 
 # Recent form window (number of prior fights to average)
 RECENT_FORM_WINDOW = 3
