@@ -102,7 +102,8 @@ PRIORS: dict[str, float] = {
 # 162 -- the career value barely predicts the next fight's). Derived stats (EWMA,
 # opponent-adjusted) use their base stat's k; stats with no base (finish rates,
 # clinch share, knockdowns received, round-1 control) fall back to SHRINK_K.
-# 90% bootstrap intervals (resampling fighters) in issue #69.
+# Re-estimate with scripts/estimate_shrink_k.py (90% bootstrap intervals over
+# fighters in issue #69). Off by default: no measurable gain over k = 6 (#69).
 STAT_K_MAX = 50.0
 _BASE_K = {
     "splm": 10.6, "sapm": 9.2, "td_avg": 8.0, "avg_sub_att": 39.2,

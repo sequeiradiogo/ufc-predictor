@@ -242,9 +242,12 @@ SHRINK_K = 6.0
 # (ml/shrinkage.DIV_PRIORS; small divisions fall back to the UFC-wide prior).
 SHRINK_BY_DIVISION = True
 # One k per stat (ml/shrinkage.STAT_K, estimated by next-fight regression on
-# 2018-01..2022-06) instead of SHRINK_K for all; SHRINK_K stays the k of stats
-# without an estimate and SHRINK_K = 0 still switches everything off.
-# Off: experiment under evaluation (issue #69).
+# 2018-01..2022-06, scripts/estimate_shrink_k.py) instead of SHRINK_K for all;
+# SHRINK_K stays the k of stats without an estimate and SHRINK_K = 0 still
+# switches everything off. Off: tested 2026-11-16 (issue #69, pre-registration
+# 5, 11 origins x 9 seeds) it was -0.0001 hold-out log-loss vs k = 6 (6/11
+# origins) and no better than a uniform k = 12; kept because it is the
+# statistically sounder model and may matter with other features or more data.
 SHRINK_PER_STAT = False
 
 # Recent form window (number of prior fights to average)
