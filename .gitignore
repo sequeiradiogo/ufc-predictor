@@ -34,6 +34,7 @@ db/*_backup_*.db
 # See README "Setup" for the download step.
 models_v1/*.joblib
 models_v1_prod/*.joblib
+models_v1_prod/prod_validation.json
 
 # Raw source CSVs -- seed CSVs are tracked, others are not
 raw_data/*.csv
