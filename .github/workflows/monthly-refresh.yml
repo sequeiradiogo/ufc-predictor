@@ -106,9 +106,11 @@ jobs:
       # against the closing line (issue #67) -- fails before anything is
       # committed or uploaded if the retrain is clearly broken. Report in the
       # job summary and shipped in models_v1_prod.tar.gz.
+      # It also shadow-scores the V2 prod design on the same fights (issue #76,
+      # never gates) and appends the new ones to the tracked history CSV.
       - name: Validate prod retrain out of sample
         if: ${{ inputs.dry_run != true }}
-        run: python scripts/validate_prod_retrain.py --report models_v1_prod/prod_validation.json
+        run: python scripts/validate_prod_retrain.py --report models_v1_prod/prod_validation.json --shadow-history analytics/reports/prod_v2_shadow.csv
 
       # Replays predict.py on the last events and compares every win-model
       # feature with its training value -- fails (before anything is committed
@@ -122,7 +124,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add raw_data/ufc-master.csv raw_data/espn_dwcs_fights.csv raw_data/espn_fighter_map.csv raw_data/espn_career_fights.csv raw_data/espn_opponent_bouts.csv
+          git add raw_data/ufc-master.csv raw_data/espn_dwcs_fights.csv raw_data/espn_fighter_map.csv raw_data/espn_career_fights.csv raw_data/espn_opponent_bouts.csv analytics/reports/prod_v2_shadow.csv
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else

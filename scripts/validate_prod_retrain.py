@@ -33,10 +33,22 @@ with a warning instead of failing.
 The report (metrics, thresholds, failures) is written to --report as JSON and,
 on GitHub Actions, to the job summary.
 
+Shadow scoring of the V2 prod design (issue #76, --shadow-history): the same
+trial also trains V2, the eval pipeline with its test window moved past the
+cutoff -- base models fit on the first 80% of the training data, calibrated on
+the last 20% with their own predictions, nothing fit on the held-out fights
+(equal weights, T = 1). V2 never gates the run. Every held-out fight not yet in
+the history CSV is appended (outcome, closing line, p_prod / p_v2 / p_eval), so
+each fight counts once, from the first refresh that scored it. The
+pre-registered decision (issue #76) only uses fights dated SHADOW_SINCE or
+later; --shadow-summary prints where it stands.
+
 Usage:
     python scripts/validate_prod_retrain.py
     python scripts/validate_prod_retrain.py --hold-months 6 --seed 1
     python scripts/validate_prod_retrain.py --report models_v1_prod/prod_validation.json
+    python scripts/validate_prod_retrain.py --shadow-history analytics/reports/prod_v2_shadow.csv
+    python scripts/validate_prod_retrain.py --shadow-summary analytics/reports/prod_v2_shadow.csv
 """
 
 import argparse
@@ -67,6 +79,15 @@ MAX_MARKET_GAP = 0.15
 MIN_MARKET_GAP = -0.04
 MIN_PROB_SD = 0.08
 MAX_AT_BOUNDS = 0.10
+
+# Issue #76 shadow scoring. The 14 trial cutoffs of #67 held out fights up to
+# 2026-11-07, so the pre-registered comparison only counts later fights; first
+# look at SHADOW_FIRST_LOOK of them, final one at SHADOW_FINAL_LOOK.
+SHADOW_SINCE = "2026-11-08"
+SHADOW_FIRST_LOOK = 800
+SHADOW_FINAL_LOOK = 1200
+SHADOW_BOOT = 2000
+_SHADOW_COLS = ["fight_id", "date", "run_date", "cutoff", "seed", "y", "market", "p_prod", "p_v2", "p_eval"]
 
 # Base-model artifacts as train_v1_models.py names them (same names in both tiers).
 _SPECS = [
@@ -174,9 +195,29 @@ def evaluate(p: np.ndarray, y: np.ndarray, market: np.ndarray) -> tuple[dict, li
     return m, fails, warns
 
 
-def run_trial(hold_months: int, seed: int) -> dict:
+def train_v2(tv, train: pd.DataFrame, hold: pd.DataFrame, out_dir: Path) -> None:
+    """Issue #76's V2 prod design into *out_dir*: the eval pipeline run on train + hold
+    with the split at the cutoff, so the base models fit on the first 80% of *train*,
+    calibrate on its last 20% with their own predictions, and *hold* is only scored."""
+    both = pd.concat([train, hold], ignore_index=True)
+    old_split = tv.TRAIN_TEST_SPLIT
+    tv.TRAIN_TEST_SPLIT = (len(train) + 0.5) / len(both)
+    try:
+        if int(len(both) * tv.TRAIN_TEST_SPLIT) != len(train):
+            raise RuntimeError("V2 split does not fall on the cutoff")
+        (out_dir / "unused_prod").mkdir(parents=True, exist_ok=True)
+        redirect_model_paths(tv, out_dir, out_dir / "unused_prod")
+        with contextlib.redirect_stdout(io.StringIO()):
+            for fn in (tv.train_xgb, tv.train_lr, tv.train_rf, tv.train_lgbm, tv.train_mlp):
+                fn(both, prod=False)
+            tv.train_ensemble(both, prod=False)
+    finally:
+        tv.TRAIN_TEST_SPLIT = old_split
+
+
+def run_trial(hold_months: int, seed: int, shadow: bool = False) -> dict:
     """Retrain eval + prod tiers on data up to (last fight - hold_months) in a temp dir
-    and score both on the held-out fights."""
+    and score both on the held-out fights (and V2 too with *shadow*)."""
     import ml.train_v1_models as tv
     from scripts.backtest_v1 import _experience_frame
 
@@ -204,10 +245,86 @@ def run_trial(hold_months: int, seed: int) -> dict:
     y = hold[tv.TARGET_COL].values
     market = (_experience_frame().set_index("fight_id")["market_red"]
               .reindex(hold["fight_id"]).values.astype(float))
-    return dict(cutoff=str(cutoff.date()), n_train=len(train),
-                hold_from=str(hold["date"].min().date()), hold_to=str(hold["date"].max().date()),
-                y=y, market=market,
-                p_prod=score_ensemble(tmp / "prod", X), p_eval=score_ensemble(tmp / "eval", X))
+    out = dict(cutoff=str(cutoff.date()), n_train=len(train),
+               hold_from=str(hold["date"].min().date()), hold_to=str(hold["date"].max().date()),
+               y=y, market=market, fight_id=hold["fight_id"].values,
+               date=hold["date"].dt.strftime("%Y-%m-%d").values,
+               p_prod=score_ensemble(tmp / "prod", X), p_eval=score_ensemble(tmp / "eval", X))
+    if shadow:
+        log.info("Shadow: training V2 (fit on the first 80%%, own calibrators on the last 20%%)")
+        train_v2(tv, train, hold, tmp / "v2")
+        out["p_v2"] = score_ensemble(tmp / "v2", X)
+    return out
+
+
+def append_shadow(history: Path, t: dict, seed: int, run_date: str) -> int:
+    """Append the trial's held-out fights that *history* doesn't have yet; returns how many.
+
+    Each fight is kept from the first refresh that scored it: consecutive monthly
+    trials hold out overlapping 3-month windows."""
+    rows = pd.DataFrame({"fight_id": t["fight_id"], "date": t["date"], "run_date": run_date,
+                         "cutoff": t["cutoff"], "seed": seed, "y": t["y"], "market": t["market"],
+                         "p_prod": t["p_prod"], "p_v2": t["p_v2"], "p_eval": t["p_eval"]})[_SHADOW_COLS]
+    old = pd.read_csv(history) if history.exists() else pd.DataFrame(columns=_SHADOW_COLS)
+    new = rows[~rows["fight_id"].isin(old["fight_id"])]
+    history.parent.mkdir(parents=True, exist_ok=True)
+    out = new if old.empty else pd.concat([old, new], ignore_index=True)
+    out.to_csv(history, index=False, float_format="%.6f")
+    return len(new)
+
+
+def _fight_ll(p: np.ndarray, y: np.ndarray) -> np.ndarray:
+    p = np.clip(np.asarray(p, float), 1e-6, 1 - 1e-6)
+    y = np.asarray(y, float)
+    return -(y * np.log(p) + (1 - y) * np.log(1 - p))
+
+
+def shadow_summary(history: Path, seed: int = 0) -> dict:
+    """Where the pre-registered V2-vs-prod comparison (issue #76) stands.
+
+    delta = mean per-fight log-loss of V2 minus prod over the fights dated
+    SHADOW_SINCE or later; the 90% interval bootstraps whole event dates (the
+    fights of one card share a retrain). At SHADOW_FIRST_LOOK fights: adopt V2 if
+    the upper bound is < 0, keep prod if delta >= 0, otherwise wait for
+    SHADOW_FINAL_LOOK, where V2 is adopted only if the upper bound is < 0.
+    """
+    h = pd.read_csv(history)
+    h = h[h["date"] >= SHADOW_SINCE]
+    res = dict(n=int(len(h)), first_look=SHADOW_FIRST_LOOK, final_look=SHADOW_FINAL_LOOK)
+    if h.empty:
+        return {**res, "decision": "no fights yet"}
+    ll_prod, ll_v2 = _fight_ll(h["p_prod"], h["y"]), _fight_ll(h["p_v2"], h["y"])
+    d = ll_v2 - ll_prod
+    dates = h["date"].values
+    by_date = [d[dates == u] for u in np.unique(dates)]
+    rng = np.random.default_rng(seed)
+    boots = [np.concatenate([by_date[i] for i in rng.integers(0, len(by_date), len(by_date))]).mean()
+             for _ in range(SHADOW_BOOT)]
+    lo, hi = np.percentile(boots, [5, 95])
+    res.update(delta=float(d.mean()), ci90=[float(lo), float(hi)], events=len(by_date),
+               ll_prod=float(ll_prod.mean()), ll_v2=float(ll_v2.mean()))
+    if len(h) < SHADOW_FIRST_LOOK:
+        res["decision"] = f"collecting ({len(h)}/{SHADOW_FIRST_LOOK} fights before the first look)"
+    elif hi < 0:
+        res["decision"] = "adopt V2 (upper 90% bound < 0)"
+    elif len(h) < SHADOW_FINAL_LOOK:
+        res["decision"] = ("keep prod (V2 not better)" if d.mean() >= 0 else
+                           f"inconclusive: keep collecting until {SHADOW_FINAL_LOOK} fights")
+    else:
+        res["decision"] = "keep prod (upper 90% bound >= 0 at the final look)"
+    return res
+
+
+def _shadow_md(s: dict, added: int | None = None) -> str:
+    lines = ["### V2 shadow scoring (issue #76)", ""]
+    if added is not None:
+        lines.append(f"- {added} new held-out fights appended to the history.")
+    if "delta" in s:
+        lines.append(f"- Fights since {SHADOW_SINCE}: {s['n']} ({s['events']} events). "
+                     f"Log-loss prod {s['ll_prod']:.4f}, V2 {s['ll_v2']:.4f}: "
+                     f"V2 - prod {s['delta']:+.4f}, 90% CI [{s['ci90'][0]:+.4f}, {s['ci90'][1]:+.4f}].")
+    lines.append(f"- Decision: **{s['decision']}**")
+    return "\n".join(lines) + "\n"
 
 
 def _summary_md(report: dict) -> str:
@@ -237,9 +354,17 @@ def main() -> None:
     ap.add_argument("--hold-months", type=int, default=HOLD_MONTHS)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--report", type=Path, help="write the report here as JSON")
+    ap.add_argument("--shadow-history", type=Path,
+                    help="also train V2 (issue #76) and append the new held-out fights to this CSV")
+    ap.add_argument("--shadow-summary", type=Path, metavar="HISTORY",
+                    help="only print where the V2-vs-prod comparison stands, then exit")
     args = ap.parse_args()
 
-    t = run_trial(args.hold_months, args.seed)
+    if args.shadow_summary:
+        print(_shadow_md(shadow_summary(args.shadow_summary)))
+        return
+
+    t = run_trial(args.hold_months, args.seed, shadow=args.shadow_history is not None)
     prod, fails, warns = evaluate(t["p_prod"], t["y"], t["market"])
     ev, _, _ = evaluate(t["p_eval"], t["y"], t["market"])
     report = dict(cutoff=t["cutoff"], n_train=t["n_train"], hold_from=t["hold_from"], hold_to=t["hold_to"],
@@ -248,6 +373,12 @@ def main() -> None:
                                   min_market_gap=MIN_MARKET_GAP, min_prob_sd=MIN_PROB_SD,
                                   max_at_bounds=MAX_AT_BOUNDS, min_odds_fights=MIN_ODDS_FIGHTS))
     md = _summary_md(report)
+    if args.shadow_history:
+        # V2 never gates the run; a failed gate stops the workflow before the commit anyway
+        report["v2"], _, _ = evaluate(t["p_v2"], t["y"], t["market"])
+        added = append_shadow(args.shadow_history, t, args.seed, pd.Timestamp.now().strftime("%Y-%m-%d"))
+        report["shadow"] = shadow_summary(args.shadow_history)
+        md += "\n" + _shadow_md(report["shadow"], added)
     print(md)
     if args.report:
         args.report.parent.mkdir(parents=True, exist_ok=True)

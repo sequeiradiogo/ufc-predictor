@@ -88,3 +88,75 @@ class TestTrialIsolation:
         monkeypatch.setattr(tv, "MODELS_V1_EXTRA_DIR", Path("/somewhere/live"), raising=False)
         with pytest.raises(RuntimeError):
             v.redirect_model_paths(tv, tmp_path / "eval", tmp_path / "prod")
+
+
+class TestShadowV2:
+    """Issue #76: V2 shadow scoring next to the prod validation."""
+
+    @staticmethod
+    def _trial(ids, dates, p_prod, p_v2, y):
+        n = len(ids)
+        return dict(fight_id=np.array(ids), date=np.array(dates), cutoff="2026-11-01",
+                    y=np.asarray(y, float), market=np.full(n, np.nan),
+                    p_prod=np.asarray(p_prod, float), p_v2=np.asarray(p_v2, float),
+                    p_eval=np.full(n, 0.5))
+
+    def test_each_fight_is_kept_from_the_first_run(self, tmp_path):
+        h = tmp_path / "shadow.csv"
+        t1 = self._trial(["a", "b"], ["2026-12-05", "2026-12-12"], [0.6, 0.6], [0.7, 0.7], [1, 0])
+        t2 = self._trial(["b", "c"], ["2026-12-12", "2027-01-09"], [0.1, 0.4], [0.1, 0.4], [0, 1])
+        assert v.append_shadow(h, t1, 42, "2026-12-01") == 2
+        assert v.append_shadow(h, t2, 42, "2027-01-01") == 1
+        import pandas as pd
+        rows = pd.read_csv(h).set_index("fight_id")
+        assert list(rows.index) == ["a", "b", "c"]
+        assert rows.loc["b", "p_prod"] == pytest.approx(0.6)     # first run's value kept
+        assert rows.loc["b", "run_date"] == "2026-12-01"
+
+    def _history(self, tmp_path, n, v2_shift, date0="2026-12-01"):
+        import pandas as pd
+        rng = np.random.default_rng(0)
+        market, y = _fights(n)
+        p_prod = np.clip(market + rng.normal(0, 0.08, n), 0.05, 0.95)
+        # V2 moves part of the way back to the well-priced market (better) or away (worse)
+        p_v2 = np.clip(p_prod + v2_shift * (market - p_prod), 0.05, 0.95)
+        dates = pd.date_range(date0, periods=max(1, n // 12), freq="7D").strftime("%Y-%m-%d")
+        h = tmp_path / "h.csv"
+        pd.DataFrame(dict(fight_id=[f"f{i}" for i in range(n)], date=np.resize(dates, n), run_date="x",
+                          cutoff="x", seed=42, y=y, market=market, p_prod=p_prod, p_v2=p_v2,
+                          p_eval=0.5)).to_csv(h, index=False)
+        return h
+
+    def test_collecting_before_the_first_look(self, tmp_path):
+        s = v.shadow_summary(self._history(tmp_path, 300, 0.8))
+        assert s["n"] == 300 and s["decision"].startswith("collecting")
+
+    def test_clearly_better_v2_is_adopted(self, tmp_path):
+        s = v.shadow_summary(self._history(tmp_path, v.SHADOW_FIRST_LOOK, 0.8))
+        assert s["delta"] < 0 and s["ci90"][1] < 0
+        assert s["decision"].startswith("adopt V2")
+
+    def test_worse_v2_keeps_prod(self, tmp_path):
+        s = v.shadow_summary(self._history(tmp_path, v.SHADOW_FIRST_LOOK, -0.8))
+        assert s["delta"] > 0 and s["decision"].startswith("keep prod")
+
+    def test_fights_before_shadow_since_are_ignored(self, tmp_path):
+        s = v.shadow_summary(self._history(tmp_path, 120, 0.8, date0="2026-01-03"))
+        assert s["n"] < 120
+
+    def test_v2_split_falls_on_the_cutoff_and_is_restored(self, tmp_path, monkeypatch):
+        import pandas as pd
+
+        class FakeTV:
+            TRAIN_TEST_SPLIT = 0.8
+            seen = []
+
+        def fit(df, prod=False):
+            FakeTV.seen.append((len(df), int(len(df) * FakeTV.TRAIN_TEST_SPLIT), prod))
+        for name in ("train_xgb", "train_lr", "train_rf", "train_lgbm", "train_mlp", "train_ensemble"):
+            setattr(FakeTV, name, staticmethod(fit))
+        monkeypatch.setattr(v, "redirect_model_paths", lambda *a, **k: None)
+        train, hold = pd.DataFrame({"x": range(3417)}), pd.DataFrame({"x": range(141)})
+        v.train_v2(FakeTV, train, hold, tmp_path / "v2")
+        assert FakeTV.seen and all(s == (3558, 3417, False) for s in FakeTV.seen)
+        assert FakeTV.TRAIN_TEST_SPLIT == 0.8
