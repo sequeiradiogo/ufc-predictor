@@ -15,6 +15,7 @@ Arguments
     --model       Model to use: 'xgb' (default), 'lr', 'rf', 'lgbm', or 'mlp'
     --division    Weight division (optional — for division feature encoding)
     --title       Flag if this is a title fight (default: False)
+    --five-rounds Scheduled for 5 rounds, e.g. a non-title main event (finish method only)
 
 Notes
 -----
@@ -1105,6 +1106,7 @@ def build_feature_vector(
     extra_r:      dict | None = None,
     extra_b:      dict | None = None,
     shrink:       dict | None = None,
+    five_rounds:  int = 0,
 ) -> pd.DataFrame:
     """
     Compute all features the model expects.
@@ -1123,6 +1125,7 @@ def build_feature_vector(
       - ko_rate_diff / sub_rate_diff / dec_rate_diff  (from extra_r/extra_b)
       - days_since_last_diff  (from extra_r/extra_b)
       - sos_diff  (from extra_r/extra_b)
+      - <stat>_sum / <stat>_absdiff / five_rounds  (finish-type model, corner-invariant)
     """
     # Style ratios from the raw stats: in training they are fight-level columns
     # stored in the DB (add_computed_features_to_csv.py), never shrunk.
@@ -1143,6 +1146,17 @@ def build_feature_vector(
     blue_stats = shrink_corner(blue_stats, b_rounds, **_sk)
     _er = shrink_corner(extra_r or {}, r_rounds, **_sk)
     _eb = shrink_corner(extra_b or {}, b_rounds, **_sk)
+
+    def _corner_value(stat: str, stats: pd.Series, extra: dict, form: dict) -> float:
+        """One fighter's (shrunk) value of *stat*, from the source its _diff uses."""
+        if stat in form:
+            v = form[stat]
+        elif stat in extra:
+            v = extra[stat]
+        else:
+            v = stats.get(stat, 0)
+        v = pd.to_numeric(v, errors="coerce")
+        return 0.0 if v is None or pd.isna(v) else float(v)
 
     r_time = float(red_stats.get("total_fight_time",  0) or 0)
     b_time = float(blue_stats.get("total_fight_time", 0) or 0)
@@ -1192,6 +1206,17 @@ def build_feature_vector(
         # ── Title fight ───────────────────────────────────────────────────────
         elif feat == "title_fight":
             row[feat] = title_fight
+
+        # ── Finish-type model: corner-invariant features (issue #30) ─────────
+        # Sum / |difference| of the two fighters' values; training builds them
+        # in ML_data_preparation_v1.py from the same per-corner columns.
+        elif feat == "five_rounds":
+            row[feat] = int(five_rounds)
+        elif feat.endswith("_sum") or feat.endswith("_absdiff"):
+            stat, kind = feat.rsplit("_", 1)
+            r_val = _corner_value(stat, red_stats, _er, form_r)
+            b_val = _corner_value(stat, blue_stats, _eb, form_b)
+            row[feat] = r_val + b_val if kind == "sum" else abs(r_val - b_val)
 
         # ── Stance matchup ────────────────────────────────────────────────────
         # stance is in fight_stats; use red_stats / blue_stats directly
@@ -1442,6 +1467,7 @@ def compute_prediction(
     r_ufcstats_id: str | None = None,
     b_ufcstats_id: str | None = None,
     interactive:  bool = False,
+    five_rounds:  int | None = None,
 ) -> dict:
     """
     Compute a fight prediction and return a result dict.
@@ -1464,6 +1490,10 @@ def compute_prediction(
     history but no ufc_v2.db row yet is still predicted.
 
     *interactive* lets resolve_fighter() prompt on an ambiguous name (CLI only).
+
+    *five_rounds*: the fight is scheduled for 5 rounds (finish-type model only).
+    Default: title fights only -- pass 1 for a non-title main event
+    (predict_event.py does).
     """
     db_path    = db_path    or DB_V1_PATH
     # Prefer production models (trained on 100% of data) when available
@@ -1872,6 +1902,7 @@ def compute_prediction(
             division, title_fight,
             finish_feats,
             extra_r=extra_r, extra_b=extra_b, shrink=finish_shrink_settings,
+            five_rounds=int(title_fight) if five_rounds is None else int(five_rounds),
         ).fillna(0)
         finish_proba = finish_model.predict_proba(X_fin.values)[0].tolist()
 
@@ -1940,6 +1971,7 @@ def predict_fight(
     model_type:      str = "xgb",
     division:        str | None = None,
     title_fight:     int = 0,
+    five_rounds:     int | None = None,
     odds_red:        float | None = None,
     odds_blue:       float | None = None,
     market_blend:    float = 0.0,
@@ -1956,7 +1988,8 @@ def predict_fight(
     }
     model_label = model_labels.get(model_type, model_type)
 
-    result = compute_prediction(red_name, blue_name, model_type, division, title_fight, interactive=True)
+    result = compute_prediction(red_name, blue_name, model_type, division, title_fight, interactive=True,
+                                five_rounds=five_rounds)
 
     r_name        = result["red_name"]
     b_name        = result["blue_name"]
@@ -2061,6 +2094,13 @@ Examples
         help="Flag if this is a title fight.",
     )
     parser.add_argument(
+        "--five-rounds",
+        action="store_true",
+        default=False,
+        help="Scheduled for 5 rounds (e.g. a non-title main event); implied by --title. "
+             "Only affects the predicted finish method.",
+    )
+    parser.add_argument(
         "--odds-red",
         type=float,
         default=None,
@@ -2088,6 +2128,7 @@ Examples
         args.model,
         division=args.division,
         title_fight=int(args.title),
+        five_rounds=int(args.title or args.five_rounds),
         odds_red=args.odds_red,
         odds_blue=args.odds_blue,
         market_blend=args.market_blend,

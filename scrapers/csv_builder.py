@@ -64,11 +64,6 @@ _DIVISION_TO_GENDER = {
     "women's featherweight": "FEMALE",
 }
 
-_DIVISION_TO_ROUNDS = {
-    # title bouts get 5 rounds; main events sometimes 5 too -- use title_fight flag
-}
-
-
 # ── Career state dataclass ───────────────────────────────────��────────────────
 
 @dataclass
@@ -317,7 +312,9 @@ def _make_row(
     division = fight.get("division") or ""
     gender = _DIVISION_TO_GENDER.get(division.lower(), "MALE")
     title_fight = bool(fight.get("title_fight"))
-    no_rounds = 5 if title_fight else 3
+    # Scheduled rounds from the fight page ("Time format"); the title flag alone
+    # stored every non-title main event as 3 rounds (Apr-Nov 2026, issue #30).
+    no_rounds = fight.get("scheduled_rounds") or (5 if title_fight else 3)
 
     total_secs = fight.get("total_fight_time_secs") or 0
 

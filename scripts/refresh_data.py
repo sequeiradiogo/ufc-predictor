@@ -118,6 +118,7 @@ _FIGHT_COLS     = (
     # refreshed fight counts as 0 minutes (Jul-Sep 2026 were inserted so).
     "finish_round", "match_time_sec",
     "location", "country", "finish_details",
+    "no_of_rounds",
 )
 _STAT_COLS = (
     "fight_id", "fighter_id", "date", "corner",
@@ -185,6 +186,7 @@ def _insert_new_data(data: dict, conn: sqlite3.Connection) -> set[str]:
     fight_dates = {}
     for f in data["fights"]:
         f.setdefault("match_time_sec", _mmss_to_secs(f.get("finish_round_time")))
+        f.setdefault("no_of_rounds", f.get("scheduled_rounds") or (5 if f.get("title_fight") else 3))
         fight_dates[f["fight_id"]] = f.get("date")
     for s in data["fight_stats"]:
         s.setdefault("date", fight_dates.get(s["fight_id"]))

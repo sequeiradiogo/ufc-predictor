@@ -44,6 +44,7 @@ from config import (
     DIV_SPLM_STD,
     DIV_SPLM_STD_FALLBACK,
     DIVISIONS,
+    FINISH_INV_STATS,
     FINISH_METHOD_MAP,
     META_COLS,
     MIN_FIGHT_DATE,
@@ -394,6 +395,17 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
     b_exp = pd.to_numeric(wide.get("b_wins"), errors="coerce").fillna(0) + \
             pd.to_numeric(wide.get("b_losses"), errors="coerce").fillna(0)
     ml["ufc_experience_diff"] = (r_exp - b_exp).values
+
+    # ── Finish-type model: corner-invariant features (issue #30) ─────────────
+    # Sum and |difference| of the same shrunk per-corner values the diffs above
+    # use; predict.build_feature_vector builds them the same way live. The win
+    # models drop them (config.FINISH_ONLY_FEATURES).
+    for stat in FINISH_INV_STATS:
+        r_val = pd.to_numeric(wide[f"r_{stat}"], errors="coerce").fillna(0)
+        b_val = pd.to_numeric(wide[f"b_{stat}"], errors="coerce").fillna(0)
+        ml[f"{stat}_sum"]     = (r_val + b_val).values
+        ml[f"{stat}_absdiff"] = (r_val - b_val).abs().values
+    ml["five_rounds"] = (pd.to_numeric(wide["no_of_rounds"], errors="coerce") == 5).astype(int).values
 
     # ── Exclusion filters ─────────────────────────────────────────────────────
     n_before = len(ml)

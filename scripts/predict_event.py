@@ -414,6 +414,12 @@ def _event_slug(name: str, event_date: str) -> str:
     return f"{event_date}-{slug}"
 
 
+def five_rounds(fight: dict) -> int:
+    """Scheduled for 5 rounds: a title fight or the main event (the first bout
+    on the scraped card). Feature of the finish-type model (issue #30)."""
+    return int(bool(fight.get("title_fight") or fight.get("main_event")))
+
+
 def _format_finish(finish_proba: list[float] | None) -> str:
     if not finish_proba:
         return "N/A"
@@ -576,6 +582,7 @@ def main() -> None:
                 model_type=args.model,
                 division=fight["division"] or None,
                 title_fight=fight["title_fight"],
+                five_rounds=five_rounds(fight),
                 db_path=DB_V1_PATH,
                 models_dir=_models_dir,
                 # Age / layoff / rankings as of fight night, like training

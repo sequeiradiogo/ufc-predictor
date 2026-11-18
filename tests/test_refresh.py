@@ -36,6 +36,7 @@ from scrapers.ufcstats import (
     _id_from_url,
     _parse_height_cm,
     _parse_reach_cm,
+    _scheduled_rounds,
 )
 
 
@@ -683,3 +684,51 @@ class TestDrawScoring:
         assert "**Net P/L: +EUR 0.00 on EUR 0 staked (+0.0% ROI)**" in text
         assert "*Bookmaker favorite:" not in text
         assert _event_record(text, 0.55) is None  # nothing gradeable
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# Scheduled rounds (finish-type model feature, issue #30)
+# ══════════════════════════════════════════════════════════════════════════════
+
+from bs4 import BeautifulSoup
+from scrapers.csv_builder import _CareerState, _make_row
+from scripts.predict_event import five_rounds
+
+
+def _fight_page(time_format: str | None) -> BeautifulSoup:
+    items = ['<i class="b-fight-details__text-item"><i class="b-fight-details__label">Round:</i> 5</i>']
+    if time_format:
+        items.append(f'<i class="b-fight-details__text-item"><i class="b-fight-details__label">'
+                     f'Time format:</i>\n   {time_format}\n</i>')
+    return BeautifulSoup(f'<p class="b-fight-details__text">{"".join(items)}</p>', "lxml")
+
+
+class TestScheduledRounds:
+    def test_parsed_from_time_format(self):
+        assert _scheduled_rounds(_fight_page("5 Rnd (5-5-5-5-5)")) == 5
+        assert _scheduled_rounds(_fight_page("3 Rnd (5-5-5)")) == 3
+
+    def test_missing_is_none(self):
+        assert _scheduled_rounds(_fight_page(None)) is None
+
+    @pytest.mark.parametrize("title, scheduled, expected", [
+        (0, 5, 5),      # non-title main event: was stored as 3 until 2026-11
+        (1, None, 5),   # page without a time format: title fights are 5 rounds
+        (0, None, 3),
+        (0, 3, 3),
+    ])
+    def test_csv_row_no_of_rounds(self, title, scheduled, expected):
+        fight = {"date": "2026-11-07", "fight_id": "f", "r_fighter_id": "r", "b_fighter_id": "b",
+                 "winner_id": "r", "method": "KO/TKO", "division": "lightweight",
+                 "title_fight": title, "scheduled_rounds": scheduled}
+        row = _make_row(fight, _CareerState(fighter_id="r"), _CareerState(fighter_id="b"), "R", "B")
+        assert row["no_of_rounds"] == expected
+
+    @pytest.mark.parametrize("fight, expected", [
+        ({"title_fight": 0, "main_event": 1}, 1),
+        ({"title_fight": 1, "main_event": 0}, 1),
+        ({"title_fight": 0, "main_event": 0}, 0),
+        ({"title_fight": 0}, 0),
+    ])
+    def test_live_five_rounds(self, fight, expected):
+        assert five_rounds(fight) == expected

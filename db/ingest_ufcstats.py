@@ -214,7 +214,7 @@ def ingest(data: dict, db_path: Path = DB_UFCSTATS_PATH) -> None:
     for f in fights:
         div = (f.get("division") or "").lower()
         gender = "female" if div in _WOMEN_DIVS else "male"
-        no_of_rounds = 5 if f.get("title_fight") else 3
+        no_of_rounds = f.get("scheduled_rounds") or (5 if f.get("title_fight") else 3)
         match_time_sec = _round_time_secs(f.get("finish_round_time", "0:00"))
         fights_rows.append({
             "fight_id":       f["fight_id"],

@@ -293,6 +293,30 @@ FINISH_METHOD_MAP: dict[str, int] = {
 }
 FINISH_CLASS_NAMES = ["Decision", "KO/TKO", "Submission"]
 
+# Finish-type model features (issue #30). How a fight ends doesn't depend on who
+# is in the red corner, so it uses corner-invariant features only: for each stat
+# below, the sum and the absolute difference of the two fighters' pre-fight values
+# (shrunk like the win features), plus the fight context -- division one-hots,
+# title_fight and five_rounds (scheduled for 5 rounds; live: title fight or main
+# event). Built by ML_data_preparation_v1.py and, live, by
+# predict.build_feature_vector; the win models drop them (train_v1_models.preprocess).
+FINISH_INV_STATS: list[str] = [
+    "ko_rate", "sub_rate", "dec_rate", "ko_vuln", "kd_received", "ewma_kd_received",
+    "splm", "sapm", "td_avg", "avg_sub_att", "ewma_sub_att", "ewma_ctrl_r1",
+    "str_def", "td_def", "recent_finish_rate", "win_by_ko", "win_by_sub",
+    "total_rounds_fought",
+]
+FINISH_ONLY_FEATURES: list[str] = [
+    f"{s}_{kind}" for s in FINISH_INV_STATS for kind in ("sum", "absdiff")
+] + ["five_rounds"]
+# Small on purpose: the old 400-tree, depth-4 model on every v1 column (~110 features,
+# ~2,800 fights) had worse test log-loss than division + title + rounds alone at
+# 8 of 8 forecast origins (issue #30). Fixed before the experiment, not tuned.
+FINISH_XGB_PARAMS: dict = {
+    "n_estimators": 150, "learning_rate": 0.03, "max_depth": 2, "min_child_weight": 20,
+    "subsample": 0.8, "colsample_bytree": 0.8,
+}
+
 # ── Division normalization constants ─────────────────────────────────────────
 # Per-division reach std (cm) for reach_div_norm_diff feature. Used by BOTH training
 # (ML_data_preparation_v1.py) and inference (predict.build_feature_vector) -- training

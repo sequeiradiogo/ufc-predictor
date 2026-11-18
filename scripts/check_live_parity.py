@@ -75,6 +75,10 @@ def _replay_event(day: pd.Timestamp, rows: pd.DataFrame, models_dir: Path, tmp: 
                     f["r_name"], f["b_name"], "ensemble", division=f["division"],
                     title_fight=int(f["title_fight"]), db_path=DB_V1_PATH,
                     models_dir=models_dir, as_of=d,
+                    # The DB has no card order to tell a non-title main event
+                    # (predict_event.py reads it from the scraped card), so pass
+                    # the stored scheduled rounds; the live rule is unit-tested.
+                    five_rounds=int(f["five_rounds"]) if "five_rounds" in f else None,
                 )
             except (SystemExit, ValueError) as exc:
                 print(f"  [skip] {f['r_name']} vs {f['b_name']}: {exc}")

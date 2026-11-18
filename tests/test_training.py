@@ -22,6 +22,8 @@ from ml.calibration import apply_temperature, symmetric_proba
 from ml.ML_data_preparation_v1 import make_symmetric, mirror_features
 from config import TRAIN_TEST_SPLIT
 from ml.train_v1_models import CAL_PROB_MAX, CAL_PROB_MIN, _isotonic, _mirror, eval_fit_end, time_split
+from ml.train_v1_models import preprocess as win_preprocess
+from config import FINISH_ONLY_FEATURES
 
 
 def _toy_fights() -> pd.DataFrame:
@@ -138,3 +140,19 @@ class TestEvalWindows:
         train, test = time_split(df)
         assert len(train) == fit_end
         assert test.index[0] == split
+
+
+class TestFinishOnlyFeatures:
+    """The finish-type model's corner-invariant columns live in the same CSV
+    (issue #30) but must never reach the win models: make_symmetric() leaves
+    them unchanged on a corner swap, which is right for "how does it end" and
+    meaningless for "who wins"."""
+
+    def test_win_models_drop_them(self):
+        df = pd.DataFrame({
+            "fight_id": ["a", "b"], "date": pd.to_datetime(["2025-01-01", "2025-01-02"]),
+            "division": ["lightweight"] * 2, "target": [1, 0], "elo_diff": [10.0, -5.0],
+            **{f: [1.0, 2.0] for f in FINISH_ONLY_FEATURES},
+        })
+        X, _ = win_preprocess(df)
+        assert list(X.columns) == ["elo_diff"]

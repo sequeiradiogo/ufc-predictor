@@ -388,6 +388,18 @@ def _parse_round_stats(
 
 # ── Fight detail ──────────────────────────────────────────────────────────────
 
+def _scheduled_rounds(soup: BeautifulSoup) -> int | None:
+    """Scheduled rounds from a fight page's "Time format: 5 Rnd (5-5-5-5-5)".
+
+    The event listing only flags title fights; a non-title main event is
+    scheduled for 5 rounds too (finish-type model feature, issue #30)."""
+    for item in soup.select("i.b-fight-details__text-item"):
+        m = re.search(r"Time format:\s*(\d+)\s*Rnd", " ".join(item.get_text(" ").split()))
+        if m:
+            return int(m.group(1))
+    return None
+
+
 def _scrape_fight(
     fight_id: str, fight_url: str,
     event_id: str, event_date: str,
@@ -441,6 +453,8 @@ def _scrape_fight(
                 finish_details = finish_details[len(label_text):].strip()
             break
 
+    scheduled_rounds = _scheduled_rounds(soup)
+
     fight = {
         "fight_id":              fight_id,
         "event_id":              event_id,
@@ -459,6 +473,7 @@ def _scrape_fight(
         "finish_round":          round_num,
         "finish_round_time":     time_str,
         "finish_details":        finish_details,
+        "scheduled_rounds":      scheduled_rounds,
     }
 
     # ---- Stat sections ----
@@ -617,6 +632,7 @@ def scrape_upcoming_event() -> dict | None:
                     "b_id": "<hex>", "b_name": "Fighter B",
                     "division": "lightweight",
                     "title_fight": 0,
+                    "main_event": 1,   # first bout on the card
                 },
                 ...
             ],
@@ -691,6 +707,9 @@ def scrape_upcoming_event() -> dict | None:
                 "b_name":     b_name,
                 "division":   division,
                 "title_fight": title_fight,
+                # The page lists the card from the main event down; a main
+                # event is scheduled for 5 rounds even without a title.
+                "main_event": int(not fights),
             })
 
         log.info("Found %d fights on the card.", len(fights))

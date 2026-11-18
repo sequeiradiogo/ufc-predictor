@@ -96,6 +96,8 @@ class PredictRequest(BaseModel):
     model:        str = Field("xgb", pattern="^(xgb|lr|rf|lgbm|mlp|ensemble|stacking)$", description="'xgb', 'lr', 'rf', 'lgbm', 'mlp', 'ensemble', or 'stacking'")
     division:     Optional[str]   = Field(None, example="lightweight")
     title_fight:  Optional[int]   = Field(0,    ge=0, le=1)
+    five_rounds:  Optional[int]   = Field(None, ge=0, le=1,
+                                          description="Scheduled for 5 rounds (finish method only); default: title_fight")
     odds_red:     Optional[float] = Field(None, example=-150.0,
                                           description="American moneyline odds for Red (e.g. -150)")
     odds_blue:    Optional[float] = Field(None, example=130.0,
@@ -241,6 +243,7 @@ def _run_prediction(req: PredictRequest, as_of: Optional[str] = None) -> Predict
             model_type=req.model,
             division=req.division,
             title_fight=req.title_fight or 0,
+            five_rounds=req.five_rounds,
             db_path=DB_V1_PATH,
             models_dir=_models_dir,
             as_of=as_of,
@@ -674,6 +677,7 @@ class CardMatchup(BaseModel):
     blue_fighter: str
     division:     Optional[str]   = None
     title_fight:  Optional[int]   = Field(0, ge=0, le=1)
+    five_rounds:  Optional[int]   = Field(None, ge=0, le=1)
     odds_red:     Optional[float] = None
     odds_blue:    Optional[float] = None
 
@@ -722,6 +726,7 @@ def predict_card(req: CardRequest):
             model=req.model,
             division=matchup.division,
             title_fight=matchup.title_fight or 0,
+            five_rounds=matchup.five_rounds,
             odds_red=matchup.odds_red,
             odds_blue=matchup.odds_blue,
         )

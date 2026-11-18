@@ -34,6 +34,7 @@ sys.path.insert(0, str(ROOT_DIR))
 from config import (
     CSV_V1_WITH_ELO,
     EXCLUDED_FEATURES,
+    FINISH_ONLY_FEATURES,
     LGBM_PARAMS,
     LR_PARAMS,
     META_COLS,
@@ -143,7 +144,7 @@ def load_data(min_date: str | None = None) -> pd.DataFrame:
 
 def preprocess(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
     X = df.drop(columns=META_COLS).fillna(0).replace([np.inf, -np.inf], 0)
-    X = X.drop(columns=[f for f in EXCLUDED_FEATURES if f in X.columns])
+    X = X.drop(columns=[f for f in EXCLUDED_FEATURES + FINISH_ONLY_FEATURES if f in X.columns])
     y = df[TARGET_COL]
     return X, y
 
