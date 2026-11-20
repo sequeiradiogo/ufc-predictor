@@ -1,31 +1,31 @@
 {
   "schema": 1,
-  "generated_at": "2026-11-16T21:28Z",
+  "generated_at": "2026-11-20T19:32Z",
   "finish_names": [
     "Decision",
     "KO/TKO",
     "Submission"
   ],
   "event": {
-    "name": "UFC 334: Gane vs. Hokit",
-    "date": "2026-11-14",
-    "event_url": "http://www.ufcstats.com/event-details/402ea3b5ee233852",
+    "name": "UFC Fight Night: Prochazka vs. Stirling",
+    "date": "2026-11-21",
+    "event_url": "http://www.ufcstats.com/event-details/cbf69fa846c7e3ee",
     "model_type": "ensemble",
     "fights": [
       {
-        "red_name": "Ciryl Gane",
-        "blue_name": "Josh Hokit",
-        "red_prob": 39.4,
-        "blue_prob": 60.6,
-        "winner": "Josh Hokit",
-        "finish_str": "Decision (47%) / KO/TKO (43%)",
+        "red_name": "Jiri Prochazka",
+        "blue_name": "Navajo Stirling",
+        "red_prob": 9.8,
+        "blue_prob": 90.2,
+        "winner": "Navajo Stirling",
+        "finish_str": "KO/TKO (54%) / Decision (43%)",
         "finish": [
-          0.47487205266952515,
-          0.43341198563575745,
-          0.09171601384878159
+          0.43265771865844727,
+          0.5444885492324829,
+          0.022853700444102287
         ],
-        "elo_red": 1613.0,
-        "elo_blue": 1564.0,
+        "elo_red": 1577.0,
+        "elo_blue": 1535.0,
         "radar": {
           "axes": [
             "Str acc",
@@ -44,18 +44,101 @@
             "%"
           ],
           "red": [
-            61.7,
-            60.9,
-            23.5,
-            47.1,
-            38.5,
-            100.0
+            55.5,
+            45.4,
+            60.0,
+            68.4,
+            55.6,
+            66.7
           ],
           "blue": [
-            63.8,
-            48.3,
+            54.2,
+            59.4,
+            36.4,
+            69.7,
             50.0,
-            77.8,
+            100.0
+          ]
+        },
+        "bars": {
+          "stats": [
+            "Strikes/min",
+            "Str absorbed/min",
+            "TD avg/15min",
+            "Win streak"
+          ],
+          "red": [
+            5.61,
+            5.67,
+            0.49,
+            0.0
+          ],
+          "blue": [
+            6.41,
+            2.46,
+            0.92,
+            6.0
+          ],
+          "units": [
+            "/min",
+            "/min",
+            "/15min",
+            ""
+          ]
+        },
+        "form": {
+          "red_streak": 0,
+          "blue_streak": 6,
+          "red_finish": 100.0,
+          "blue_finish": 100.0,
+          "red_sos": 1545.0,
+          "blue_sos": 1433.0
+        }
+      },
+      {
+        "red_name": "Aljamain Sterling",
+        "blue_name": "Kevin Vallejos",
+        "red_prob": 44.1,
+        "blue_prob": 55.9,
+        "winner": "Kevin Vallejos",
+        "finish_str": "Decision (49%) / KO/TKO (31%)",
+        "finish": [
+          0.49314451217651367,
+          0.3055046796798706,
+          0.20135077834129333
+        ],
+        "elo_red": 1621.0,
+        "elo_blue": 1556.0,
+        "radar": {
+          "axes": [
+            "Str acc",
+            "Str def",
+            "TD acc",
+            "TD def",
+            "Finish rate",
+            "Recent W%"
+          ],
+          "units": [
+            "%",
+            "%",
+            "%",
+            "%",
+            "%",
+            "%"
+          ],
+          "red": [
+            52.6,
+            59.2,
+            32.2,
+            44.9,
+            8.7,
+            66.7
+          ],
+          "blue": [
+            46.6,
+            58.7,
+            33.3,
+            90.0,
             75.0,
             100.0
           ]
@@ -68,15 +151,15 @@
             "Win streak"
           ],
           "red": [
-            5.4,
-            2.31,
-            0.66,
-            3.0
+            4.26,
+            2.15,
+            2.54,
+            2.0
           ],
           "blue": [
-            10.28,
-            6.12,
-            1.5,
+            5.68,
+            3.55,
+            1.06,
             4.0
           ],
           "units": [
@@ -87,194 +170,28 @@
           ]
         },
         "form": {
-          "red_streak": 3,
+          "red_streak": 2,
           "blue_streak": 4,
-          "red_finish": 66.7,
-          "blue_finish": 66.7,
-          "red_sos": 1591.0,
-          "blue_sos": 1478.0
-        }
-      },
-      {
-        "red_name": "Kayla Harrison",
-        "blue_name": "Amanda Nunes",
-        "red_prob": 82.4,
-        "blue_prob": 17.6,
-        "winner": "Kayla Harrison",
-        "finish_str": "Decision (56%) / KO/TKO (31%)",
-        "finish": [
-          0.5556980967521667,
-          0.3054034113883972,
-          0.13889852166175842
-        ],
-        "elo_red": 1574.0,
-        "elo_blue": 1580.0,
-        "radar": {
-          "axes": [
-            "Str acc",
-            "Str def",
-            "TD acc",
-            "TD def",
-            "Finish rate",
-            "Recent W%"
-          ],
-          "units": [
-            "%",
-            "%",
-            "%",
-            "%",
-            "%",
-            "%"
-          ],
-          "red": [
-            62.1,
-            66.0,
-            37.5,
-            100.0,
-            0.0,
-            100.0
-          ],
-          "blue": [
-            52.0,
-            59.3,
-            56.7,
-            81.2,
-            38.9,
-            66.7
-          ]
-        },
-        "bars": {
-          "stats": [
-            "Strikes/min",
-            "Str absorbed/min",
-            "TD avg/15min",
-            "Win streak"
-          ],
-          "red": [
-            4.29,
-            1.1,
-            2.84,
-            3.0
-          ],
-          "blue": [
-            4.54,
-            2.44,
-            2.79,
-            2.0
-          ],
-          "units": [
-            "/min",
-            "/min",
-            "/15min",
-            ""
-          ]
-        },
-        "form": {
-          "red_streak": 3,
-          "blue_streak": 2,
-          "red_finish": 66.7,
-          "blue_finish": 33.3,
-          "red_sos": 1519.0,
-          "blue_sos": 1476.0
-        }
-      },
-      {
-        "red_name": "Caio Borralho",
-        "blue_name": "Yousri Belgaroui",
-        "red_prob": 39.8,
-        "blue_prob": 60.2,
-        "winner": "Yousri Belgaroui",
-        "finish_str": "Decision (49%) / KO/TKO (40%)",
-        "finish": [
-          0.4864296019077301,
-          0.4039593040943146,
-          0.10961107164621353
-        ],
-        "elo_red": 1576.0,
-        "elo_blue": 1529.0,
-        "radar": {
-          "axes": [
-            "Str acc",
-            "Str def",
-            "TD acc",
-            "TD def",
-            "Finish rate",
-            "Recent W%"
-          ],
-          "units": [
-            "%",
-            "%",
-            "%",
-            "%",
-            "%",
-            "%"
-          ],
-          "red": [
-            55.1,
-            59.8,
-            45.5,
-            73.7,
-            11.1,
-            66.7
-          ],
-          "blue": [
-            64.5,
-            69.7,
-            100.0,
-            56.2,
-            100.0,
-            100.0
-          ]
-        },
-        "bars": {
-          "stats": [
-            "Strikes/min",
-            "Str absorbed/min",
-            "TD avg/15min",
-            "Win streak"
-          ],
-          "red": [
-            3.3,
-            2.63,
-            1.08,
-            1.0
-          ],
-          "blue": [
-            8.35,
-            1.93,
-            0.52,
-            3.0
-          ],
-          "units": [
-            "/min",
-            "/min",
-            "/15min",
-            ""
-          ]
-        },
-        "form": {
-          "red_streak": 1,
-          "blue_streak": 3,
           "red_finish": 0.0,
-          "blue_finish": 100.0,
-          "red_sos": 1506.0,
-          "blue_sos": 1449.0
+          "blue_finish": 66.7,
+          "red_sos": 1538.0,
+          "blue_sos": 1467.0
         }
       },
       {
-        "red_name": "Uros Medic",
-        "blue_name": "Kevin Holland",
-        "red_prob": 77.7,
-        "blue_prob": 22.3,
-        "winner": "Uros Medic",
-        "finish_str": "KO/TKO (47%) / Decision (40%)",
+        "red_name": "Dan Hooker",
+        "blue_name": "Brian Ortega",
+        "red_prob": 58.2,
+        "blue_prob": 41.8,
+        "winner": "Dan Hooker",
+        "finish_str": "Decision (44%) / KO/TKO (38%)",
         "finish": [
-          0.39966943860054016,
-          0.46986836194992065,
-          0.130462184548378
+          0.4436594545841217,
+          0.38181331753730774,
+          0.17452722787857056
         ],
-        "elo_red": 1510.0,
-        "elo_blue": 1497.0,
+        "elo_red": 1483.0,
+        "elo_blue": 1533.0,
         "radar": {
           "axes": [
             "Str acc",
@@ -293,19 +210,19 @@
             "%"
           ],
           "red": [
-            58.2,
-            55.8,
-            50.0,
-            55.6,
-            72.7,
-            100.0
+            48.6,
+            49.0,
+            33.3,
+            77.1,
+            28.0,
+            0.0
           ],
           "blue": [
-            50.3,
-            50.0,
-            39.5,
-            57.8,
-            17.9,
+            37.3,
+            49.3,
+            25.0,
+            54.5,
+            23.1,
             33.3
           ]
         },
@@ -317,182 +234,16 @@
             "Win streak"
           ],
           "red": [
-            5.31,
-            3.53,
-            0.36,
-            4.0
-          ],
-          "blue": [
-            4.18,
-            3.3,
-            0.83,
-            1.0
-          ],
-          "units": [
-            "/min",
-            "/min",
-            "/15min",
-            ""
-          ]
-        },
-        "form": {
-          "red_streak": 4,
-          "blue_streak": 1,
-          "red_finish": 100.0,
-          "blue_finish": 0.0,
-          "red_sos": 1475.0,
-          "blue_sos": 1529.0
-        }
-      },
-      {
-        "red_name": "Bilal Hasan",
-        "blue_name": "Luis Gurule",
-        "red_prob": 92.6,
-        "blue_prob": 7.4,
-        "winner": "Bilal Hasan",
-        "finish_str": "Decision (45%) / KO/TKO (40%)",
-        "finish": [
-          0.4498361349105835,
-          0.3966030478477478,
-          0.1535608172416687
-        ],
-        "elo_red": 1445.0,
-        "elo_blue": 1318.0,
-        "radar": {
-          "axes": [
-            "Str acc",
-            "Str def",
-            "TD acc",
-            "TD def",
-            "Finish rate",
-            "Recent W%"
-          ],
-          "units": [
-            "%",
-            "%",
-            "%",
-            "%",
-            "%",
-            "%"
-          ],
-          "red": [
-            41.1,
-            50.0,
-            100.0,
-            0.0,
-            100.0,
-            100.0
-          ],
-          "blue": [
-            41.3,
-            57.0,
-            17.6,
-            73.3,
-            0.0,
-            33.3
-          ]
-        },
-        "bars": {
-          "stats": [
-            "Strikes/min",
-            "Str absorbed/min",
-            "TD avg/15min",
-            "Win streak"
-          ],
-          "red": [
-            7.1,
-            4.42,
-            2.01,
-            1.0
-          ],
-          "blue": [
-            5.02,
-            5.65,
-            0.81,
-            0.0
-          ],
-          "units": [
-            "/min",
-            "/min",
-            "/15min",
-            ""
-          ]
-        },
-        "form": {
-          "red_streak": 1,
-          "blue_streak": 0,
-          "red_finish": 100.0,
-          "blue_finish": 33.3,
-          "red_sos": 1400.0,
-          "blue_sos": 1408.0
-        }
-      },
-      {
-        "red_name": "Stephen Thompson",
-        "blue_name": "Charles Radtke",
-        "red_prob": 27.2,
-        "blue_prob": 72.8,
-        "winner": "Charles Radtke",
-        "finish_str": "Decision (50%) / KO/TKO (42%)",
-        "finish": [
-          0.49870654940605164,
-          0.4196133613586426,
-          0.08168014883995056
-        ],
-        "elo_red": 1484.0,
-        "elo_blue": 1443.0,
-        "radar": {
-          "axes": [
-            "Str acc",
-            "Str def",
-            "TD acc",
-            "TD def",
-            "Finish rate",
-            "Recent W%"
-          ],
-          "units": [
-            "%",
-            "%",
-            "%",
-            "%",
-            "%",
-            "%"
-          ],
-          "red": [
-            46.0,
-            54.9,
-            35.7,
-            63.3,
-            28.6,
+            4.82,
+            4.94,
+            0.67,
             0.0
           ],
           "blue": [
-            53.9,
-            54.7,
-            44.4,
-            100.0,
-            28.6,
-            66.7
-          ]
-        },
-        "bars": {
-          "stats": [
-            "Strikes/min",
-            "Str absorbed/min",
-            "TD avg/15min",
-            "Win streak"
-          ],
-          "red": [
-            4.05,
-            3.0,
-            0.23,
+            3.84,
+            6.38,
+            0.93,
             0.0
-          ],
-          "blue": [
-            2.5,
-            2.45,
-            1.99,
-            2.0
           ],
           "units": [
             "/min",
@@ -503,27 +254,27 @@
         },
         "form": {
           "red_streak": 0,
-          "blue_streak": 2,
-          "red_finish": 66.7,
-          "blue_finish": 66.7,
-          "red_sos": 1526.0,
-          "blue_sos": 1414.0
+          "blue_streak": 0,
+          "red_finish": 100.0,
+          "blue_finish": 33.3,
+          "red_sos": 1501.0,
+          "blue_sos": 1570.0
         }
       },
       {
-        "red_name": "Drew Dober",
-        "blue_name": "Chris Duncan",
-        "red_prob": 14.4,
-        "blue_prob": 85.6,
-        "winner": "Chris Duncan",
-        "finish_str": "Decision (50%) / KO/TKO (29%)",
+        "red_name": "Kyoji Horiguchi",
+        "blue_name": "Asu Almabayev",
+        "red_prob": 31.5,
+        "blue_prob": 68.5,
+        "winner": "Asu Almabayev",
+        "finish_str": "Decision (56%) / KO/TKO (36%)",
         "finish": [
-          0.49883392453193665,
-          0.28593894839286804,
-          0.21522711217403412
+          0.5625836849212646,
+          0.3581327795982361,
+          0.07928351312875748
         ],
-        "elo_red": 1480.0,
-        "elo_blue": 1487.0,
+        "elo_red": 1525.0,
+        "elo_blue": 1533.0,
         "radar": {
           "axes": [
             "Str acc",
@@ -542,19 +293,185 @@
             "%"
           ],
           "red": [
-            41.0,
-            53.1,
-            17.0,
-            58.2,
-            42.3,
+            47.6,
+            64.0,
+            40.5,
+            61.2,
+            18.2,
             66.7
           ],
           "blue": [
-            46.2,
-            52.3,
-            40.6,
-            55.6,
+            51.4,
+            53.8,
+            45.8,
+            44.4,
             0.0,
+            100.0
+          ]
+        },
+        "bars": {
+          "stats": [
+            "Strikes/min",
+            "Str absorbed/min",
+            "TD avg/15min",
+            "Win streak"
+          ],
+          "red": [
+            3.64,
+            2.08,
+            1.67,
+            0.0
+          ],
+          "blue": [
+            2.28,
+            1.94,
+            4.74,
+            3.0
+          ],
+          "units": [
+            "/min",
+            "/min",
+            "/15min",
+            ""
+          ]
+        },
+        "form": {
+          "red_streak": 0,
+          "blue_streak": 3,
+          "red_finish": 66.7,
+          "blue_finish": 66.7,
+          "red_sos": 1492.0,
+          "blue_sos": 1467.0
+        }
+      },
+      {
+        "red_name": "Jared Cannonier",
+        "blue_name": "Ikram Aliskerov",
+        "red_prob": 5.4,
+        "blue_prob": 94.6,
+        "winner": "Ikram Aliskerov",
+        "finish_str": "Decision (54%) / KO/TKO (39%)",
+        "finish": [
+          0.5442965626716614,
+          0.3887830078601837,
+          0.06692042201757431
+        ],
+        "elo_red": 1498.0,
+        "elo_blue": 1533.0,
+        "radar": {
+          "axes": [
+            "Str acc",
+            "Str def",
+            "TD acc",
+            "TD def",
+            "Finish rate",
+            "Recent W%"
+          ],
+          "units": [
+            "%",
+            "%",
+            "%",
+            "%",
+            "%",
+            "%"
+          ],
+          "red": [
+            49.4,
+            55.9,
+            45.5,
+            64.8,
+            33.3,
+            33.3
+          ],
+          "blue": [
+            60.7,
+            45.8,
+            76.9,
+            100.0,
+            50.0,
+            100.0
+          ]
+        },
+        "bars": {
+          "stats": [
+            "Strikes/min",
+            "Str absorbed/min",
+            "TD avg/15min",
+            "Win streak"
+          ],
+          "red": [
+            4.25,
+            4.36,
+            0.77,
+            0.0
+          ],
+          "blue": [
+            5.68,
+            3.8,
+            3.66,
+            3.0
+          ],
+          "units": [
+            "/min",
+            "/min",
+            "/15min",
+            ""
+          ]
+        },
+        "form": {
+          "red_streak": 0,
+          "blue_streak": 3,
+          "red_finish": 33.3,
+          "blue_finish": 33.3,
+          "red_sos": 1510.0,
+          "blue_sos": 1514.0
+        }
+      },
+      {
+        "red_name": "Aleksandre Topuria",
+        "blue_name": "Santiago Luna",
+        "red_prob": 17.9,
+        "blue_prob": 82.1,
+        "winner": "Santiago Luna",
+        "finish_str": "Decision (45%) / KO/TKO (36%)",
+        "finish": [
+          0.445149689912796,
+          0.3590938448905945,
+          0.19575649499893188
+        ],
+        "elo_red": 1487.0,
+        "elo_blue": 1436.0,
+        "radar": {
+          "axes": [
+            "Str acc",
+            "Str def",
+            "TD acc",
+            "TD def",
+            "Finish rate",
+            "Recent W%"
+          ],
+          "units": [
+            "%",
+            "%",
+            "%",
+            "%",
+            "%",
+            "%"
+          ],
+          "red": [
+            55.0,
+            68.7,
+            33.3,
+            100.0,
+            0.0,
+            100.0
+          ],
+          "blue": [
+            53.1,
+            68.0,
+            71.4,
+            57.1,
+            33.3,
             66.7
           ]
         },
@@ -566,15 +483,15 @@
             "Win streak"
           ],
           "red": [
-            4.48,
-            4.33,
-            0.61,
+            2.93,
+            2.57,
+            1.5,
             2.0
           ],
           "blue": [
-            4.6,
-            4.23,
-            2.8,
+            4.74,
+            2.76,
+            2.3,
             0.0
           ],
           "units": [
@@ -587,26 +504,26 @@
         "form": {
           "red_streak": 2,
           "blue_streak": 0,
-          "red_finish": 100.0,
+          "red_finish": 0.0,
           "blue_finish": 66.7,
-          "red_sos": 1456.0,
-          "blue_sos": 1459.0
+          "red_sos": 1418.0,
+          "blue_sos": 1423.0
         }
       },
       {
-        "red_name": "Jim Miller",
-        "blue_name": "Terrance McKinney",
-        "red_prob": 27.2,
-        "blue_prob": 72.8,
-        "winner": "Terrance McKinney",
-        "finish_str": "KO/TKO (56%) / Decision (24%)",
+        "red_name": "Shamil Gaziev",
+        "blue_name": "Tallison Teixeira",
+        "red_prob": 26.6,
+        "blue_prob": 73.4,
+        "winner": "Tallison Teixeira",
+        "finish_str": "Decision (48%) / KO/TKO (34%)",
         "finish": [
-          0.23722995817661285,
-          0.5597809553146362,
-          0.20298908650875092
+          0.48087164759635925,
+          0.33769410848617554,
+          0.18143422901630402
         ],
-        "elo_red": 1483.0,
-        "elo_blue": 1440.0,
+        "elo_red": 1467.0,
+        "elo_blue": 1463.0,
         "radar": {
           "axes": [
             "Str acc",
@@ -625,19 +542,19 @@
             "%"
           ],
           "red": [
-            42.1,
-            56.7,
-            45.0,
-            47.6,
-            13.0,
-            66.7
+            45.3,
+            45.4,
+            33.3,
+            83.3,
+            42.9,
+            33.3
           ],
           "blue": [
-            55.8,
-            41.6,
-            46.7,
-            72.7,
-            35.7,
+            67.4,
+            31.8,
+            30.0,
+            0.0,
+            25.0,
             33.3
           ]
         },
@@ -649,15 +566,15 @@
             "Win streak"
           ],
           "red": [
-            2.92,
-            3.43,
-            1.49,
+            2.97,
+            5.09,
+            1.08,
             1.0
           ],
           "blue": [
-            7.95,
-            4.76,
-            3.05,
+            3.69,
+            3.45,
+            2.68,
             0.0
           ],
           "units": [
@@ -670,192 +587,26 @@
         "form": {
           "red_streak": 1,
           "blue_streak": 0,
-          "red_finish": 66.7,
-          "blue_finish": 100.0,
-          "red_sos": 1455.0,
-          "blue_sos": 1443.0
-        }
-      },
-      {
-        "red_name": "Donte Johnson",
-        "blue_name": "Cesar Almeida",
-        "red_prob": 82.9,
-        "blue_prob": 17.1,
-        "winner": "Donte Johnson",
-        "finish_str": "Decision (52%) / KO/TKO (32%)",
-        "finish": [
-          0.516078531742096,
-          0.3152353763580322,
-          0.16868610680103302
-        ],
-        "elo_red": 1509.0,
-        "elo_blue": 1417.0,
-        "radar": {
-          "axes": [
-            "Str acc",
-            "Str def",
-            "TD acc",
-            "TD def",
-            "Finish rate",
-            "Recent W%"
-          ],
-          "units": [
-            "%",
-            "%",
-            "%",
-            "%",
-            "%",
-            "%"
-          ],
-          "red": [
-            42.6,
-            63.2,
-            100.0,
-            76.9,
-            33.3,
-            100.0
-          ],
-          "blue": [
-            60.0,
-            43.2,
-            33.3,
-            48.5,
-            33.3,
-            33.3
-          ]
-        },
-        "bars": {
-          "stats": [
-            "Strikes/min",
-            "Str absorbed/min",
-            "TD avg/15min",
-            "Win streak"
-          ],
-          "red": [
-            2.86,
-            1.82,
-            1.95,
-            3.0
-          ],
-          "blue": [
-            3.48,
-            2.32,
-            0.25,
-            0.0
-          ],
-          "units": [
-            "/min",
-            "/min",
-            "/15min",
-            ""
-          ]
-        },
-        "form": {
-          "red_streak": 3,
-          "blue_streak": 0,
-          "red_finish": 66.7,
-          "blue_finish": 66.7,
-          "red_sos": 1409.0,
-          "blue_sos": 1415.0
-        }
-      },
-      {
-        "red_name": "Jared Gordon",
-        "blue_name": "Melquizael Costa",
-        "red_prob": 21.5,
-        "blue_prob": 78.5,
-        "winner": "Melquizael Costa",
-        "finish_str": "Decision (66%) / KO/TKO (27%)",
-        "finish": [
-          0.6630618572235107,
-          0.2670060992240906,
-          0.06993204355239868
-        ],
-        "elo_red": 1450.0,
-        "elo_blue": 1480.0,
-        "radar": {
-          "axes": [
-            "Str acc",
-            "Str def",
-            "TD acc",
-            "TD def",
-            "Finish rate",
-            "Recent W%"
-          ],
-          "units": [
-            "%",
-            "%",
-            "%",
-            "%",
-            "%",
-            "%"
-          ],
-          "red": [
-            53.7,
-            55.5,
-            34.8,
-            60.5,
-            17.6,
-            33.3
-          ],
-          "blue": [
-            47.0,
-            50.4,
-            35.5,
-            50.9,
-            20.0,
-            66.7
-          ]
-        },
-        "bars": {
-          "stats": [
-            "Strikes/min",
-            "Str absorbed/min",
-            "TD avg/15min",
-            "Win streak"
-          ],
-          "red": [
-            5.57,
-            4.11,
-            1.91,
-            0.0
-          ],
-          "blue": [
-            4.29,
-            3.19,
-            1.53,
-            0.0
-          ],
-          "units": [
-            "/min",
-            "/min",
-            "/15min",
-            ""
-          ]
-        },
-        "form": {
-          "red_streak": 0,
-          "blue_streak": 0,
           "red_finish": 100.0,
           "blue_finish": 66.7,
-          "red_sos": 1471.0,
-          "blue_sos": 1486.0
+          "red_sos": 1447.0,
+          "blue_sos": 1480.0
         }
       },
       {
-        "red_name": "Macy Chiasson",
-        "blue_name": "Bia Mesquita",
-        "red_prob": 12.8,
-        "blue_prob": 87.2,
-        "winner": "Bia Mesquita",
-        "finish_str": "Decision (65%) / Submission (25%)",
+        "red_name": "Amir Albazi",
+        "blue_name": "Alessandro Costa",
+        "red_prob": 43.1,
+        "blue_prob": 56.9,
+        "winner": "Alessandro Costa",
+        "finish_str": "KO/TKO (49%) / Decision (46%)",
         "finish": [
-          0.6456305980682373,
-          0.10796915739774704,
-          0.24640022218227386
+          0.4593805968761444,
+          0.4866458773612976,
+          0.05397355183959007
         ],
-        "elo_red": 1454.0,
-        "elo_blue": 1512.0,
+        "elo_red": 1493.0,
+        "elo_blue": 1430.0,
         "radar": {
           "axes": [
             "Str acc",
@@ -874,19 +625,19 @@
             "%"
           ],
           "red": [
-            46.1,
-            44.9,
-            35.8,
+            33.8,
+            59.4,
+            25.0,
             62.5,
-            21.4,
-            0.0
+            14.3,
+            33.3
           ],
           "blue": [
-            57.0,
-            71.4,
-            75.0,
-            0.0,
-            0.0,
+            49.3,
+            54.3,
+            26.7,
+            85.2,
+            50.0,
             100.0
           ]
         },
@@ -898,15 +649,15 @@
             "Win streak"
           ],
           "red": [
-            3.21,
-            2.76,
-            1.87,
+            2.47,
+            3.88,
+            1.18,
             0.0
           ],
           "blue": [
-            4.52,
-            1.27,
-            3.57,
+            3.94,
+            3.81,
+            0.85,
             3.0
           ],
           "units": [
@@ -921,24 +672,24 @@
           "blue_streak": 3,
           "red_finish": 0.0,
           "blue_finish": 100.0,
-          "red_sos": 1474.0,
-          "blue_sos": 1406.0
+          "red_sos": 1475.0,
+          "blue_sos": 1378.0
         }
       },
       {
-        "red_name": "Alatengheili",
-        "blue_name": "Juan Diaz",
-        "red_prob": 8.9,
-        "blue_prob": 91.1,
-        "winner": "Juan Diaz",
-        "finish_str": "Decision (60%) / Submission (22%)",
+        "red_name": "Jake Matthews",
+        "blue_name": "Tahir Abdullayev",
+        "red_prob": 44.2,
+        "blue_prob": 55.8,
+        "winner": "Tahir Abdullayev",
+        "finish_str": "Decision (56%) / KO/TKO (23%)",
         "finish": [
-          0.6045297384262085,
-          0.17638379335403442,
-          0.21908648312091827
+          0.5624951720237732,
+          0.22669686377048492,
+          0.21080796420574188
         ],
-        "elo_red": 1451.0,
-        "elo_blue": 1449.0,
+        "elo_red": 1506.0,
+        "elo_blue": 1445.0,
         "radar": {
           "axes": [
             "Str acc",
@@ -957,19 +708,19 @@
             "%"
           ],
           "red": [
-            31.9,
-            56.5,
-            42.5,
-            75.0,
-            11.1,
+            44.5,
+            60.6,
+            41.7,
+            66.7,
+            8.3,
             66.7
           ],
           "blue": [
-            52.0,
-            54.5,
-            62.5,
-            0.0,
-            0.0,
+            42.5,
+            51.4,
+            33.3,
+            100.0,
+            100.0,
             100.0
           ]
         },
@@ -981,15 +732,15 @@
             "Win streak"
           ],
           "red": [
-            2.71,
-            4.96,
-            1.88,
+            3.36,
+            2.58,
+            1.36,
             1.0
           ],
           "blue": [
-            1.42,
-            1.64,
-            8.21,
+            2.56,
+            2.42,
+            2.07,
             1.0
           ],
           "units": [
@@ -1002,10 +753,93 @@
         "form": {
           "red_streak": 1,
           "blue_streak": 1,
-          "red_finish": 0.0,
+          "red_finish": 66.7,
           "blue_finish": 100.0,
-          "red_sos": 1440.0,
-          "blue_sos": 1414.0
+          "red_sos": 1452.0,
+          "blue_sos": 1400.0
+        }
+      },
+      {
+        "red_name": "Nikolas Motta",
+        "blue_name": "Dom Mar Fan",
+        "red_prob": 9.1,
+        "blue_prob": 90.9,
+        "winner": "Dom Mar Fan",
+        "finish_str": "KO/TKO (49%) / Decision (36%)",
+        "finish": [
+          0.359223872423172,
+          0.49442195892333984,
+          0.14635412395000458
+        ],
+        "elo_red": 1396.0,
+        "elo_blue": 1376.0,
+        "radar": {
+          "axes": [
+            "Str acc",
+            "Str def",
+            "TD acc",
+            "TD def",
+            "Finish rate",
+            "Recent W%"
+          ],
+          "units": [
+            "%",
+            "%",
+            "%",
+            "%",
+            "%",
+            "%"
+          ],
+          "red": [
+            41.3,
+            48.3,
+            0.0,
+            82.4,
+            33.3,
+            66.7
+          ],
+          "blue": [
+            57.1,
+            48.9,
+            25.0,
+            81.8,
+            0.0,
+            50.0
+          ]
+        },
+        "bars": {
+          "stats": [
+            "Strikes/min",
+            "Str absorbed/min",
+            "TD avg/15min",
+            "Win streak"
+          ],
+          "red": [
+            4.52,
+            5.77,
+            0.0,
+            0.0
+          ],
+          "blue": [
+            5.28,
+            3.64,
+            0.79,
+            0.0
+          ],
+          "units": [
+            "/min",
+            "/min",
+            "/15min",
+            ""
+          ]
+        },
+        "form": {
+          "red_streak": 0,
+          "blue_streak": 0,
+          "red_finish": 66.7,
+          "blue_finish": 50.0,
+          "red_sos": 1411.0,
+          "blue_sos": 1371.0
         }
       }
     ]
