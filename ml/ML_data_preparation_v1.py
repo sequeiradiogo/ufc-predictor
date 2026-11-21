@@ -237,7 +237,7 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
         "opp_adj_splm", "opp_adj_td_avg",
         "head_def", "body_def", "dist_def", "ground_def",
         "opp_adj_head_acc", "opp_adj_body_acc", "opp_adj_dist_acc",
-        "adj_str_def", "adj_acc_def",
+        "adj_str_def", "adj_acc_def", "adj_sig_land_ratio",
         # Group E: reversals
         "career_reversals", "ewma_reversals",
         # Group F: R1 stats (zero-filled when backfill not yet run)
@@ -305,7 +305,7 @@ def build_v1_dataset(conn: sqlite3.Connection, min_date: str | None = None) -> p
         "opp_adj_splm", "opp_adj_td_avg",
         "head_def", "body_def", "dist_def", "ground_def",
         "opp_adj_head_acc", "opp_adj_body_acc", "opp_adj_dist_acc",
-        "adj_str_def", "adj_acc_def",
+        "adj_str_def", "adj_acc_def", "adj_sig_land_ratio",
         # Group E: reversals
         "career_reversals", "ewma_reversals",
         # Group F: R1 stats

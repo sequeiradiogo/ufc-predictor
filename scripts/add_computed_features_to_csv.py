@@ -32,6 +32,7 @@ sys.path.insert(0, str(ROOT))
 from config import DB_V1_PATH, DB_PATH, EWMA_SPAN, FINISH_METHOD_MAP, LEAGUE_DEF, NAME_ALIASES, SOS_WINDOW, STARTING_ELO
 from ml.ELO_calculator import build_elo_features, build_glicko_features
 from ml.opp_adjusted_defense import FEATURES as ADJ_DEF_FEATURES, prefight_adj_defense
+from ml.adj_performance import FEATURE as ADJ_LAND_FEATURE, prefight_adj_land_ratio
 from ml.pre_ufc import MODEL_FEATURES as PRE_UFC_FEATURES, prefight_model_features
 
 KAGGLE_CSV = ROOT / "raw_data" / "ufc-master.csv"
@@ -515,6 +516,17 @@ def main(dry_run: bool = False) -> None:
         ["fight_id", "fighter_id", *ADJ_DEF_FEATURES]
     ]
 
+    # --- Opponent-adjusted landing ratio (ml/adj_performance.py, shared with predict.py) ---
+    print("  Opponent-adjusted landing ratio ...")
+    adjland_df = prefight_adj_land_ratio(ufc_conn)
+    adjland_df["fight_id"]   = adjland_df["fight_id"].map(ufc_fight_map)
+    adjland_df["fighter_id"] = adjland_df["fighter_id"].map(
+        lambda fid: _md5id(ufc_fid_to_name[fid]) if fid in ufc_fid_to_name else None
+    )
+    adjland_df = adjland_df.dropna(subset=["fight_id", "fighter_id"])[
+        ["fight_id", "fighter_id", ADJ_LAND_FEATURE]
+    ]
+
     # --- Pre-UFC record, opponent quality and MMA-wide rating (ESPN data; ml/pre_ufc.py,
     #     shared with predict.py's live path) ---
     print("  Pre-UFC career / opponent quality / mma_elo ...")
@@ -708,6 +720,7 @@ def main(dry_run: bool = False) -> None:
         (oadj_df,          "opp_adj_dist_acc",   "R_opp_adj_dist_acc",   "B_opp_adj_dist_acc"),
         (adjdef_df,        "adj_str_def",        "R_adj_str_def",        "B_adj_str_def"),
         (adjdef_df,        "adj_acc_def",        "R_adj_acc_def",        "B_adj_acc_def"),
+        (adjland_df,       ADJ_LAND_FEATURE,     f"R_{ADJ_LAND_FEATURE}", f"B_{ADJ_LAND_FEATURE}"),
         (ewma_rates_df,    "ewma_splm",          "R_ewma_splm",          "B_ewma_splm"),
         (ewma_rates_df,    "ewma_td_avg",        "R_ewma_td_avg",        "B_ewma_td_avg"),
         (ewma_rates_df,    "ewma_sapm",          "R_ewma_sapm",          "B_ewma_sapm"),

@@ -65,6 +65,7 @@ from config import (
 )
 from ml.calibration import apply_temperature, symmetric_proba
 from ml.opp_adjusted_defense import current_adj_defense
+from ml.adj_performance import current_adj_land_ratio
 from ml.pre_ufc import MODEL_FEATURES as PRE_UFC_FEATURES, current_model_features
 from ml.shrinkage import OFF as SHRINK_OFF, SETTINGS_NAME as SHRINK_SETTINGS, read_settings, shrink_corner
 from ml.ELO_calculator import build_elo_features, get_current_glicko_by_division, get_current_ratings
@@ -1303,7 +1304,7 @@ def build_feature_vector(
             row[feat] = _er.get(stat, 0.0) - _eb.get(stat, 0.0)
 
         # ── Opponent-adjusted stats ────────────────────────────────────────────
-        elif feat in ("adj_str_def_diff", "adj_acc_def_diff"):
+        elif feat in ("adj_str_def_diff", "adj_acc_def_diff", "adj_sig_land_ratio_diff"):
             stat = feat[: -len("_diff")]
             row[feat] = _er.get(stat, 0.0) - _eb.get(stat, 0.0)
         elif feat == "opp_adj_splm_diff":
@@ -1755,6 +1756,14 @@ def compute_prediction(
                 extra_r.update(_adj_def[r_fid_v2])
             if b_fid_v2:
                 extra_b.update(_adj_def[b_fid_v2])
+            # Opponent-adjusted landing ratio (ml/adj_performance.py, issue #68)
+            _adj_land = current_adj_land_ratio(
+                conn_v2, [f for f in (r_fid_v2, b_fid_v2) if f], before_date=as_of,
+            )
+            if r_fid_v2:
+                extra_r.update(_adj_land[r_fid_v2])
+            if b_fid_v2:
+                extra_b.update(_adj_land[b_fid_v2])
 
         # -- Pre-UFC record / opponent quality / mma_elo (same code path as training).
         #    Always filled for both corners: an unknown fighter gets the no-history

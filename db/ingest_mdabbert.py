@@ -235,6 +235,8 @@ def ingest(csv_path: Path, db_path: Path) -> None:
         # Opponent-adjusted striking defence (ml/opp_adjusted_defense.py)
         "adj_str_def":       ("R_adj_str_def",       "B_adj_str_def"),
         "adj_acc_def":       ("R_adj_acc_def",       "B_adj_acc_def"),
+        # Opponent-adjusted landing ratio (ml/adj_performance.py, issue #68)
+        "adj_sig_land_ratio": ("R_adj_sig_land_ratio", "B_adj_sig_land_ratio"),
         # Group E: reversals (from add_computed_features_to_csv.py)
         "career_reversals":  ("R_career_reversals",  "B_career_reversals"),
         "ewma_reversals":    ("R_ewma_reversals",    "B_ewma_reversals"),
