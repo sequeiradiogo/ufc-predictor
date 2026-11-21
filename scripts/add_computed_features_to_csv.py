@@ -88,6 +88,28 @@ def _to_v1(fight_map: pd.DataFrame, ufc_df: pd.DataFrame, pairs: list[tuple[str,
     return m[["fight_id"] + [c for pair in pairs for c in pair]]
 
 
+def corner_map(fight_map: pd.DataFrame) -> pd.DataFrame:
+    """One row per mapped corner: (ufc_fight_id, ufc_fid) -> (fight_id, v1_fid)."""
+    return pd.concat([
+        fight_map.assign(ufc_fid=np.where(fight_map["swapped"], fight_map["ufc_b"], fight_map["ufc_r"]),
+                         v1_fid=fight_map["r_fighter_id"]),
+        fight_map.assign(ufc_fid=np.where(fight_map["swapped"], fight_map["ufc_r"], fight_map["ufc_b"]),
+                         v1_fid=fight_map["b_fighter_id"]),
+    ], ignore_index=True)[["ufc_fight_id", "ufc_fid", "fight_id", "v1_fid"]]
+
+
+def _per_fighter_to_v1(corner: pd.DataFrame, ufc_df: pd.DataFrame) -> pd.DataFrame:
+    """Re-key a per-(fight, fighter) UFCStats frame to mdabbert fight and fighter ids.
+
+    Rows whose fight isn't mapped are dropped (the CSV column stays empty -> 0
+    downstream, as before). Matching is by UFCStats ids, never by name.
+    """
+    m = corner.merge(ufc_df.rename(columns={"fight_id": "ufc_fight_id", "fighter_id": "ufc_fid"}),
+                     on=["ufc_fight_id", "ufc_fid"])
+    return (m.drop(columns=["ufc_fight_id", "ufc_fid"])
+             .rename(columns={"v1_fid": "fighter_id"}))
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Inactivity features
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -305,15 +327,8 @@ def main(dry_run: bool = False) -> None:
     print("  SOS ...")
     ufc_meta = pd.read_sql_query("SELECT fight_id, date, r_fighter_id, b_fighter_id FROM fights", ufc_conn)
     sos_ufc = compute_sos_features(ufc_meta.merge(elo_ufc, on="fight_id"))
-    # per-fighter rows: map (ufc fight, ufc fighter) -> (mdabbert fight, mdabbert fighter)
-    corner = pd.concat([
-        fight_map.assign(ufc_fid=np.where(fight_map["swapped"], fight_map["ufc_b"], fight_map["ufc_r"]),
-                         v1_fid=fight_map["r_fighter_id"]),
-        fight_map.assign(ufc_fid=np.where(fight_map["swapped"], fight_map["ufc_r"], fight_map["ufc_b"]),
-                         v1_fid=fight_map["b_fighter_id"]),
-    ])
-    sos_df = corner.merge(sos_ufc.rename(columns={"fight_id": "ufc_fight_id", "fighter_id": "ufc_fid"}),
-                          on=["ufc_fight_id", "ufc_fid"])[["fight_id", "v1_fid", "sos"]]                    .rename(columns={"v1_fid": "fighter_id"})
+    corner = corner_map(fight_map)
+    sos_df = _per_fighter_to_v1(corner, sos_ufc)[["fight_id", "fighter_id", "sos"]]
 
     # ── Inactivity ────────────────────────────────────────────────────────────
     print("  Inactivity ...")
@@ -323,16 +338,14 @@ def main(dry_run: bool = False) -> None:
     print("  KO vulnerability ...")
     kovuln_raw = compute_ko_vulnerability(ufc_conn)
 
-    # Map UFCStats (fight_id, fighter_id) -> mdabbert (fight_id, fighter_id)
-    ufc_fighters = pd.read_sql_query(
-        "SELECT fighter_id, name FROM fighters", ufc_conn
-    )
+    # Every per-fighter UFCStats frame is re-keyed to mdabbert (fight_id,
+    # fighter_id) through `corner` (_per_fighter_to_v1), i.e. by date + both
+    # fighters with aliases and reversed corners handled. Until 2026-11 they were
+    # keyed by md5 of the UFCStats names, which missed every fighter whose name
+    # differs between the sources (~3.6% of training fights had all of these
+    # features at 0 while live inference, keyed by UFCStats id, had values; #78).
     ufc_fights = pd.read_sql_query(
-        "SELECT f.fight_id, f.date, f.r_fighter_id, f.b_fighter_id, r.name r_name, b.name b_name "
-        "FROM fights f "
-        "JOIN fighters r ON f.r_fighter_id = r.fighter_id "
-        "JOIN fighters b ON f.b_fighter_id = b.fighter_id",
-        ufc_conn,
+        "SELECT fight_id, date, r_fighter_id, b_fighter_id FROM fights", ufc_conn,
     )
 
     # Item 8: EWMA striking/TD accuracy -- requires per-fight raw counts from UFCStats
@@ -387,22 +400,9 @@ def main(dry_run: bool = False) -> None:
         ufc_conn,
     )
 
-    import hashlib as _hl
-    def _md5id(s: str) -> str:
-        return _hl.md5(s.lower().strip().encode()).hexdigest()[:16]
-
-    ufc_fid_to_name = dict(zip(ufc_fighters["fighter_id"], ufc_fighters["name"]))
-    ufc_fights["mab_fight_id"] = ufc_fights.apply(
-        lambda r: _fight_id(r["r_name"], r["b_name"], str(r["date"])[:10]), axis=1
-    )
-    ufc_fight_map    = dict(zip(ufc_fights["fight_id"], ufc_fights["mab_fight_id"]))
 
     kovuln_df = kovuln_raw.copy()
-    kovuln_df["fight_id"]   = kovuln_df["fight_id"].map(ufc_fight_map)
-    kovuln_df["fighter_id"] = kovuln_df["fighter_id"].map(
-        lambda fid: _md5id(ufc_fid_to_name[fid]) if fid in ufc_fid_to_name else None
-    )
-    kovuln_df = kovuln_df.dropna(subset=["fight_id", "fighter_id"])[
+    kovuln_df = _per_fighter_to_v1(corner, kovuln_df)[
         ["fight_id", "fighter_id", "ko_vuln", "kd_received"]
     ]
 
@@ -437,11 +437,7 @@ def main(dry_run: bool = False) -> None:
     _ewma_acc_out_cols = [c for _, c in _ewma_acc_cols] + ["str_acc_var"]
     ewma_computed = _ewma_raw[["fight_id", "fighter_id"] + _ewma_acc_out_cols].copy()
     ewma_df = ewma_computed.copy()
-    ewma_df["fight_id"]   = ewma_df["fight_id"].map(ufc_fight_map)
-    ewma_df["fighter_id"] = ewma_df["fighter_id"].map(
-        lambda fid: _md5id(ufc_fid_to_name[fid]) if fid in ufc_fid_to_name else None
-    )
-    ewma_df = ewma_df.dropna(subset=["fight_id", "fighter_id"])[
+    ewma_df = _per_fighter_to_v1(corner, ewma_df)[
         ["fight_id", "fighter_id"] + _ewma_acc_out_cols
     ]
 
@@ -497,33 +493,21 @@ def main(dry_run: bool = False) -> None:
 
     _oadj_out_cols = ["opp_adj_splm", "opp_adj_td_avg", "opp_adj_head_acc", "opp_adj_body_acc", "opp_adj_dist_acc"]
     oadj_df = _oadj_raw[["fight_id", "fighter_id"] + _oadj_out_cols].copy()
-    oadj_df["fight_id"]   = oadj_df["fight_id"].map(ufc_fight_map)
-    oadj_df["fighter_id"] = oadj_df["fighter_id"].map(
-        lambda fid: _md5id(ufc_fid_to_name[fid]) if fid in ufc_fid_to_name else None
-    )
-    oadj_df = oadj_df.dropna(subset=["fight_id", "fighter_id"])[
+    oadj_df = _per_fighter_to_v1(corner, oadj_df)[
         ["fight_id", "fighter_id"] + _oadj_out_cols
     ]
 
     # --- Opponent-adjusted striking defence (shared with predict.py's live path) ---
     print("  Opponent-adjusted defence ...")
     adjdef_df = prefight_adj_defense(ufc_conn)
-    adjdef_df["fight_id"]   = adjdef_df["fight_id"].map(ufc_fight_map)
-    adjdef_df["fighter_id"] = adjdef_df["fighter_id"].map(
-        lambda fid: _md5id(ufc_fid_to_name[fid]) if fid in ufc_fid_to_name else None
-    )
-    adjdef_df = adjdef_df.dropna(subset=["fight_id", "fighter_id"])[
+    adjdef_df = _per_fighter_to_v1(corner, adjdef_df)[
         ["fight_id", "fighter_id", *ADJ_DEF_FEATURES]
     ]
 
     # --- Opponent-adjusted landing ratio (ml/adj_performance.py, shared with predict.py) ---
     print("  Opponent-adjusted landing ratio ...")
     adjland_df = prefight_adj_land_ratio(ufc_conn)
-    adjland_df["fight_id"]   = adjland_df["fight_id"].map(ufc_fight_map)
-    adjland_df["fighter_id"] = adjland_df["fighter_id"].map(
-        lambda fid: _md5id(ufc_fid_to_name[fid]) if fid in ufc_fid_to_name else None
-    )
-    adjland_df = adjland_df.dropna(subset=["fight_id", "fighter_id"])[
+    adjland_df = _per_fighter_to_v1(corner, adjland_df)[
         ["fight_id", "fighter_id", ADJ_LAND_FEATURE]
     ]
 
@@ -535,11 +519,9 @@ def main(dry_run: bool = False) -> None:
         ufc_fights[["fight_id", "date", "b_fighter_id"]].rename(columns={"b_fighter_id": "fighter_id"}),
     ], ignore_index=True)
     preufc_df = prefight_model_features(_pu[["fighter_id", "date"]], ufc_conn)
-    preufc_df["fight_id"]   = _pu["fight_id"].map(ufc_fight_map).values
-    preufc_df["fighter_id"] = _pu["fighter_id"].map(
-        lambda fid: _md5id(ufc_fid_to_name[fid]) if fid in ufc_fid_to_name else None
-    ).values
-    preufc_df = preufc_df.dropna(subset=["fight_id", "fighter_id"])[
+    preufc_df["fight_id"]   = _pu["fight_id"].values
+    preufc_df["fighter_id"] = _pu["fighter_id"].values
+    preufc_df = _per_fighter_to_v1(corner, preufc_df)[
         ["fight_id", "fighter_id", *PRE_UFC_FEATURES]
     ]
 
@@ -644,11 +626,7 @@ def main(dry_run: bool = False) -> None:
 
     _rate_out_cols = [c for _, c in _rate_cols] + ["career_reversals"]
     ewma_rates_df = _ewma_rates_raw[["fight_id", "fighter_id"] + _rate_out_cols].copy()
-    ewma_rates_df["fight_id"]   = ewma_rates_df["fight_id"].map(ufc_fight_map)
-    ewma_rates_df["fighter_id"] = ewma_rates_df["fighter_id"].map(
-        lambda fid: _md5id(ufc_fid_to_name[fid]) if fid in ufc_fid_to_name else None
-    )
-    ewma_rates_df = ewma_rates_df.dropna(subset=["fight_id", "fighter_id"])[
+    ewma_rates_df = _per_fighter_to_v1(corner, ewma_rates_df)[
         ["fight_id", "fighter_id"] + _rate_out_cols
     ]
 
@@ -678,11 +656,7 @@ def main(dry_run: bool = False) -> None:
             )
         _r1_out_cols = [c for _, c in _r1_cols]
         r1_df = _r1_raw[["fight_id", "fighter_id"] + _r1_out_cols].copy()
-        r1_df["fight_id"]   = r1_df["fight_id"].map(ufc_fight_map)
-        r1_df["fighter_id"] = r1_df["fighter_id"].map(
-            lambda fid: _md5id(ufc_fid_to_name[fid]) if fid in ufc_fid_to_name else None
-        )
-        r1_df = r1_df.dropna(subset=["fight_id", "fighter_id"])[
+        r1_df = _per_fighter_to_v1(corner, r1_df)[
             ["fight_id", "fighter_id"] + _r1_out_cols
         ]
     else:
