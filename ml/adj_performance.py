@@ -22,7 +22,8 @@ against what each opponent usually allows), for this one stat:
 Positive = out-landed his opponents by more than they usually get out-landed.
 Tested 2026-11 (issue #68): over 7 forecast origins not used to choose it,
 hold-out log-loss -0.0025 (6/7 origins, 16/21 seeds), better at 11 of 14
-origins overall -- strong for 2024+ hold-outs, about neutral for 2023 ones.
+origins overall -- strong for hold-outs starting 2024-04 or later (-0.003 to
+-0.013), about neutral for those starting 2023-02..2024-01.
 Eleven other AdjPerf stats (accuracies, defences, round-1 strikes, ...) were
 rejected: they duplicate the ewma_* features and destabilised RF / LightGBM.
 
