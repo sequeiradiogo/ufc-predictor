@@ -6,6 +6,7 @@ Artifact-free tests for training-time helpers:
   - bounded isotonic calibrators
   - final temperature scaling of the ensemble
   - eval-tier training / calibration windows
+  - --tune: fit-window only, seeded, log-loss objective (issue #42)
 """
 
 import sys
@@ -23,6 +24,7 @@ from ml.ML_data_preparation_v1 import make_symmetric, mirror_features
 from config import TRAIN_TEST_SPLIT
 from ml.train_v1_models import CAL_PROB_MAX, CAL_PROB_MIN, _isotonic, _mirror, eval_fit_end, time_split
 from ml.train_v1_models import preprocess as win_preprocess
+import ml.train_v1_models as tv
 from config import FINISH_ONLY_FEATURES
 
 
@@ -140,6 +142,50 @@ class TestEvalWindows:
         train, test = time_split(df)
         assert len(train) == fit_end
         assert test.index[0] == split
+
+
+def _toy_season(n: int = 600, seed: int = 0) -> pd.DataFrame:
+    """Daily fights with a learnable signal, enough for 5 purged CV folds."""
+    rng = np.random.default_rng(seed)
+    elo = rng.normal(0, 100, n)
+    return pd.DataFrame({
+        "fight_id": [f"f{i}" for i in range(n)],
+        "date":     pd.date_range("2018-01-01", periods=n, freq="3D"),
+        "division": ["lightweight"] * n,
+        "target":   (rng.uniform(size=n) < 1 / (1 + np.exp(-elo / 100))).astype(int),
+        "elo_diff": elo,
+        "reach_diff": rng.normal(0, 5, n),
+    })
+
+
+class TestTuning:
+    """--tune (issue #42): eval tuning must not see the calibration window or the
+    test split (until 2026-11 its CV ran over the whole CSV), the search is seeded,
+    and the objective is log-loss on symmetrised probabilities unless asked otherwise."""
+
+    def test_eval_tuning_sees_only_the_fit_window(self):
+        df = _toy_season()
+        assert len(tv._tune_window(df, prod=False)) == eval_fit_end(len(df))
+        assert len(tv._tune_window(df, prod=True)) == len(df)
+
+    def test_lr_search_is_reproducible_and_scores_logloss(self, monkeypatch):
+        df = _toy_season()
+        seen = []
+        real = tv._tune
+
+        def spy(name, d, n_trials, suggest, fit_proba, metric=None):
+            seen.append(metric or tv.TUNE_METRIC)
+            return real(name, d, n_trials, suggest, fit_proba, metric)
+
+        monkeypatch.setattr(tv, "_tune", spy)
+        a = tv._tune_lr(df, 3)
+        b = tv._tune_lr(df, 3)
+        assert a == b
+        assert seen == ["logloss", "logloss"]
+
+    def test_unknown_metric_is_rejected(self):
+        with pytest.raises(ValueError):
+            tv._tune("LR", _toy_season(), 1, lambda t: {}, lambda *a: None, metric="auc")
 
 
 class TestFinishOnlyFeatures:
