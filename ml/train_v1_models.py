@@ -7,7 +7,7 @@ artifacts to models_v1/.
 
 Usage:
     python ml/train_v1_models.py
-    python ml/train_v1_models.py --tune --trials 100
+    python ml/train_v1_models.py --tune --trials 100      # CV log-loss on the eval fit window
     python ml/train_v1_models.py --model xgb
     python ml/train_v1_models.py --model lr --tune --trials 50
 """
@@ -173,11 +173,64 @@ def time_split(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     return train, test
 
 
+# ── Hyperparameter tuning (--tune) ────────────────────────────────────────────
+
+# CV objective of --tune: "logloss" (on corner-symmetrised probabilities, as at
+# inference) or "accuracy" (the only objective until 2026-11, issue #42).
+TUNE_METRIC = "logloss"
+
+
+def _tune_window(df: pd.DataFrame, prod: bool) -> pd.DataFrame:
+    """Rows --tune may see: all of them for prod, only the base models' fit window
+    for the eval tier. Until 2026-11 eval tuning ran its CV over the whole CSV, so
+    tuned params had seen the calibration window and the test split (issue #42)."""
+    return df if prod else df.iloc[:eval_fit_end(len(df))]
+
+
+def _tune(name: str, df: pd.DataFrame, n_trials: int, suggest, fit_proba,
+          metric: str | None = None) -> dict:
+    """Optuna search (seeded TPE) over purged walk-forward CV folds of *df*.
+
+    suggest(trial) -> params; fit_proba(params, X_tr, y_tr, weights, X_va) ->
+    corner-symmetrised P(red) on X_va. Log-loss is minimised, accuracy maximised.
+    """
+    import optuna
+    from sklearn.metrics import log_loss
+
+    metric = metric or TUNE_METRIC
+    if metric not in ("logloss", "accuracy"):
+        raise ValueError(f"unknown tune metric {metric!r}")
+    optuna.logging.set_verbosity(optuna.logging.WARNING)
+    log.info("Tuning %s on %s (%d trials, %d fights up to %s)...",
+             name, metric, n_trials, len(df), df["date"].max().date())
+    folds = []
+    for tr_idx, va_idx in PurgedWalkForwardCV(n_splits=5, gap_days=180).split(df["date"]):
+        sym = make_symmetric(df.iloc[tr_idx].copy())
+        X_tr, y_tr = preprocess(sym)
+        X_va, y_va = preprocess(df.iloc[va_idx])
+        folds.append((X_tr, y_tr, compute_sample_weights(sym["date"]), X_va, y_va.values))
+
+    def objective(trial) -> float:
+        params = suggest(trial)
+        scores = []
+        for X_tr, y_tr, w, X_va, y_va in folds:
+            p = np.clip(fit_proba(params, X_tr, y_tr, w, X_va), 1e-6, 1 - 1e-6)
+            scores.append(log_loss(y_va, p, labels=[0, 1]) if metric == "logloss"
+                          else float(np.mean((p >= 0.5) == y_va)))
+        return float(np.mean(scores))
+
+    study = optuna.create_study(direction="minimize" if metric == "logloss" else "maximize",
+                                sampler=optuna.samplers.TPESampler(seed=RANDOM_STATE))
+    study.optimize(objective, n_trials=n_trials, show_progress_bar=False, catch=(Exception,))
+    log.info("%s best CV %s: %.4f  params: %s", name, metric, study.best_value, study.best_params)
+    return study.best_params
+
+
 # ── XGBoost ───────────────────────────────────────────────────────────────────
 
 def train_xgb(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: bool = False) -> None:
     log.info("=== XGBoost%s ===", " (prod)" if prod else "")
-    params = _tune_xgb(df, n_trials) if tune else {**XGB_PARAMS, "random_state": RANDOM_STATE}
+    params = _tune_xgb(_tune_window(df, prod), n_trials) if tune else {**XGB_PARAMS, "random_state": RANDOM_STATE}
     fit_p  = {k: v for k, v in params.items() if k != "eval_metric"}
 
     if prod:
@@ -211,14 +264,8 @@ def train_xgb(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: bo
 
 
 def _tune_xgb(df: pd.DataFrame, n_trials: int) -> dict:
-    import optuna
-    optuna.logging.set_verbosity(optuna.logging.WARNING)
-    log.info("Tuning XGBoost (%d trials)...", n_trials)
-    pcv = PurgedWalkForwardCV(n_splits=5, gap_days=180)
-    X_all, y_all = preprocess(df)
-
-    def objective(trial) -> float:
-        p = {
+    def suggest(trial) -> dict:
+        return {
             "n_estimators":     trial.suggest_int("n_estimators",     100, 800),
             "learning_rate":    trial.suggest_float("learning_rate",   0.01, 0.3, log=True),
             "max_depth":        trial.suggest_int("max_depth",         2, 7),
@@ -230,28 +277,20 @@ def _tune_xgb(df: pd.DataFrame, n_trials: int) -> dict:
             "reg_lambda":       trial.suggest_float("reg_lambda",      0.5, 5.0),
             "random_state":     RANDOM_STATE,
         }
-        scores = []
-        for tr_idx, va_idx in pcv.split(df["date"]):
-            sym = make_symmetric(df.iloc[tr_idx].copy())
-            Xtr, ytr = preprocess(sym)
-            Xva, yva = preprocess(df.iloc[va_idx])
-            m = XGBClassifier(**p, eval_metric="logloss", verbosity=0)
-            m.fit(Xtr, ytr, sample_weight=compute_sample_weights(sym["date"]))
-            scores.append(accuracy_score(yva, m.predict(Xva)))
-        return float(np.mean(scores))
 
-    study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=n_trials, show_progress_bar=True)
-    best = {**study.best_params, "random_state": RANDOM_STATE}
-    log.info("XGBoost best CV: %.2f%%  params: %s", study.best_value * 100, best)
-    return best
+    def fit_proba(p, X_tr, y_tr, w, X_va):
+        m = XGBClassifier(**p, eval_metric="logloss", verbosity=0)
+        m.fit(X_tr, y_tr, sample_weight=w)
+        return symmetric_proba(lambda Z: m.predict_proba(Z)[:, 1], X_va)
+
+    return {**_tune("XGBoost", df, n_trials, suggest, fit_proba), "random_state": RANDOM_STATE}
 
 
 # ── Logistic Regression ───────────────────────────────────────────────────────
 
 def train_lr(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: bool = False) -> None:
     log.info("=== Logistic Regression%s ===", " (prod)" if prod else "")
-    params = _tune_lr(df, n_trials) if tune else LR_PARAMS
+    params = _tune_lr(_tune_window(df, prod), n_trials) if tune else LR_PARAMS
 
     n = len(df)
     if prod:
@@ -302,42 +341,28 @@ def train_lr(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: boo
 
 
 def _tune_lr(df: pd.DataFrame, n_trials: int) -> dict:
-    import optuna
-    optuna.logging.set_verbosity(optuna.logging.WARNING)
-    log.info("Tuning LR (%d trials)...", n_trials)
-    pcv = PurgedWalkForwardCV(n_splits=5, gap_days=180)
-    X_all, y_all = preprocess(df)
-
-    def objective(trial) -> float:
-        p = {
+    def suggest(trial) -> dict:
+        return {
             "C":            trial.suggest_float("C", 0.001, 10.0, log=True),
             "solver":       trial.suggest_categorical("solver", ["lbfgs", "saga"]),
             "max_iter":     trial.suggest_int("max_iter", 200, 2000),
             "class_weight": trial.suggest_categorical("class_weight", [None, "balanced"]),
         }
-        scores = []
-        for tr_idx, va_idx in pcv.split(df["date"]):
-            sym = make_symmetric(df.iloc[tr_idx].copy())
-            Xtr, ytr = preprocess(sym)
-            sc = StandardScaler()
-            Xtr_s = sc.fit_transform(Xtr)
-            Xva_s = sc.transform(X_all.iloc[va_idx])
-            m = LogisticRegression(**p)
-            m.fit(Xtr_s, ytr, sample_weight=compute_sample_weights(sym["date"]))
-            scores.append(accuracy_score(y_all.iloc[va_idx], m.predict(Xva_s)))
-        return float(np.mean(scores))
 
-    study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=n_trials, show_progress_bar=True)
-    log.info("LR best CV: %.2f%%  params: %s", study.best_value * 100, study.best_params)
-    return study.best_params
+    def fit_proba(p, X_tr, y_tr, w, X_va):
+        sc = StandardScaler()
+        m = LogisticRegression(**p)
+        m.fit(sc.fit_transform(X_tr), y_tr, sample_weight=w)
+        return symmetric_proba(lambda Z: m.predict_proba(sc.transform(Z))[:, 1], X_va)
+
+    return _tune("LR", df, n_trials, suggest, fit_proba)
 
 
 # ── Random Forest ─────────────────────────────────────────────────────────────
 
 def train_rf(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: bool = False) -> None:
     log.info("=== Random Forest%s ===", " (prod)" if prod else "")
-    params = _tune_rf(df, n_trials) if tune else {**RF_PARAMS, "random_state": RANDOM_STATE}
+    params = _tune_rf(_tune_window(df, prod), n_trials) if tune else {**RF_PARAMS, "random_state": RANDOM_STATE}
 
     if prod:
         train_sym     = make_symmetric(df)
@@ -368,14 +393,8 @@ def train_rf(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: boo
 
 
 def _tune_rf(df: pd.DataFrame, n_trials: int) -> dict:
-    import optuna
-    optuna.logging.set_verbosity(optuna.logging.WARNING)
-    log.info("Tuning RF (%d trials)...", n_trials)
-    pcv = PurgedWalkForwardCV(n_splits=5, gap_days=180)
-    X_all, y_all = preprocess(df)
-
-    def objective(trial) -> float:
-        p = {
+    def suggest(trial) -> dict:
+        return {
             "n_estimators":      trial.suggest_int("n_estimators",      100, 800),
             "max_depth":         trial.suggest_int("max_depth",          4, 20),
             "min_samples_split": trial.suggest_int("min_samples_split",  2, 20),
@@ -384,27 +403,20 @@ def _tune_rf(df: pd.DataFrame, n_trials: int) -> dict:
             "class_weight":      trial.suggest_categorical("class_weight", [None, "balanced"]),
             "random_state":      RANDOM_STATE,
         }
-        scores = []
-        for tr_idx, va_idx in pcv.split(df["date"]):
-            sym = make_symmetric(df.iloc[tr_idx].copy())
-            Xtr, ytr = preprocess(sym)
-            m = RandomForestClassifier(**p)
-            m.fit(Xtr, ytr, sample_weight=compute_sample_weights(sym["date"]))
-            scores.append(accuracy_score(y_all.iloc[va_idx], m.predict(X_all.iloc[va_idx])))
-        return float(np.mean(scores))
 
-    study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=n_trials, show_progress_bar=True)
-    best = {**study.best_params, "random_state": RANDOM_STATE}
-    log.info("RF best CV: %.2f%%  params: %s", study.best_value * 100, best)
-    return best
+    def fit_proba(p, X_tr, y_tr, w, X_va):
+        m = RandomForestClassifier(**p)
+        m.fit(X_tr, y_tr, sample_weight=w)
+        return symmetric_proba(lambda Z: m.predict_proba(Z)[:, 1], X_va)
+
+    return {**_tune("RF", df, n_trials, suggest, fit_proba), "random_state": RANDOM_STATE}
 
 
 # ── LightGBM ──────────────────────────────────────────────────────────────────
 
 def train_lgbm(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: bool = False) -> None:
     log.info("=== LightGBM%s ===", " (prod)" if prod else "")
-    params = _tune_lgbm(df, n_trials) if tune else {**LGBM_PARAMS, "random_state": RANDOM_STATE}
+    params = _tune_lgbm(_tune_window(df, prod), n_trials) if tune else {**LGBM_PARAMS, "random_state": RANDOM_STATE}
 
     if prod:
         train_sym     = make_symmetric(df)
@@ -435,14 +447,8 @@ def train_lgbm(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: b
 
 
 def _tune_lgbm(df: pd.DataFrame, n_trials: int) -> dict:
-    import optuna
-    optuna.logging.set_verbosity(optuna.logging.WARNING)
-    log.info("Tuning LightGBM (%d trials)...", n_trials)
-    pcv = PurgedWalkForwardCV(n_splits=5, gap_days=180)
-    X_all, y_all = preprocess(df)
-
-    def objective(trial) -> float:
-        p = {
+    def suggest(trial) -> dict:
+        return {
             "n_estimators":     trial.suggest_int("n_estimators",     100, 800),
             "learning_rate":    trial.suggest_float("learning_rate",   0.01, 0.3, log=True),
             "max_depth":        trial.suggest_int("max_depth",         2, 8),
@@ -453,27 +459,20 @@ def _tune_lgbm(df: pd.DataFrame, n_trials: int) -> dict:
             "reg_lambda":       trial.suggest_float("reg_lambda",      0.0, 3.0),
             "random_state":     RANDOM_STATE,
         }
-        scores = []
-        for tr_idx, va_idx in pcv.split(df["date"]):
-            sym = make_symmetric(df.iloc[tr_idx].copy())
-            Xtr, ytr = preprocess(sym)
-            m = LGBMClassifier(**p, verbosity=-1)
-            m.fit(Xtr.values, ytr, sample_weight=compute_sample_weights(sym["date"]))
-            scores.append(accuracy_score(y_all.iloc[va_idx], m.predict(X_all.iloc[va_idx].values)))
-        return float(np.mean(scores))
 
-    study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=n_trials, show_progress_bar=True)
-    best = {**study.best_params, "random_state": RANDOM_STATE}
-    log.info("LightGBM best CV: %.2f%%  params: %s", study.best_value * 100, best)
-    return best
+    def fit_proba(p, X_tr, y_tr, w, X_va):
+        m = LGBMClassifier(**p, verbosity=-1)
+        m.fit(X_tr.values, y_tr, sample_weight=w)
+        return symmetric_proba(lambda Z: m.predict_proba(Z.values)[:, 1], X_va)
+
+    return {**_tune("LightGBM", df, n_trials, suggest, fit_proba), "random_state": RANDOM_STATE}
 
 
 # ── MLP Neural Network ────────────────────────────────────────────────────────
 
 def train_mlp(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: bool = False) -> None:
     log.info("=== MLP Neural Network (PyTorch)%s ===", " (prod)" if prod else "")
-    params = _tune_mlp(df, n_trials) if tune else {**MLP_PARAMS, "random_state": RANDOM_STATE}
+    params = _tune_mlp(_tune_window(df, prod), n_trials) if tune else {**MLP_PARAMS, "random_state": RANDOM_STATE}
 
     n = len(df)
     if prod:
@@ -519,14 +518,8 @@ def train_mlp(df: pd.DataFrame, tune: bool = False, n_trials: int = 50, prod: bo
 
 
 def _tune_mlp(df: pd.DataFrame, n_trials: int) -> dict:
-    import optuna
-    optuna.logging.set_verbosity(optuna.logging.WARNING)
-    log.info("Tuning MLP (%d trials)...", n_trials)
-    pcv = PurgedWalkForwardCV(n_splits=5, gap_days=180)
-    X_all, y_all = preprocess(df)
-
-    def objective(trial) -> float:
-        p = {
+    def suggest(trial) -> dict:
+        return {
             "hidden_sizes": trial.suggest_categorical(
                 "hidden_sizes",
                 [(64, 64), (128, 64), (128, 128), (256, 128, 64), (256, 128, 64, 32)],
@@ -540,23 +533,16 @@ def _tune_mlp(df: pd.DataFrame, n_trials: int) -> dict:
             "patience":      15,
             "random_state":  RANDOM_STATE,
         }
-        scores = []
-        for tr_idx, va_idx in pcv.split(df["date"]):
-            sym = make_symmetric(df.iloc[tr_idx].copy())
-            Xtr, ytr = preprocess(sym)
-            sc = StandardScaler()
-            Xtr_s = sc.fit_transform(Xtr)
-            Xva_s = sc.transform(X_all.iloc[va_idx])
-            m = PyTorchMLP(**p)
-            m.fit(Xtr_s, ytr.values)
-            scores.append(accuracy_score(y_all.iloc[va_idx], m.predict(Xva_s)))
-        return float(np.mean(scores))
 
-    study = optuna.create_study(direction="maximize")
-    study.optimize(objective, n_trials=n_trials, show_progress_bar=True, catch=(Exception,))
-    best = {**study.best_params, "random_state": RANDOM_STATE, "max_epochs": 300, "patience": 20}
-    log.info("MLP best CV: %.2f%%  params: %s", study.best_value * 100, best)
-    return best
+    def fit_proba(p, X_tr, y_tr, w, X_va):
+        # PyTorchMLP takes no sample weights (as in train_mlp)
+        sc = StandardScaler()
+        m = PyTorchMLP(**p)
+        m.fit(sc.fit_transform(X_tr), y_tr.values)
+        return symmetric_proba(lambda Z: m.predict_proba(sc.transform(Z))[:, 1], X_va)
+
+    best = _tune("MLP", df, n_trials, suggest, fit_proba)
+    return {**best, "random_state": RANDOM_STATE, "max_epochs": 300, "patience": 20}
 
 
 # ── Stacking meta-learner ─────────────────────────────────────────────────────
@@ -860,6 +846,7 @@ def train_ensemble(df: pd.DataFrame, prod: bool = False) -> None:
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    global TUNE_METRIC
     parser = argparse.ArgumentParser(description="Train all v1 models and calibrated ensemble.")
     parser.add_argument(
         "--model",
@@ -877,6 +864,12 @@ def main() -> None:
         type=int,
         default=50,
         help="Optuna trials per model (default: 50; use 100 for production tuning).",
+    )
+    parser.add_argument(
+        "--tune-metric",
+        choices=("logloss", "accuracy"),
+        default=TUNE_METRIC,
+        help="CV objective for --tune (default: logloss; accuracy was the objective until 2026-11).",
     )
     parser.add_argument(
         "--min-date",
@@ -904,6 +897,8 @@ def main() -> None:
         import config as _cfg
         _cfg.SAMPLE_WEIGHT_ALPHA = args.alpha
         log.info("Sample weight alpha set to %.3f", args.alpha)
+
+    TUNE_METRIC = args.tune_metric
 
     df = load_data(min_date=args.min_date)
     # Record how the CSV's rates were shrunk in the tier being trained; a
