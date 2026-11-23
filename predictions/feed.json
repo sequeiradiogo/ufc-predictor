@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generated_at": "2026-11-20T19:32Z",
+  "generated_at": "2026-11-23T23:07Z",
   "finish_names": [
     "Decision",
     "KO/TKO",
@@ -846,19 +846,150 @@
   },
   "track_record": {
     "since": "2026-10-24",
-    "events": 4,
-    "fights": 45,
-    "model_acc": 0.5333,
-    "fights_with_odds": 43,
-    "model_acc_with_odds": 0.5581,
-    "favorite_acc": 0.7674,
+    "events": 5,
+    "fights": 55,
+    "model_acc": 0.5818,
+    "fights_with_odds": 53,
+    "model_acc_with_odds": 0.6038,
+    "favorite_acc": 0.7358,
     "min_confidence": 0.55,
-    "model_pl": -6.69,
-    "model_staked": 44.0,
-    "model_roi": -0.152,
-    "favorite_roi": 0.1276
+    "model_pl": -0.03,
+    "model_staked": 54.0,
+    "model_roi": -0.0006,
+    "favorite_roi": 0.0881
   },
   "events": [
+    {
+      "date": "2026-11-21",
+      "name": "UFC Fight Night: Prochazka vs. Stirling",
+      "model_ok": 8,
+      "n": 10,
+      "fav_model_ok": 8,
+      "fav_ok": 6,
+      "fav_n": 10,
+      "fights": [
+        {
+          "red_name": "Jiri Prochazka",
+          "blue_name": "Navajo Stirling",
+          "pick": "Navajo Stirling",
+          "confidence": 0.902,
+          "odds": [
+            180,
+            -215
+          ],
+          "result": "Navajo Stirling (KO R2)",
+          "correct": true
+        },
+        {
+          "red_name": "Aljamain Sterling",
+          "blue_name": "Kevin Vallejos",
+          "pick": "Kevin Vallejos",
+          "confidence": 0.559,
+          "odds": [
+            108,
+            -126
+          ],
+          "result": "Kevin Vallejos (Dec)",
+          "correct": true
+        },
+        {
+          "red_name": "Dan Hooker",
+          "blue_name": "Brian Ortega",
+          "pick": "Dan Hooker",
+          "confidence": 0.582,
+          "odds": [
+            -188,
+            158
+          ],
+          "result": "Dan Hooker (Dec)",
+          "correct": true
+        },
+        {
+          "red_name": "Kyoji Horiguchi",
+          "blue_name": "Asu Almabayev",
+          "pick": "Asu Almabayev",
+          "confidence": 0.685,
+          "odds": [
+            -198,
+            166
+          ],
+          "result": "Kyoji Horiguchi (Dec)",
+          "correct": false
+        },
+        {
+          "red_name": "Jared Cannonier",
+          "blue_name": "Ikram Aliskerov",
+          "pick": "Ikram Aliskerov",
+          "confidence": 0.946,
+          "odds": [
+            245,
+            -300
+          ],
+          "result": "Ikram Aliskerov (Dec)",
+          "correct": true
+        },
+        {
+          "red_name": "Aleksandre Topuria",
+          "blue_name": "Santiago Luna",
+          "pick": "Santiago Luna",
+          "confidence": 0.821,
+          "odds": [
+            -275,
+            225
+          ],
+          "result": "Santiago Luna (Dec (Split))",
+          "correct": true
+        },
+        {
+          "red_name": "Shamil Gaziev",
+          "blue_name": "Tallison Teixeira",
+          "pick": "Tallison Teixeira",
+          "confidence": 0.734,
+          "odds": [
+            -196,
+            164
+          ],
+          "result": "Tallison Teixeira (Dec)",
+          "correct": true
+        },
+        {
+          "red_name": "Amir Albazi",
+          "blue_name": "Alessandro Costa",
+          "pick": "Alessandro Costa",
+          "confidence": 0.569,
+          "odds": [
+            -104,
+            -112
+          ],
+          "result": "Amir Albazi (Sub R3)",
+          "correct": false
+        },
+        {
+          "red_name": "Jake Matthews",
+          "blue_name": "Tahir Abdullayev",
+          "pick": "Tahir Abdullayev",
+          "confidence": 0.558,
+          "odds": [
+            -250,
+            205
+          ],
+          "result": "Tahir Abdullayev (Dec)",
+          "correct": true
+        },
+        {
+          "red_name": "Nikolas Motta",
+          "blue_name": "Dom Mar Fan",
+          "pick": "Dom Mar Fan",
+          "confidence": 0.909,
+          "odds": [
+            140,
+            -166
+          ],
+          "result": "Dom Mar Fan (Dec)",
+          "correct": true
+        }
+      ]
+    },
     {
       "date": "2026-11-14",
       "name": "UFC 334: Gane vs. Hokit",
