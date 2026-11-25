@@ -1,0 +1,5 @@
+outs:
+- md5: 4942f6014c093b9d4a5f308babe097dc
+  size: 30937088
+  hash: md5
+  path: ufc_ufcstats.db

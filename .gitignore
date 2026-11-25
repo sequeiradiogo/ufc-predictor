@@ -25,16 +25,14 @@ logs/
 ml/*.csv
 ml/*.settings.joblib
 
-# Databases -- regenerate with db/rebuild_ufcstats_db.py or scripts/scrape_history.py
+# Databases -- versioned with DVC (db/*.db.dvc are tracked; `dvc pull` fetches them)
 db/*.db
 db/*_backup_*.db
 
-# Trained model artifacts -- distributed via the data-artifacts-latest GitHub Release
-# (models_v1.tar.gz / models_v1_prod.tar.gz), not tracked in git.
-# See README "Setup" for the download step.
-models_v1/*.joblib
-models_v1_prod/*.joblib
-models_v1_prod/prod_validation.json
+# Trained model artifacts -- versioned with DVC in the private R2 bucket (issue #70):
+# git tracks models_v1.dvc / models_v1_prod.dvc, `dvc pull` fetches the files.
+/models_v1
+/models_v1_prod
 
 # Raw source CSVs -- seed CSVs are tracked, others are not
 raw_data/*.csv
@@ -47,8 +45,10 @@ raw_data/*.csv
 !raw_data/espn_career_fights.csv
 # needed at inference (mma_elo / opponent quality replay it), so tracked like the others
 !raw_data/espn_opponent_bouts.csv
-# ESPN response cache (scripts/scrape_espn_careers.py) -- resumable, never committed
+# ESPN response cache (scripts/scrape_espn_careers.py) -- resumable, never committed;
+# backed up to R2 as raw_data/espn_cache.tar.gz via DVC (issue #70)
 raw_data/espn_cache/
+/raw_data/espn_cache.tar.gz
 
 # Claude Code local config
 .claude/

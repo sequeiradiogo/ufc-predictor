@@ -11,6 +11,12 @@ permissions:
 jobs:
   predict:
     runs-on: ubuntu-latest
+    # Data lives in the private Cloudflare R2 bucket, versioned with DVC (issue #70).
+    # The DVC S3 remote reads the standard AWS variables; the token is scoped to that
+    # bucket only (Object Read & Write).
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -25,36 +31,30 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
+          pip install "dvc[s3]==3.67.1"
           playwright install chromium --with-deps
 
-      - name: Download DB artifacts
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release download data-artifacts-latest --dir db/ --pattern "*.db"
-
-      - name: Download rankings
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release download data-artifacts-latest --dir raw_data/ --pattern "rankings_history.csv"
-
-      - name: Download and extract model artifacts
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release download data-artifacts-latest --pattern "models_v1_prod.tar.gz" --clobber
-          tar -xzf models_v1_prod.tar.gz
-          rm models_v1_prod.tar.gz
+      - name: Pull DBs, rankings and prod models from R2
+        run: dvc pull db/ufc_ufcstats.db db/ufc_v2.db raw_data/rankings_history.csv models_v1_prod
 
       - name: Refresh live rankings snapshot
         id: refresh_rankings
         continue-on-error: true
         run: python scrapers/ufc_rankings_web.py
 
-      - name: Upload updated rankings to release
+      # rankings_history.csv can't be rebuilt (the scraper only sees today's
+      # rankings), so the new version goes to R2 before anything is committed:
+      # the .dvc file committed below must never point at data R2 doesn't have.
+      # Transition (issue #70): also mirrored to the old public release until the
+      # DVC path has run for two monthly refreshes.
+      - name: Version updated rankings (R2 + release mirror)
         if: steps.refresh_rankings.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload data-artifacts-latest raw_data/rankings_history.csv --clobber
+        run: |
+          dvc add raw_data/rankings_history.csv
+          dvc push raw_data/rankings_history.csv
+          gh release upload data-artifacts-latest raw_data/rankings_history.csv --clobber
 
       # predict.py silently computes garbage splm/sapm from a broken DB
       # (UFC 329 shipped that way) -- refuse to predict instead.
@@ -68,10 +68,10 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add predictions/
+          git add predictions/ raw_data/rankings_history.csv.dvc
           if git diff --cached --quiet; then
-            echo "No new predictions to commit."
+            echo "No new predictions or rankings to commit."
           else
-            git commit -m "chore: add event predictions [skip ci]"
+            git commit -m "chore: add event predictions and rankings snapshot [skip ci]"
             git push
           fi
