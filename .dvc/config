@@ -1,0 +1,7 @@
+[core]
+    analytics = false
+    remote = r2
+['remote "r2"']
+    url = s3://ufc-predictor-data
+    endpointurl = https://499b3fb6b438bcd8d503face5f914970.r2.cloudflarestorage.com
+    region = auto

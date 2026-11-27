@@ -16,6 +16,12 @@ permissions:
 jobs:
   refresh:
     runs-on: ubuntu-latest
+    # Data lives in the private Cloudflare R2 bucket, versioned with DVC (issue #70).
+    # The DVC S3 remote reads the standard AWS variables; the token is scoped to that
+    # bucket only (Object Read & Write).
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
 
     steps:
       - uses: actions/checkout@v4
@@ -30,14 +36,14 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
+          pip install "dvc[s3]==3.67.1"
           playwright install chromium --with-deps
 
-      - name: Download DB and rankings artifacts
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release download data-artifacts-latest --dir db/ --pattern "*.db"
-          gh release download data-artifacts-latest --dir raw_data/ --pattern "rankings_history.csv"
+      # The models are not pulled: they are retrained below. Neither is the ESPN
+      # response cache (raw_data/espn_cache.tar.gz): it caches athlete eventlogs
+      # forever, so with it the incremental ESPN scrape would miss new bouts.
+      - name: Pull DBs and rankings from R2
+        run: dvc pull db/ufc_ufcstats.db db/ufc_v2.db raw_data/rankings_history.csv
 
       - name: Refresh data
         env:
@@ -119,12 +125,22 @@ jobs:
         if: ${{ inputs.dry_run != true }}
         run: python scripts/check_live_parity.py --events 4 --min-match 0.9
 
+      # New data versions go to R2 *before* the commit: a pushed .dvc file must
+      # never point at data the bucket doesn't have. Unchanged files keep their
+      # hash and are not uploaded again.
+      - name: Version DBs, rankings and models with DVC (push to R2)
+        if: ${{ inputs.dry_run != true }}
+        run: |
+          dvc add db/ufc_ufcstats.db db/ufc_v2.db raw_data/rankings_history.csv models_v1 models_v1_prod
+          dvc push db/ufc_ufcstats.db db/ufc_v2.db raw_data/rankings_history.csv models_v1 models_v1_prod
+
       - name: Commit updated artifacts
         if: ${{ inputs.dry_run != true }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add raw_data/ufc-master.csv raw_data/espn_dwcs_fights.csv raw_data/espn_fighter_map.csv raw_data/espn_career_fights.csv raw_data/espn_opponent_bouts.csv analytics/reports/prod_v2_shadow.csv
+          git add db/ufc_ufcstats.db.dvc db/ufc_v2.db.dvc raw_data/rankings_history.csv.dvc models_v1.dvc models_v1_prod.dvc
           if git diff --cached --quiet; then
             echo "No changes to commit."
           else
@@ -132,6 +148,9 @@ jobs:
             git push
           fi
 
+      # Transition (issue #70): R2 + DVC is the source of truth; the two release
+      # steps below mirror it to the old public releases until the DVC path has
+      # run for two monthly refreshes, then they are removed.
       - name: Upload updated DB and model artifacts to release
         if: ${{ inputs.dry_run != true }}
         env:

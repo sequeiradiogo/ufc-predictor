@@ -49,12 +49,14 @@ cd ufc-predictor
 pip install -r requirements.txt
 ```
 
-**Model artifacts and databases are distributed as GitHub Release assets** (too large to commit -- see [Repo size note](#repo-size-note)). Download and extract them before running predictions:
+**Data (databases, rankings history, trained models) is versioned with [DVC](https://dvc.org) in a private Cloudflare R2 bucket** -- see [Data storage](#data-storage). With access to the bucket:
 ```bash
-gh release download data-artifacts-latest --dir db/ --pattern "*.db"
-gh release download data-artifacts-latest --pattern "models_v1_prod.tar.gz"
-tar -xzf models_v1_prod.tar.gz
+pip install "dvc[s3]==3.67.1"
+dvc remote modify --local r2 access_key_id     "<R2 access key id>"
+dvc remote modify --local r2 secret_access_key "<R2 secret access key>"
+dvc pull db/ufc_ufcstats.db db/ufc_v2.db raw_data/rankings_history.csv models_v1_prod
 ```
+Without it, the UFCStats DB can be rebuilt from scratch with `scripts/scrape_history.py` (overnight) and the rest of the pipeline below.
 
 ---
 
@@ -120,8 +122,8 @@ python scripts/backfill_rounds.py
 python -c "from db.rolling import main; from config import DB_UFCSTATS_PATH; main(db_path=DB_UFCSTATS_PATH)"
 python scripts/check_db_health.py
 
-# 2. Download the latest rankings (gitignored, lives in the GitHub Release)
-gh release download data-artifacts-latest --dir raw_data/ --pattern "rankings_history.csv"
+# 2. Get the latest rankings history (gitignored, versioned with DVC)
+dvc pull raw_data/rankings_history.csv
 
 # 3. Enrich the v1 CSV (in this order)
 python scripts/add_defensive_stats_to_csv.py
@@ -156,7 +158,7 @@ GitHub Actions workflows keep the system running without manual intervention:
 |----------|----------|--------------|
 | `weekly-predictions.yml` | Every Friday | Refreshes UFC.com rankings, checks DB health, predicts the upcoming card, commits to `predictions/` |
 | `monday-results.yml` | Every Monday | Scores the weekend's predictions against results and closing odds (incl. the bookmaker-favorite baseline), updates accuracy and P/L |
-| `monthly-refresh.yml` | 1st of month | Scrapes new fights, runs the full enrichment pipeline, retrains all models (eval + prod), gates on live-feature parity, uploads DBs and models to the release |
+| `monthly-refresh.yml` | 1st of month | Scrapes new fights, runs the full enrichment pipeline, retrains all models (eval + prod), gates on live-feature parity, versions DBs and models with DVC (pushed to R2) |
 | `tests.yml` | Every PR + push to `main` | Runs the test suite (`pytest tests/ -v`) |
 
 ---
@@ -242,9 +244,9 @@ The pipeline is fully reproducible -- rebuild the DB from scratch with `scripts/
 
 ---
 
-## Repo size note
+## Data storage
 
-Trained model artifacts (`.joblib`, up to ~27MB each) and SQLite databases are distributed via the `data-artifacts-latest` GitHub Release rather than committed to git -- binary artifacts don't diff, so committing a new copy on every retrain would bloat the repo's history indefinitely. `monthly-refresh.yml` uploads fresh artifacts to the release after each retrain instead of committing them.
+Trained model artifacts (`.joblib`, up to ~27MB each), the SQLite databases, the rankings history and the raw ESPN response cache are not committed to git -- binary artifacts don't diff, so committing a new copy on every retrain would bloat the repo's history indefinitely. They are versioned with DVC: git tracks a small `.dvc` file per artifact, and the content lives in a private Cloudflare R2 bucket, so `git checkout <commit> && dvc pull` restores exactly the data a given commit used. The code and the predictions stay public. `monthly-refresh.yml` pushes each retrain's artifacts to R2 and commits their `.dvc` files.
 
 ## License
 

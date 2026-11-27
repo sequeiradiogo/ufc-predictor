@@ -1,0 +1,5 @@
+outs:
+- md5: dd6040be2dae661f89bcfd89f58b477f
+  size: 4507104
+  hash: md5
+  path: rankings_history.csv
