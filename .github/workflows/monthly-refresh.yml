@@ -40,8 +40,8 @@ jobs:
           playwright install chromium --with-deps
 
       # The models are not pulled: they are retrained below. Neither is the ESPN
-      # response cache (raw_data/espn_cache.tar.gz): it caches athlete eventlogs
-      # forever, so with it the incremental ESPN scrape would miss new bouts.
+      # response cache (raw_data/espn_cache.tar.gz): the incremental ESPN scrape
+      # only fetches fighters not stored yet, so it doesn't need it.
       - name: Pull DBs and rankings from R2
         run: dvc pull db/ufc_ufcstats.db db/ufc_v2.db raw_data/rankings_history.csv
 

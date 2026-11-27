@@ -40,6 +40,7 @@ import unicodedata
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import requests
 
@@ -92,24 +93,49 @@ def _get(url: str, retries: int = 3) -> dict:
 class CachedFetcher:
     """Thread-safe GET with an on-disk JSON cache (one file per URL) -- makes long scrapes resumable.
 
-    Completed fights never change, so a cached response is reused forever; delete the
-    cache directory to force a refresh. 404s are cached as {} too.
+    Completed fights, their status and events never change, so those responses are
+    reused forever. An athlete's eventlog grows with every new bout, so it expires
+    after *eventlog_max_age_days* (file mtime; an archive restored from R2 carries a
+    fixed 2000-01-01 mtime, so its eventlogs are re-fetched once). Until 2026-11 eventlogs
+    were cached forever too, and `--full` with the cache present missed every bout
+    fought after it was cached. 404s are cached as {} too.
     """
 
-    def __init__(self, cache_dir: Path, delay: float = _DELAY):
+    # Query parameters that don't change the response: every $ref ESPN returns carries
+    # ?lang=en&region=us. Everything else (limit, page) is part of the cache key.
+    _IGNORED_PARAMS = {"lang", "region"}
+
+    def __init__(self, cache_dir: Path, delay: float = _DELAY, eventlog_max_age_days: float = 30):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.delay = delay
+        self.eventlog_max_age = eventlog_max_age_days * 86400
         self._local = threading.local()
 
+    @classmethod
+    def _key_url(cls, url: str) -> str:
+        """The URL the cache is keyed on: https, without lang/region. Until 2026-11 the
+        whole query string was dropped, so eventlog page 2 got page 1's response."""
+        parts = urlsplit(url.replace("http://", "https://"))
+        query = sorted((k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
+                       if k not in cls._IGNORED_PARAMS)
+        return urlunsplit(parts._replace(query=urlencode(query), fragment=""))
+
     def _path(self, url: str) -> Path:
-        key = hashlib.md5(url.split("?")[0].replace("http://", "https://").encode()).hexdigest()
+        key = hashlib.md5(self._key_url(url).encode()).hexdigest()
         return self.cache_dir / key[:2] / f"{key}.json"
+
+    def _fresh(self, path: Path, url: str) -> bool:
+        if not path.exists():
+            return False
+        if "/eventlog" in urlsplit(url).path:
+            return time.time() - path.stat().st_mtime < self.eventlog_max_age
+        return True
 
     def get(self, url: str) -> dict:
         url = url.replace("http://", "https://")
         path = self._path(url)
-        if path.exists():
+        if self._fresh(path, url):
             return json.loads(path.read_text(encoding="utf-8"))
         if not hasattr(self._local, "session"):
             self._local.session = requests.Session()
