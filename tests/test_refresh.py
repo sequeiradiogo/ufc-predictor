@@ -37,6 +37,7 @@ from scrapers.ufcstats import (
     _parse_height_cm,
     _parse_reach_cm,
     _scheduled_rounds,
+    _abs_url,
 )
 
 
@@ -148,6 +149,63 @@ class TestIdFromUrl:
 
     def test_trailing_slash(self):
         assert _id_from_url("http://www.ufcstats.com/fighter-details/abc123/") == "abc123"
+
+
+class TestAbsUrl:
+    """Since 2026-11 ufcstats.com emits relative links ("/event-details/<id>");
+    Playwright can't navigate to them, and the monthly scrape found 0 fights."""
+
+    def test_relative(self):
+        assert _abs_url("/event-details/402ea3b5ee233852") ==             "http://www.ufcstats.com/event-details/402ea3b5ee233852"
+
+    def test_absolute_unchanged(self):
+        u = "http://www.ufcstats.com/fight-details/1c1afd4cf80c8506"
+        assert _abs_url(u) == u
+
+    def test_whitespace(self):
+        assert _abs_url("  /fighter-details/abc \n") == "http://www.ufcstats.com/fighter-details/abc"
+
+
+class TestEventRowLinks:
+    """_scrape_event must find each fight's link with the old markup (row
+    data-link, absolute) and the 2026-11 one (no data-link, relative <a>)."""
+
+    @staticmethod
+    def _page(row_attrs, fight_href):
+        from bs4 import BeautifulSoup
+        fight_a = f'<a href="{fight_href}">View</a>' if fight_href else ""
+        return BeautifulSoup(f"""
+        <table><tr class="b-fight-details__table-row b-fight-details__table-row__hover" {row_attrs}>
+          <td class="b-fight-details__table-col">{fight_a}</td>
+          <td class="b-fight-details__table-col">
+            <p><a href="/fighter-details/aaa111">Red</a></p>
+            <p><a href="/fighter-details/bbb222">Blue</a></p>
+          </td>
+        </tr></table>""", "lxml")
+
+    def _run(self, monkeypatch, soup):
+        import scrapers.ufcstats as u
+        seen = []
+
+        def fake_fight(**kw):
+            seen.append((kw["fight_id"], kw["fight_url"], kw["r_fid"], kw["b_fid"]))
+            return None
+
+        monkeypatch.setattr(u, "_scrape_fight", fake_fight)
+        event = {"event_id": "e1", "name": "UFC X", "date": "2026-11-14", "url": "/event-details/e1"}
+        u._scrape_event(event, set(), lambda url: soup)
+        return seen
+
+    def test_relative_anchor_without_data_link(self, monkeypatch):
+        seen = self._run(monkeypatch, self._page("", "/fight-details/30dbf1eceb2e1f8d"))
+        assert seen == [("30dbf1eceb2e1f8d",
+                         "http://www.ufcstats.com/fight-details/30dbf1eceb2e1f8d",
+                         "aaa111", "bbb222")]
+
+    def test_old_data_link(self, monkeypatch):
+        url = "http://www.ufcstats.com/fight-details/1c1afd4cf80c8506"
+        seen = self._run(monkeypatch, self._page(f'data-link="{url}"', None))
+        assert seen == [("1c1afd4cf80c8506", url, "aaa111", "bbb222")]
 
 
 class TestHeightReach:
