@@ -56,6 +56,31 @@ def _existing_fighter_ids(conn: sqlite3.Connection) -> set[str]:
 
 # -- Scraping ------------------------------------------------------------------
 
+# An event UFCStats lists as completed but that yields no fights is a scrape
+# failure, unless it's this recent (results can be posted after the listing).
+EMPTY_EVENT_GRACE_DAYS = 2
+
+
+def check_empty_events(empty_events: list[dict], today: date | None = None) -> None:
+    """Exit 1 if a completed event older than EMPTY_EVENT_GRACE_DAYS yielded no
+    fights. Until 2026-11 a page that failed to load (or a ufcstats.com markup
+    change) was indistinguishable from "no new fights", and the monthly refresh
+    went green while skipping two events."""
+    today = today or date.today()
+    stale = [e for e in empty_events
+             if e.get("date") and (today - date.fromisoformat(e["date"])).days > EMPTY_EVENT_GRACE_DAYS]
+    for e in empty_events:
+        level = log.error if e in stale else log.warning
+        level("Completed event yielded no fights: %s (%s) %s", e.get("name"), e.get("date"), e.get("url"))
+    if stale:
+        log.error(
+            "%d completed event(s) older than %d days scraped to 0 fights -- the "
+            "UFCStats page failed to load or its markup changed. Not treating this "
+            "as 'no new fights'.", len(stale), EMPTY_EVENT_GRACE_DAYS,
+        )
+        sys.exit(1)
+
+
 def scrape_new_fights(since: date) -> dict:
     """
     Scrape new fights since *since* from ufcstats.com and enrich with odds
@@ -267,6 +292,7 @@ def refresh_auto(dry_run: bool = False) -> None:
     log.info("Last recorded event: %s. Checking for new fights...", last_date)
 
     data = scrape_new_fights(since=last_date)
+    check_empty_events(data.get("empty_events", []))
 
     if not data["fights"]:
         log.info("No new fights found since %s. Database is up to date.", last_date)
