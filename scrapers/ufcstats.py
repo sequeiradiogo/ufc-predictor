@@ -23,6 +23,7 @@ import time
 from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
+from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
 
@@ -51,7 +52,7 @@ def _browser_session():
 
         def get(url: str) -> BeautifulSoup:
             time.sleep(_DELAY)
-            page.goto(url, wait_until="networkidle", timeout=30_000)
+            page.goto(_abs_url(url), wait_until="networkidle", timeout=30_000)
             return BeautifulSoup(page.content(), "lxml")
 
         try:
@@ -99,6 +100,12 @@ def _parse_date(text: str) -> str | None:
     if not mon:
         return None
     return f"{m.group(3)}-{mon}-{int(m.group(2)):02d}"
+
+
+def _abs_url(url: str) -> str:
+    """Resolve a ufcstats.com href against BASE. Since 2026-11 the site emits
+    relative links ("/event-details/<id>"), which Playwright can't navigate to."""
+    return urljoin(BASE + "/", url.strip())
 
 
 def _id_from_url(url: str) -> str:
@@ -192,7 +199,7 @@ def _fetch_completed_events(since: date, get) -> list[dict]:
         except ValueError:
             continue
         if event_date > since:
-            event_url = a["href"].strip()
+            event_url = _abs_url(a["href"])
             # Location is in the second td of each event row
             tds = row.find_all("td")
             raw_location = tds[1].get_text(strip=True) if len(tds) > 1 else ""
@@ -227,9 +234,15 @@ def _scrape_event(event: dict, seen_fids: set[str], get) -> dict:
     round_stats: list[dict] = []
 
     for row in soup.select("tr.b-fight-details__table-row__hover"):
+        # The fight link used to be the row's data-link attribute; since 2026-11
+        # it is an <a href="/fight-details/<id>"> inside the row.
         fight_url = row.get("data-link", "").strip()
         if not fight_url:
+            fight_a = row.select_one("a[href*='/fight-details/']")
+            fight_url = fight_a["href"].strip() if fight_a else ""
+        if not fight_url:
             continue
+        fight_url = _abs_url(fight_url)
         fight_id = _id_from_url(fight_url)
 
         # Fighter links are in column 1
@@ -657,7 +670,7 @@ def scrape_upcoming_event() -> dict | None:
             iso = _parse_date(date_span.get_text(strip=True))
             if not iso:
                 continue
-            event_url = a["href"].strip()
+            event_url = _abs_url(a["href"])
             events.append({
                 "name":     a.get_text(strip=True),
                 "date":     iso,
