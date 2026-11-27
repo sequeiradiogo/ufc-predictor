@@ -11,6 +11,7 @@ needs them), and features must filter by date anyway.
 Requests: one eventlog per fighter, then competition + status per bout and one per
 event (event name), deduplicated. Every response is cached on disk
 (raw_data/espn_cache/, gitignored), so an interrupted run resumes where it stopped.
+Eventlogs expire after 30 days (a fighter's career grows), the rest is kept forever.
 
 --opponents (second hop) then fetches the bouts of those bouts' non-UFC opponents
 (date + winner only, up to their last meeting with a mapped fighter) into

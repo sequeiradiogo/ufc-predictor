@@ -85,6 +85,65 @@ class TestEspnParsing:
         assert pair_fight("Tony Johnson", "Someone Else", cands) is None
 
 
+
+class TestCachedFetcher:
+    """raw_data/espn_cache: $refs are keyed without lang/region (so the existing cache
+    stays valid), eventlog pages get their own key, and eventlogs expire."""
+
+    COMP = "https://sports.core.api.espn.com/v2/sports/mma/leagues/ufc/events/1/competitions/2"
+    LOG = "https://sports.core.api.espn.com/v2/sports/mma/athletes/9/eventlog?limit=200&page={}"
+
+    def test_ref_key_ignores_lang_region_and_scheme(self, tmp_path):
+        from scrapers.espn import CachedFetcher
+        f = CachedFetcher(tmp_path)
+        assert f._path(self.COMP + "?lang=en&region=us") == f._path(self.COMP)
+        assert f._path("http://" + self.COMP[8:] + "?region=us&lang=en") == f._path(self.COMP)
+
+    def test_eventlog_pages_have_their_own_key(self, tmp_path):
+        from scrapers.espn import CachedFetcher
+        f = CachedFetcher(tmp_path)
+        assert f._path(self.LOG.format(1)) != f._path(self.LOG.format(2))
+
+    def _fetcher_with_fake_session(self, tmp_path, payload):
+        from scrapers.espn import CachedFetcher
+        f = CachedFetcher(tmp_path, delay=0)
+        calls = []
+
+        class Resp:
+            status_code = 200
+            def raise_for_status(self): pass
+            def json(self): return payload
+
+        class Session:
+            def get(self, url, timeout):
+                calls.append(url)
+                return Resp()
+
+        f._local.session = Session()
+        return f, calls
+
+    def _seed(self, f, url, data, age_days):
+        import json, os, time
+        path = f._path(url)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(data), encoding="utf-8")
+        t = time.time() - age_days * 86400
+        os.utime(path, (t, t))
+
+    def test_old_eventlog_is_refetched(self, tmp_path):
+        f, calls = self._fetcher_with_fake_session(tmp_path, {"new": 1})
+        self._seed(f, self.LOG.format(1), {"old": 1}, age_days=31)
+        assert f.get(self.LOG.format(1)) == {"new": 1} and len(calls) == 1
+        assert f.get(self.LOG.format(1)) == {"new": 1} and len(calls) == 1   # now fresh
+
+    def test_recent_eventlog_and_old_competition_come_from_cache(self, tmp_path):
+        f, calls = self._fetcher_with_fake_session(tmp_path, {"new": 1})
+        self._seed(f, self.LOG.format(1), {"old": 1}, age_days=5)
+        self._seed(f, self.COMP, {"old": 2}, age_days=3650)   # completed bouts never change
+        assert f.get(self.LOG.format(1)) == {"old": 1}
+        assert f.get(self.COMP + "?lang=en&region=us") == {"old": 2}
+        assert calls == []
+
 CAREER = pd.DataFrame([
     ("A", "2018-01-01", "other", "W", "KO/TKO"),
     ("A", "2018-06-01", "lfa", "L", "TKO (Punches)"),
