@@ -669,6 +669,51 @@ class TestRollingIncremental:
 # 5. refresh_data helpers
 # ══════════════════════════════════════════════════════════════════════════════
 
+class TestCheckEmptyEvents:
+    """A completed event that scrapes to 0 fights must fail the refresh, not
+    pass as 'no new fights' (2026-11: a ufcstats.com markup change did that)."""
+
+    TODAY = date(2026, 11, 27)
+
+    def _ev(self, d):
+        return {"name": "UFC X", "date": d, "url": "http://www.ufcstats.com/event-details/x"}
+
+    def test_no_empty_events_passes(self):
+        from scripts.refresh_data import check_empty_events
+        check_empty_events([], today=self.TODAY)
+
+    def test_old_empty_event_exits(self):
+        from scripts.refresh_data import check_empty_events
+        with pytest.raises(SystemExit) as exc:
+            check_empty_events([self._ev("2026-11-14")], today=self.TODAY)
+        assert exc.value.code == 1
+
+    def test_recent_empty_event_only_warns(self):
+        from scripts.refresh_data import check_empty_events
+        check_empty_events([self._ev("2026-11-26")], today=self.TODAY)
+
+    def test_no_new_events_is_not_an_error(self, monkeypatch):
+        """A week/month without events: nothing listed after the last DB date,
+        so nothing is empty and the refresh stays a quiet no-op."""
+        import scrapers.ufcstats as u
+        from scripts.refresh_data import check_empty_events
+        monkeypatch.setattr(u, "scrape_events_iter", lambda since, ids=None: iter([]))
+        data = u.scrape_new_data(date(2026, 11, 21))
+        assert data["fights"] == [] and data["empty_events"] == []
+        check_empty_events(data["empty_events"], today=self.TODAY)
+
+    def test_scrape_new_data_reports_empty_events(self, monkeypatch):
+        import scrapers.ufcstats as u
+        empty = {"fighters": [], "fights": [], "fight_stats": [], "round_stats": []}
+        full = {"fighters": [], "fights": [{"fight_id": "f1"}], "fight_stats": [], "round_stats": []}
+        events = [({"name": "A", "date": "2026-11-14", "url": "/event-details/a"}, empty),
+                  ({"name": "B", "date": "2026-11-21", "url": "/event-details/b"}, full)]
+        monkeypatch.setattr(u, "scrape_events_iter", lambda since, ids=None: iter(events))
+        data = u.scrape_new_data(date(2026, 11, 7))
+        assert [e["name"] for e in data["empty_events"]] == ["A"]
+        assert len(data["fights"]) == 1
+
+
 class TestRefreshHelpers:
     @pytest.mark.skipif(not DB_PATH.exists(), reason="DB not found")
     def test_get_last_event_date_returns_date(self):

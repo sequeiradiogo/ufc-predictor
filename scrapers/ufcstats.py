@@ -768,20 +768,27 @@ def scrape_new_data(since: date, existing_fighter_ids: set[str] | None = None) -
     """
     Scrape all UFC events completed after *since* from ufcstats.com.
 
-    Returns {"fighters": [...], "fights": [...], "fight_stats": [...]}.
+    Returns {"fighters": [...], "fights": [...], "fight_stats": [...],
+    "empty_events": [...]}. *empty_events* lists the events ({name, date, url})
+    that yielded no fights -- a page that failed to load or a markup change
+    looks exactly like "nothing new", so callers must check it.
     Pass *existing_fighter_ids* to skip bio scraping for fighters already in DB.
     """
     all_fighters: list[dict] = []
     all_fights:   list[dict] = []
     all_stats:    list[dict] = []
+    empty_events: list[dict] = []
 
-    for _event, data in scrape_events_iter(since, existing_fighter_ids):
+    for event, data in scrape_events_iter(since, existing_fighter_ids):
         all_fighters.extend(data["fighters"])
         all_fights.extend(data["fights"])
         all_stats.extend(data["fight_stats"])
+        if not data["fights"]:
+            empty_events.append({k: event.get(k) for k in ("name", "date", "url")})
 
     log.info(
         "UFCStats: %d fighters, %d fights, %d fight_stats rows",
         len(all_fighters), len(all_fights), len(all_stats),
     )
-    return {"fighters": all_fighters, "fights": all_fights, "fight_stats": all_stats}
+    return {"fighters": all_fighters, "fights": all_fights, "fight_stats": all_stats,
+            "empty_events": empty_events}
